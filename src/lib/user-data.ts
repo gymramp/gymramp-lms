@@ -96,7 +96,7 @@ export async function getUserById(userId: string): Promise<User | null> {
 }
 
 /**
- * Fetches a single non-soft-deleted user by their email address.
+ * Fetches a single non-soft-deleted user by their email address (case-insensitive).
  * Handles users created before the soft-delete feature by checking if isDeleted is explicitly true.
  * @param {string} email - The email of the user to fetch.
  * @returns {Promise<User | null>} A promise that resolves to the user or null if not found or soft-deleted.
@@ -106,15 +106,16 @@ export async function getUserByEmail(email: string): Promise<User | null> {
         console.warn("getUserByEmail called with empty email.");
         return null;
     }
+    const lowercasedEmail = email.toLowerCase(); // Convert search email to lowercase
     return retryOperation(async () => {
         const usersRef = collection(db, USERS_COLLECTION);
-        // Query only by email first
-        const q = query(usersRef, where("email", "==", email));
+        // Query by the lowercase email
+        const q = query(usersRef, where("email", "==", lowercasedEmail));
         const querySnapshot = await getDocs(q);
         if (querySnapshot.empty) {
             return null;
         }
-        // Assuming email is unique, get the first match
+        // Assuming email is unique (after lowercasing), get the first match
         const docSnap = querySnapshot.docs[0];
         // Check if document exists and isDeleted is not explicitly true
         if (docSnap.exists() && docSnap.data().isDeleted !== true) {
@@ -175,7 +176,7 @@ export async function getUserCountByCompanyId(companyId: string): Promise<number
 /**
  * Adds a new user to the Firestore database.
  * Assumes Firebase Auth user has already been created.
- * Initializes with isDeleted: false and deletedAt: null.
+ * Initializes with isDeleted: false and deletedAt: null. Stores email in lowercase.
  * @param {Omit<UserFormData, 'password'>} userData - The data for the new user (excluding password).
  * @returns {Promise<User | null>} A promise that resolves to the newly created user or null on failure.
  */
@@ -185,6 +186,7 @@ export async function addUser(userData: Omit<UserFormData, 'password'>): Promise
         // Add default fields like isActive and timestamps
         const newUserDoc = {
             ...userData,
+            email: userData.email.toLowerCase(), // Store email in lowercase
             isActive: true,
             isDeleted: false, // Initialize as not deleted
             deletedAt: null,  // Initialize as null
@@ -205,7 +207,7 @@ export async function addUser(userData: Omit<UserFormData, 'password'>): Promise
 }
 
 /**
- * Updates an existing user in Firestore.
+ * Updates an existing user in Firestore. Stores email in lowercase if provided.
  * @param {string} userId - The ID of the user to update.
  * @param {Partial<UserFormData>} userData - The partial data to update.
  * @returns {Promise<User | null>} A promise that resolves to the updated user or null on failure.
@@ -221,6 +223,9 @@ export async function updateUser(userId: string, userData: Partial<UserFormData>
         const { password, ...dataToUpdate } = userData;
 
         const updatePayload: Partial<User> = { ...dataToUpdate };
+        if (dataToUpdate.email) {
+            updatePayload.email = dataToUpdate.email.toLowerCase(); // Store email in lowercase
+        }
         if (dataToUpdate.companyId === null) {
             updatePayload.companyId = ''; // Store empty string if company is unassigned
         }
@@ -675,3 +680,5 @@ export async function getUserCompany(): Promise<Company | null> {
   );
   return null;
 }
+
+
