@@ -1,110 +1,156 @@
-import CourseCard from '@/components/course/course-card';
-import { Button } from '@/components/ui/button';
-import Link from 'next/link';
 
-const courses = [
-  {
-    id: '1',
-    title: 'Ultimate Web Development Bootcamp',
-    description: 'Learn full-stack web development with HTML, CSS, JavaScript, React, Node.js, and more. From zero to hero!',
-    imageUrl: 'https://placehold.co/600x400.png',
-    dataAiHint: 'web development',
-    category: 'Programming',
-    author: 'Dr. Angela Yu',
-    price: 49.99,
-    rating: 4.8,
-    reviews: 12500,
-  },
-  {
-    id: '2',
-    title: 'Digital Marketing Masterclass',
-    description: 'Master SEO, content marketing, social media, email marketing, and analytics to grow any business online.',
-    imageUrl: 'https://placehold.co/600x400.png',
-    dataAiHint: 'digital marketing',
-    category: 'Marketing',
-    author: 'Neil Patel',
-    price: 79.99,
-    rating: 4.7,
-    reviews: 8200,
-  },
-  {
-    id: '3',
-    title: 'UI/UX Design Essentials',
-    description: 'A comprehensive guide to user interface and user experience design. Learn Figma, prototyping, and design thinking.',
-    imageUrl: 'https://placehold.co/600x400.png',
-    dataAiHint: 'ui ux design',
-    category: 'Design',
-    author: 'Sarah Doody',
-    price: 59.99,
-    rating: 4.9,
-    reviews: 9500,
-  },
-   {
-    id: '4',
-    title: 'Python for Data Science and Machine Learning',
-    description: 'Learn Python for data analysis, visualization, and machine learning. Includes hands-on projects.',
-    imageUrl: 'https://placehold.co/600x400.png',
-    dataAiHint: 'data science',
-    category: 'Data Science',
-    author: 'Jose Portilla',
-    price: 69.99,
-    rating: 4.6,
-    reviews: 15300,
-  },
-  {
-    id: '5',
-    title: 'Graphic Design Fundamentals',
-    description: 'Explore the core principles of graphic design including typography, color theory, and layout composition.',
-    imageUrl: 'https://placehold.co/600x400.png',
-    dataAiHint: 'graphic design',
-    category: 'Design',
-    author: 'Ellen Lupton',
-    price: 39.99,
-    rating: 4.5,
-    reviews: 7800,
-  },
-  {
-    id: '6',
-    title: 'The Complete Guide to Photography',
-    description: 'Master your camera and learn to take stunning photos with this comprehensive photography course.',
-    imageUrl: 'https://placehold.co/600x400.png',
-    dataAiHint: 'photography landscape',
-    category: 'Photography',
-    author: 'Peter McKinnon',
-    price: 89.99,
-    rating: 4.9,
-    reviews: 11200,
-  },
-];
+'use client';
 
-export default function HomePage() {
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import Link from "next/link";
+import Image from 'next/image';
+import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { useRouter } from 'next/navigation';
+import { getUserByEmail } from '@/lib/user-data';
+import { getCompanyById } from '@/lib/company-data'; // Import getCompanyById
+import { Loader2 } from "lucide-react";
+import { Timestamp } from "firebase/firestore"; // Import Timestamp
+
+export default function LoginPage() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
+  const router = useRouter();
+
+  const handleLogin = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setIsLoading(true);
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        if (!user.email) {
+           throw new Error("User email not found after login.");
+        }
+
+        const userDetails = await getUserByEmail(user.email);
+        if (userDetails && userDetails.isActive === false) {
+            await signOut(auth);
+            if (typeof window !== 'undefined') {
+                localStorage.removeItem('isLoggedIn');
+                localStorage.removeItem('userEmail');
+            }
+            toast({ title: "Login Failed", description: "Your account has been deactivated. Please contact your administrator.", variant: "destructive" });
+            setIsLoading(false);
+            return;
+        }
+
+        // Check company trial status if user has a companyId
+        if (userDetails && userDetails.companyId) {
+            const companyDetails = await getCompanyById(userDetails.companyId);
+            if (companyDetails?.isTrial && companyDetails.trialEndsAt) {
+                const trialEndDate = companyDetails.trialEndsAt instanceof Timestamp
+                    ? companyDetails.trialEndsAt.toDate()
+                    : new Date(companyDetails.trialEndsAt); // Fallback if not Timestamp (should be)
+
+                if (trialEndDate < new Date()) {
+                    await signOut(auth);
+                    if (typeof window !== 'undefined') {
+                        localStorage.removeItem('isLoggedIn');
+                        localStorage.removeItem('userEmail');
+                    }
+                    toast({
+                        title: "Trial Ended",
+                        description: `The trial period for ${companyDetails.name} has ended. Please contact support.`,
+                        variant: "destructive",
+                        duration: 7000,
+                    });
+                    setIsLoading(false);
+                    return;
+                }
+            }
+        }
+
+
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('isLoggedIn', 'true');
+          localStorage.setItem('userEmail', user.email);
+        }
+
+        let redirectPath = '/';
+        if (userDetails) {
+            switch (userDetails.role) {
+                case 'Super Admin': redirectPath = '/admin/dashboard'; break;
+                case 'Admin':
+                case 'Owner':
+                case 'Manager': redirectPath = '/dashboard'; break;
+                case 'Staff': redirectPath = '/courses/my-courses'; break;
+                default: redirectPath = '/courses/my-courses';
+            }
+        } else {
+             await signOut(auth);
+             if (typeof window !== 'undefined') {
+                localStorage.removeItem('isLoggedIn');
+                localStorage.removeItem('userEmail');
+             }
+             toast({ title: "Login Error", description: "Could not load user profile. Please contact support.", variant: "destructive" });
+             setIsLoading(false);
+             return;
+        }
+
+        router.push(redirectPath);
+        toast({ title: "Login Successful", description: `Welcome!` });
+
+      } catch (error: any) {
+          console.error("Login failed:", error);
+          let errorMessage = "There was a problem logging in.";
+          if(error.code === "auth/invalid-credential" || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password'){
+             errorMessage = "Invalid email or password.";
+          } else if (error.code === 'auth/invalid-email') {
+             errorMessage = "Please enter a valid email address.";
+          }
+          toast({ title: "Login Failed", description: errorMessage, variant: "destructive" });
+      } finally {
+            setIsLoading(false);
+      }
+  };
+
   return (
-    <div className="space-y-12">
-      <section className="text-center py-16 bg-gradient-to-r from-primary/10 via-background to-accent/10 rounded-lg shadow-sm">
-        <h1 className="text-5xl font-extrabold tracking-tight text-primary sm:text-6xl md:text-7xl">
-          Welcome to <span className="text-accent">Gymramp LMS</span>
-        </h1>
-        <p className="mt-6 max-w-2xl mx-auto text-lg text-foreground/80 sm:text-xl">
-          Unlock your potential with our expert-led courses. Start learning today and achieve your goals.
-        </p>
-        <div className="mt-10 flex justify-center gap-4">
-          <Button asChild size="lg" className="text-lg px-8 py-6">
-            <Link href="/#courses">Explore Courses</Link>
-          </Button>
-          <Button asChild variant="outline" size="lg" className="text-lg px-8 py-6 border-primary text-primary hover:bg-primary/10">
-            <Link href="/manage-courses">Create a Course</Link>
-          </Button>
-        </div>
-      </section>
-
-      <section id="courses" className="space-y-8">
-        <h2 className="text-3xl font-bold text-center text-primary">Featured Courses</h2>
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-          {courses.map((course) => (
-            <CourseCard key={course.id} course={course} />
-          ))}
-        </div>
-      </section>
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-theme(spacing.14)*2)] py-12 px-4 sm:px-6 lg:px-8">
+       <div className="mb-8">
+         <Image src="/images/newlogo.png" alt="GYMRAMP Logo" width={150} height={45} priority />
+       </div>
+      <Card className="w-full max-w-md shadow-lg">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl font-bold text-primary">Welcome Back!</CardTitle>
+          <CardDescription>Log in to access your GYMRAMP account.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" type="email" placeholder="you@example.com" required value={email} onChange={(e) => setEmail(e.target.value)} disabled={isLoading} />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                 <Label htmlFor="password">Password</Label>
+                 <Link href="/forgot-password" className="text-sm text-primary hover:underline"> Forgot password? </Link>
+              </div>
+              <Input id="password" type="password" required placeholder="********" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isLoading}/>
+            </div>
+             <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}> {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} {isLoading ? "Logging in..." : "Login"} </Button>
+          </form>
+        </CardContent>
+         <CardFooter className="flex justify-center text-sm"> </CardFooter>
+      </Card>
     </div>
   );
 }

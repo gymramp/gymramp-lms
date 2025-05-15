@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
@@ -54,16 +56,25 @@ TableFooter.displayName = "TableFooter"
 const TableRow = React.forwardRef<
   HTMLTableRowElement,
   React.HTMLAttributes<HTMLTableRowElement>
->(({ className, ...props }, ref) => (
-  <tr
-    ref={ref}
-    className={cn(
-      "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
-      className
-    )}
-    {...props}
-  />
-))
+>(({ className, children, ...props }, ref) => {
+  // Strip out any children that are just whitespace to avoid invalid <tr> text nodes
+  const filteredChildren = React.Children.toArray(children).filter(
+    (child) => !(typeof child === "string" && /^\s*$/.test(child))
+  )
+
+  return (
+    <tr
+      ref={ref}
+      className={cn(
+        "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+        className
+      )}
+      {...props}
+    >
+      {filteredChildren}
+    </tr>
+  )
+})
 TableRow.displayName = "TableRow"
 
 const TableHead = React.forwardRef<

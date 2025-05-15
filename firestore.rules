@@ -1,0 +1,16 @@
+rules_version = '6';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if true;
+    }
+    match /lessons/{document} {
+      allow create, update, delete: if true;
+    }
+    match /courses/{document} {
+          allow read: if request.auth != null;
+          allow create, update, delete: if true;
+    }
+  }
+}

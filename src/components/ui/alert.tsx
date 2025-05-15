@@ -1,3 +1,4 @@
+
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 
@@ -11,6 +12,9 @@ const alertVariants = cva(
         default: "bg-background text-foreground",
         destructive:
           "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive",
+        // Added a success variant, though not strictly used by default ShadCN theme
+        success:
+            "border-green-500/50 text-green-700 dark:border-green-500 [&>svg]:text-green-500",
       },
     },
     defaultVariants: {
@@ -26,6 +30,7 @@ const Alert = React.forwardRef<
   <div
     ref={ref}
     role="alert"
+    // Use cn() to merge base styles, variant styles, and custom className
     className={cn(alertVariants({ variant }), className)}
     {...props}
   />
@@ -57,3 +62,5 @@ const AlertDescription = React.forwardRef<
 AlertDescription.displayName = "AlertDescription"
 
 export { Alert, AlertTitle, AlertDescription }
+
+    
