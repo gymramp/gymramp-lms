@@ -74,33 +74,6 @@ export default function AdminUsersPage() {
 
   const fetchCurrentUser = useCallback(async () => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      // --- DEVELOPMENT ONLY: Simulate Super Admin for /admin/users page if not logged in ---
-      // SET THIS TO false TO DISABLE THE SIMULATION
-      const SIMULATE_SUPER_ADMIN_FOR_DEV = process.env.NODE_ENV === 'development';
-
-      if (SIMULATE_SUPER_ADMIN_FOR_DEV && !firebaseUser) {
-        console.warn(
-          "DEVELOPMENT ONLY: No user logged in. Simulating Super Admin for /admin/users page. This is a temporary workaround. Disable by setting SIMULATE_SUPER_ADMIN_FOR_DEV to false or when not in development."
-        );
-        const mockSuperAdmin: User = {
-          id: 'dev-super-admin-id-001',
-          name: 'Dev Super Admin (Simulated)',
-          email: 'dev-super-admin@example.com',
-          role: 'Super Admin',
-          companyId: '', // Super Admins might not have a company, or use a mock one
-          assignedLocationIds: [],
-          isActive: true,
-          isDeleted: false,
-          createdAt: new Date(), // Or Timestamp.now() if using Firestore Timestamp
-        };
-        setCurrentUser(mockSuperAdmin);
-        setCurrentUserName(mockSuperAdmin.name);
-        // No redirect, allow page to load.
-        // fetchDataBasedOnRole will be called due to currentUser changing.
-        return; // Skip further auth logic for this dev-only case
-      }
-      // --- END DEVELOPMENT ONLY SECTION ---
-
       if (firebaseUser && firebaseUser.email) {
         const userDetails = await getUserByEmail(firebaseUser.email);
         setCurrentUser(userDetails);
@@ -121,7 +94,7 @@ export default function AdminUsersPage() {
            setSelectedLocationId('all');
         }
       } else {
-        // Normal case: No user logged in and not in dev simulation mode
+        // No user logged in
         setCurrentUser(null);
         setCurrentUserName('');
         setSelectedCompanyId('all');
@@ -130,7 +103,7 @@ export default function AdminUsersPage() {
       }
     });
     return () => unsubscribe();
-  }, [router, toast]); // Ensure all dependencies of the original useCallback are present
+  }, [router, toast]);
 
    const fetchDataBasedOnRole = useCallback(async () => {
         if (!currentUser) return;
@@ -624,3 +597,4 @@ export default function AdminUsersPage() {
     </div>
   );
 }
+
