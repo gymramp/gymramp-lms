@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -28,19 +29,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from '@/hooks/use-toast';
 import type { User, UserRole, Company, Location } from '@/types/user';
 import { getAllUsers, toggleUserStatus, deleteUser, updateUser, getUserByEmail, assignMissingCompanyToUsers, getUsersByCompanyId } from '@/lib/user-data';
-import { getAllCompanies, getAllLocations, getLocationsByCompanyId, getCompanyById, createDefaultCompany } from '@/lib/company-data'; 
+import { getAllCompanies, getAllLocations, getLocationsByCompanyId, getCompanyById, createDefaultCompany } from '@/lib/company-data';
 import { EditUserDialog } from '@/components/admin/EditUserDialog';
-import { AddUserDialog } from '@/components/admin/AddUserDialog'; 
+import { AddUserDialog } from '@/components/admin/AddUserDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useRouter } from 'next/navigation'; // Import useRouter
+import { Timestamp } from 'firebase/firestore'; // Import Timestamp
 
 const ROLE_HIERARCHY: Record<UserRole, number> = {
   'Super Admin': 5,
@@ -60,47 +62,75 @@ export default function AdminUsersPage() {
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [allLocations, setAllLocations] = useState<Location[]>([]); 
-  const [filteredLocations, setFilteredLocations] = useState<Location[]>([]); 
+  const [allLocations, setAllLocations] = useState<Location[]>([]);
+  const [filteredLocations, setFilteredLocations] = useState<Location[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('all');
   const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
   const [currentUserName, setCurrentUserName] = useState<string>('');
-  const router = useRouter(); // Initialize useRouter
+  const router = useRouter();
 
 
   const { toast } = useToast();
 
   const fetchCurrentUser = useCallback(async () => {
-     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-       if (firebaseUser && firebaseUser.email) {
-         const userDetails = await getUserByEmail(firebaseUser.email);
-         setCurrentUser(userDetails);
-         setCurrentUserName(userDetails?.name || 'User');
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      // --- DEVELOPMENT ONLY: Simulate Super Admin for /admin/users page if not logged in ---
+      // SET THIS TO false TO DISABLE THE SIMULATION
+      const SIMULATE_SUPER_ADMIN_FOR_DEV = process.env.NODE_ENV === 'development';
 
-         // Authorization: Super Admin, Admin, Owner, or Manager can access
-         if (!userDetails || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(userDetails.role)) {
-            toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
-            router.push('/'); // Redirect if not authorized
-            return;
-         }
+      if (SIMULATE_SUPER_ADMIN_FOR_DEV && !firebaseUser) {
+        console.warn(
+          "DEVELOPMENT ONLY: No user logged in. Simulating Super Admin for /admin/users page. This is a temporary workaround. Disable by setting SIMULATE_SUPER_ADMIN_FOR_DEV to false or when not in development."
+        );
+        const mockSuperAdmin: User = {
+          id: 'dev-super-admin-id-001',
+          name: 'Dev Super Admin (Simulated)',
+          email: 'dev-super-admin@example.com',
+          role: 'Super Admin',
+          companyId: '', // Super Admins might not have a company, or use a mock one
+          assignedLocationIds: [],
+          isActive: true,
+          isDeleted: false,
+          createdAt: new Date(), // Or Timestamp.now() if using Firestore Timestamp
+        };
+        setCurrentUser(mockSuperAdmin);
+        setCurrentUserName(mockSuperAdmin.name);
+        // No redirect, allow page to load.
+        // fetchDataBasedOnRole will be called due to currentUser changing.
+        return; // Skip further auth logic for this dev-only case
+      }
+      // --- END DEVELOPMENT ONLY SECTION ---
 
-         if (userDetails && userDetails.role !== 'Super Admin') {
-            setSelectedCompanyId(userDetails.companyId || 'all'); 
-            setSelectedLocationId('all');
-         } else {
-            setSelectedCompanyId('all');
-            setSelectedLocationId('all');
-         }
-       } else {
-         setCurrentUser(null);
-          setCurrentUserName('');
-          setSelectedCompanyId('all');
-          setSelectedLocationId('all');
-          router.push('/'); // Redirect if not logged in
-       }
-     });
-     return () => unsubscribe();
-   }, [router, toast]); // Added router and toast
+      if (firebaseUser && firebaseUser.email) {
+        const userDetails = await getUserByEmail(firebaseUser.email);
+        setCurrentUser(userDetails);
+        setCurrentUserName(userDetails?.name || 'User');
+
+        // Authorization: Super Admin, Admin, Owner, or Manager can access
+        if (!userDetails || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(userDetails.role)) {
+           toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
+           router.push('/'); // Redirect if not authorized
+           return;
+        }
+
+        if (userDetails && userDetails.role !== 'Super Admin') {
+           setSelectedCompanyId(userDetails.companyId || 'all');
+           setSelectedLocationId('all');
+        } else {
+           setSelectedCompanyId('all');
+           setSelectedLocationId('all');
+        }
+      } else {
+        // Normal case: No user logged in and not in dev simulation mode
+        setCurrentUser(null);
+        setCurrentUserName('');
+        setSelectedCompanyId('all');
+        setSelectedLocationId('all');
+        router.push('/');
+      }
+    });
+    return () => unsubscribe();
+  }, [router, toast]); // Ensure all dependencies of the original useCallback are present
 
    const fetchDataBasedOnRole = useCallback(async () => {
         if (!currentUser) return;
@@ -251,7 +281,7 @@ export default function AdminUsersPage() {
         return;
     }
 
-    if (!canPerformAction(targetUser)) { 
+    if (!canPerformAction(targetUser)) {
         toast({ title: "Permission Denied", description: "You do not have permission to change this user's status.", variant: "destructive"});
         return;
     }
@@ -280,7 +310,7 @@ export default function AdminUsersPage() {
 
   const handleUserUpdated = () => {
     refreshUsers();
-    setIsEditUserDialogOpen(false); 
+    setIsEditUserDialogOpen(false);
   };
 
 
@@ -289,7 +319,7 @@ export default function AdminUsersPage() {
     if (currentUser.role === 'Super Admin') return true; // Super Admin can do anything to anyone (except demote other Super Admins perhaps)
     if (currentUser.id === targetUser.id) return false; // Cannot act on self
     if (!currentUser.companyId || currentUser.companyId !== targetUser.companyId) return false; // Must be in same company
-    
+
     // Admin/Owner can act on roles lower than theirs in their company
     if ((currentUser.role === 'Admin' || currentUser.role === 'Owner') && ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[targetUser.role]) {
         return true;
@@ -306,7 +336,7 @@ export default function AdminUsersPage() {
      if (currentUser.role === 'Super Admin') return true;
      if (currentUser.id === targetUser.id) return true; // Can edit self
      if (!currentUser.companyId || currentUser.companyId !== targetUser.companyId) return false; // Must be in same company
-     
+
      // Admin/Owner can edit roles lower than or equal to theirs in their company (but not higher)
      if ((currentUser.role === 'Admin' || currentUser.role === 'Owner') && ROLE_HIERARCHY[currentUser.role] >= ROLE_HIERARCHY[targetUser.role]) {
         return true;
@@ -510,7 +540,7 @@ export default function AdminUsersPage() {
                                     variant="ghost"
                                     size="sm"
                                     className={cn(
-                                        'p-1 h-auto text-xs rounded-full', 
+                                        'p-1 h-auto text-xs rounded-full',
                                         user.isActive
                                             ? 'bg-green-100 text-green-800 border border-green-200 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:border-green-700 hover:dark:bg-green-800'
                                             : 'bg-red-100 text-red-800 border border-red-200 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:border-red-700 hover:dark:bg-red-800',
@@ -557,7 +587,7 @@ export default function AdminUsersPage() {
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem
                                             className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                                            onClick={() => handleDeleteUser(user.id, user.name)} 
+                                            onClick={() => handleDeleteUser(user.id, user.name)}
                                             disabled={!canPerformAction(user)}
                                         >
                                           <>
