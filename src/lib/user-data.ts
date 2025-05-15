@@ -111,37 +111,42 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 
     return retryOperation(async () => {
         const usersRef = collection(db, USERS_COLLECTION);
-        const q = query(usersRef, where("email", "==", lowercasedEmail));
+        // MODIFIED QUERY: Added where("isDeleted", "==", false)
+        const q = query(usersRef, where("email", "==", lowercasedEmail), where("isDeleted", "==", false));
 
         try {
             const querySnapshot = await getDocs(q);
-            console.log(`[getUserByEmail] Query for '${lowercasedEmail}' executed. Snapshot empty: ${querySnapshot.empty}. Docs count: ${querySnapshot.docs.length}`);
+            console.log(`[getUserByEmail] Query for '${lowercasedEmail}' (and isDeleted:false) executed. Snapshot empty: ${querySnapshot.empty}. Docs count: ${querySnapshot.docs.length}`);
 
             if (querySnapshot.empty) {
-                console.log(`[getUserByEmail] No user document found for email: '${lowercasedEmail}' in collection '${USERS_COLLECTION}'.`);
+                console.log(`[getUserByEmail] No user document found for email: '${lowercasedEmail}' with isDeleted:false in collection '${USERS_COLLECTION}'.`);
+                // Fallback: Check if a document exists with that email but isDeleted is true (or missing isDeleted field)
+                const qAll = query(usersRef, where("email", "==", lowercasedEmail));
+                const allSnapshot = await getDocs(qAll);
+                if (!allSnapshot.empty) {
+                    const foundDoc = allSnapshot.docs[0];
+                    console.log(`[getUserByEmail] Fallback check: Found document for '${lowercasedEmail}'. ID: ${foundDoc.id}. isDeleted status: ${foundDoc.data().isDeleted}`);
+                }
                 return null;
             }
 
-            const docSnap = querySnapshot.docs[0];
+            const docSnap = querySnapshot.docs[0]; // If not empty, there's at least one
             const userData = docSnap.data();
-            // Use JSON.stringify for potentially large objects to avoid overly verbose console output by default
-            console.log(`[getUserByEmail] Document found for '${lowercasedEmail}'. ID: ${docSnap.id}. Data (stringified):`, JSON.stringify(userData).substring(0, 500) + (JSON.stringify(userData).length > 500 ? '...' : ''));
+            console.log(`[getUserByEmail] Document found for '${lowercasedEmail}' with isDeleted:false. ID: ${docSnap.id}. Data (first 500 chars):`, JSON.stringify(userData).substring(0, 500) + (JSON.stringify(userData).length > 500 ? '...' : ''));
 
-
-            if (docSnap.exists() && userData.isDeleted !== true) {
-                console.log(`[getUserByEmail] User '${lowercasedEmail}' is valid and not soft-deleted. Returning user object.`);
+            // The isDeleted check is now part of the query, but keeping docSnap.exists() is good practice.
+            if (docSnap.exists()) { // userData.isDeleted !== true is now redundant due to query but safe to keep
+                console.log(`[getUserByEmail] User '${lowercasedEmail}' is valid and not soft-deleted (verified by query). Returning user object.`);
                 return { id: docSnap.id, ...userData } as User;
             } else {
-                if (!docSnap.exists()) { // This condition should ideally not be met if querySnapshot was not empty
-                    console.warn(`[getUserByEmail] Document for '${lowercasedEmail}' was found in query but docSnap.exists() is false. This is unexpected.`);
-                }
-                if (userData.isDeleted === true) {
-                    console.log(`[getUserByEmail] User '${lowercasedEmail}' found but is marked as soft-deleted.`);
-                }
+                 // This block should ideally not be reached if querySnapshot was not empty
+                console.warn(`[getUserByEmail] Document for '${lowercasedEmail}' was found in query but docSnap.exists() is false. This is unexpected.`);
                 return null;
             }
         } catch (error) {
             console.error(`[getUserByEmail] Error during Firestore query for email '${lowercasedEmail}':`, error);
+            // If Firestore suggests an index, the error might contain a link or message.
+            // Check the browser console for specific Firestore errors.
             throw error; // Re-throw to be caught by retryOperation or calling function
         }
     });
