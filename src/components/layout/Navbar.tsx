@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Menu, LogOut, User as UserIcon, LayoutDashboard, Settings, Users, BookOpen, FileText, ListChecks, Building, ShoppingCart, Award, MapPin, DatabaseZap, BarChartBig, Gift, TestTube2 } from 'lucide-react'; 
+import { Menu, LogOut, User as UserIcon, LayoutDashboard, Settings, Users, BookOpen, FileText, ListChecks, Building, ShoppingCart, Award, MapPin, DatabaseZap, BarChartBig, Gift, TestTube2 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { getUserByEmail } from '@/lib/user-data';
@@ -27,9 +27,9 @@ import { cn } from '@/lib/utils';
 export function Navbar() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); 
-  const [isMounted, setIsMounted] = useState(false); 
-  const [currentUser, setCurrentUser] = useState<User | null>(null); 
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   const isLoggedIn = !!currentUser;
 
@@ -65,7 +65,7 @@ export function Navbar() {
           localStorage.removeItem('userEmail');
       }
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
-      router.push('/'); 
+      router.push('/');
     } catch (error) {
       console.error("Logout failed:", error);
       toast({ title: "Logout Failed", description: "Could not log you out.", variant: "destructive" });
@@ -88,7 +88,7 @@ export function Navbar() {
         { href: '/admin/quizzes', label: 'Quizzes' },
         { href: '/admin/checkout', label: 'Checkout' },
         { href: '/admin/free-trial-checkout', label: 'Free Trial' },
-        { href: '/admin/test-checkout', label: 'Test Checkout'} 
+        { href: '/admin/test-checkout', label: 'Test Checkout'}
       );
     } else if (user.role === 'Admin' || user.role === 'Owner') {
         roleSpecificItems.push(
@@ -128,8 +128,8 @@ export function Navbar() {
           { href: '/admin/lessons', label: 'Lessons', icon: FileText },
           { href: '/admin/quizzes', label: 'Quizzes', icon: ListChecks },
           { href: '/admin/checkout', label: 'Paid Checkout', icon: ShoppingCart },
-          { href: '/admin/free-trial-checkout', label: 'Free Trial Checkout', icon: Gift }, 
-          { href: '/admin/test-checkout', label: 'Test Checkout', icon: TestTube2 }, 
+          { href: '/admin/free-trial-checkout', label: 'Free Trial Checkout', icon: Gift },
+          { href: '/admin/test-checkout', label: 'Test Checkout', icon: TestTube2 },
           { href: '/admin/settings', label: 'Settings', icon: Settings },
         ]
       : []),
@@ -215,8 +215,8 @@ export function Navbar() {
                 <Image
                     src="/images/newlogo.png"
                     alt="GYMRAMP Logo"
-                    width={150} 
-                    height={45} 
+                    width={150}
+                    height={45}
                     priority
                 />
             </Link>
@@ -281,10 +281,10 @@ export function Navbar() {
                 ) : (
                      <>
                         <Button asChild size="sm" variant="outline">
-                            <Link href="/">Login</Link> {/* Changed from /login to / */}
+                          <span><Link href="/">Login</Link></span>
                         </Button>
                         <Button asChild size="sm">
-                             <Link href="/contact">Schedule A Call</Link>
+                          <span><Link href="/contact">Schedule A Call</Link></span>
                         </Button>
                      </>
                 )) : (
