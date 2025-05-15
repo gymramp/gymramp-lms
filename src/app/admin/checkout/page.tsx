@@ -18,7 +18,7 @@ import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { getAllCourses } from '@/lib/firestore-data';
 import { processCheckout } from '@/actions/checkout';
-import { createTestPaymentIntent } from '@/actions/stripe';
+import { createTestPaymentIntent } from '@/actions/stripe'; // For the test payment
 import type { Course } from '@/types/course';
 import type { User } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
@@ -55,9 +55,10 @@ interface CheckoutFormContentProps {
   discountPercentInput: string;
   onDiscountPercentInputChange: (value: string) => void;
   appliedDiscountAmount: number;
-  finalTotalAmount: number; // This is in dollars
+  finalTotalAmount: number; // This is for the main form's summary
   maxUsers: number | null;
   setMaxUsers: React.Dispatch<React.SetStateAction<number | null>>;
+  // No clientSecret needed here directly as Stripe Elements are outside or use hooks
 }
 
 function CheckoutFormContent({
@@ -68,7 +69,7 @@ function CheckoutFormContent({
   discountPercentInput,
   onDiscountPercentInputChange,
   appliedDiscountAmount,
-  finalTotalAmount, // Received in dollars
+  finalTotalAmount, // For main form summary
   maxUsers,
   setMaxUsers,
 }: CheckoutFormContentProps) {
@@ -162,17 +163,18 @@ function CheckoutFormContent({
       setPaymentErrorMessage('Stripe.js has not loaded yet. Please try again.');
       return;
     }
-    if (finalTotalAmount <= 0) {
-        setPaymentErrorMessage('Payment amount must be greater than $0.00.');
-        return;
-    }
+    // For fixed $1 test, no need to check finalTotalAmount here
+    // if (finalTotalAmount <= 0) {
+    //     setPaymentErrorMessage('Payment amount must be greater than $0.00.');
+    //     return;
+    // }
 
     setIsProcessingPayment(true);
 
     const { error, paymentIntent } = await stripe.confirmPayment({
       elements,
       confirmParams: {
-        return_url: `${window.location.origin}/admin/checkout/success`,
+        return_url: `${window.location.origin}/admin/checkout/success`, // Or a specific test success page
       },
     });
 
@@ -191,7 +193,7 @@ function CheckoutFormContent({
         case 'succeeded':
           toast({
             title: 'Test Payment Succeeded!',
-            description: `Your $${finalTotalAmount.toFixed(2)} test payment was successful.`,
+            description: `Your $1.00 test payment was successful.`, // Static amount
           });
           break;
         case 'processing':
@@ -330,18 +332,18 @@ function CheckoutFormContent({
           </Card>
         
           {/* Stripe Payment Form Section */}
-          {stripe && elements && (
+          {stripe && elements && ( // Conditionally render if Stripe is loaded
             <Card className="lg:col-span-1">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><CreditCard className="h-5 w-5" /> Test Payment</CardTitle>
-                <CardDescription>Make a test payment for the calculated total.</CardDescription>
+                <CardDescription>Make a test payment for $1.00.</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleTestPaymentSubmit} id="stripe-payment-form" className="space-y-4">
                   <PaymentElement id="payment-element" options={{layout: "tabs"}} />
-                  <Button type="submit" className="w-full" disabled={!stripe || isProcessingPayment || finalTotalAmount <= 0}>
+                  <Button type="submit" className="w-full" disabled={!stripe || isProcessingPayment}>
                     {isProcessingPayment ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    {isProcessingPayment ? 'Processing...' : `Pay $${finalTotalAmount > 0 ? finalTotalAmount.toFixed(2) : '0.00'} (Test)`}
+                    {isProcessingPayment ? 'Processing...' : `Pay $1.00 (Test)`} {/* Static amount */}
                   </Button>
                   {paymentErrorMessage && <p className="text-xs text-destructive mt-2">{paymentErrorMessage}</p>}
                 </form>
@@ -391,12 +393,12 @@ export default function AdminCheckoutPage() {
   const [subtotalAmount, setSubtotalAmount] = useState(0);
   const [discountPercentInput, setDiscountPercentInput] = useState('');
   const [appliedDiscountAmount, setAppliedDiscountAmount] = useState(0);
-  const [finalTotalAmount, setFinalTotalAmount] = useState(0); // This is in dollars
+  const [finalTotalAmount, setFinalTotalAmount] = useState(0);
   const [maxUsers, setMaxUsers] = useState<number | null>(5);
 
-  // Stripe PaymentIntent states
+  // Stripe PaymentIntent states for the FIXED $1.00 TEST PAYMENT
   const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [isLoadingClientSecret, setIsLoadingClientSecret] = useState(false);
+  const [isLoadingClientSecret, setIsLoadingClientSecret] = useState(true); // Start true
   const [paymentIntentError, setPaymentIntentError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -442,6 +444,7 @@ export default function AdminCheckoutPage() {
     }
   }, [currentUser, isCheckingAuth, toast]);
 
+  // Calculate totals for the main form
   useEffect(() => {
     let total = 0;
     selectedCourseIds.forEach((id) => {
@@ -467,56 +470,27 @@ export default function AdminCheckoutPage() {
     setFinalTotalAmount(Math.max(0, finalAmount));
   }, [subtotalAmount, discountPercentInput]);
 
-  // Fetch PaymentIntent clientSecret
+  // Fetch PaymentIntent clientSecret FOR THE FIXED $1.00 TEST
   useEffect(() => {
-    const fetchClientSecret = async (amountInCents: number) => {
-      // Stripe's minimum is usually $0.50 (50 cents).
-      // createTestPaymentIntent action already checks this (and returns error if < 50).
-      // Client-side check can be good for immediate feedback if desired,
-      // but here we rely on the action's check.
-      if (amountInCents < 50 && amountInCents > 0) { // Special handling for positive but too small
-        setClientSecret(null);
-        setPaymentIntentError(`Amount ($${(amountInCents/100).toFixed(2)}) is less than Stripe's minimum of $0.50.`);
-        setIsLoadingClientSecret(false);
-        return;
-      }
-      if (amountInCents <= 0) { // No payment needed if $0 or less
-        setClientSecret(null);
-        setPaymentIntentError(null); // Not an error if $0
-        setIsLoadingClientSecret(false);
-        return;
-      }
-
-
-      setIsLoadingClientSecret(true);
-      setPaymentIntentError(null);
-      setClientSecret(null); // Clear previous secret
-
-      try {
-        const result = await createTestPaymentIntent(amountInCents);
-        if (result.clientSecret) {
-          setClientSecret(result.clientSecret);
-        } else {
-          setPaymentIntentError(result.error || 'Failed to initialize payment.');
-          toast({ title: "Payment Init Error", description: result.error || 'Could not initialize payment.', variant: "destructive" });
-        }
-      } catch (err: any) {
-        setPaymentIntentError(err.message || 'An unexpected error occurred.');
-        toast({ title: "Payment Init Error", description: err.message, variant: "destructive" });
-      } finally {
-        setIsLoadingClientSecret(false);
-      }
-    };
-
-    if (currentUser && !isCheckingAuth) {
-      const finalAmountInCentsValue = Math.round(finalTotalAmount * 100);
-      fetchClientSecret(finalAmountInCentsValue);
-    } else if (!currentUser && !isCheckingAuth) { // User logged out or auth failed
-        setClientSecret(null);
+    if (currentUser && !isCheckingAuth) { // Only fetch if authorized
+        setIsLoadingClientSecret(true);
         setPaymentIntentError(null);
-        setIsLoadingClientSecret(false);
+        createTestPaymentIntent() // Call without arguments to use default $1.00
+            .then(result => {
+                if (result.clientSecret) {
+                    setClientSecret(result.clientSecret);
+                } else {
+                    setPaymentIntentError(result.error || 'Failed to initialize payment.');
+                    toast({ title: "Test Payment Init Error", description: result.error || 'Could not initialize test payment form.', variant: "destructive" });
+                }
+            })
+            .catch(err => {
+                setPaymentIntentError(err.message || 'An unexpected error occurred preparing test payment.');
+                toast({ title: "Test Payment Init Error", description: err.message, variant: "destructive" });
+            })
+            .finally(() => setIsLoadingClientSecret(false));
     }
-  }, [currentUser, isCheckingAuth, toast, finalTotalAmount]);
+  }, [currentUser, isCheckingAuth, toast]);
 
 
   if (isCheckingAuth || !currentUser) {
@@ -526,32 +500,34 @@ export default function AdminCheckoutPage() {
     return ( <div className="container mx-auto py-12 text-center"> <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /> <p className="mt-4 text-muted-foreground">Loading courses…</p> </div> );
   }
 
+  // Options for Stripe Elements, initialized when clientSecret is available
   const stripeElementsOptions: StripeElementsOptions | undefined = clientSecret ? { clientSecret, appearance: {theme: 'stripe'} } : undefined;
 
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20">
       <h1 className="text-3xl font-bold tracking-tight text-primary mb-8">New Customer Checkout</h1>
       
-      {isLoadingClientSecret && finalTotalAmount > 0 && <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin text-primary" /> <p>Loading payment form...</p></div>}
+      {/* Loading or error state for the test payment form */}
+      {isLoadingClientSecret && (
+        <div className="text-center p-4 my-4 rounded-md bg-muted">
+            <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />
+            <p className="mt-2 text-muted-foreground">Loading test payment form...</p>
+        </div>
+      )}
       
       {paymentIntentError && !clientSecret && (
         <Alert variant="destructive" className="mb-4">
-          <AlertCircle className="h-4 w-4" /> <AlertTitle>Payment Error</AlertTitle> <AlertDescription>{paymentIntentError}</AlertDescription>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Test Payment Error</AlertTitle>
+          <AlertDescription>{paymentIntentError}</AlertDescription>
         </Alert>
       )}
       
-      {finalTotalAmount <= 0 && !isLoadingClientSecret && !paymentIntentError && (
-         <Alert variant="default" className="mb-4 border-blue-300 bg-blue-50 dark:bg-blue-900/30">
-            <AlertCircle className="h-4 w-4 text-blue-500" />
-            <AlertTitle className="text-blue-700 dark:text-blue-300">No Payment Required</AlertTitle>
-            <AlertDescription className="text-blue-600 dark:text-blue-400">
-              The current total is $0.00 or less. The payment form is not active.
-            </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Conditionally render Elements provider only if clientSecret and options are available */}
-      {stripeElementsOptions && clientSecret && finalTotalAmount > 0 ? (
+      {/* 
+        Render Elements provider and CheckoutFormContent once clientSecret is available.
+        CheckoutFormContent handles its internal Stripe logic based on hooks.
+      */}
+      {clientSecret && stripeElementsOptions ? (
         <Elements stripe={stripePromise} options={stripeElementsOptions} key={clientSecret}>
           <CheckoutFormContent
             allCourses={allCourses}
@@ -561,15 +537,17 @@ export default function AdminCheckoutPage() {
             discountPercentInput={discountPercentInput}
             onDiscountPercentInputChange={setDiscountPercentInput}
             appliedDiscountAmount={appliedDiscountAmount}
-            finalTotalAmount={finalTotalAmount}
+            finalTotalAmount={finalTotalAmount} // This is for the main form summary
             maxUsers={maxUsers}
             setMaxUsers={setMaxUsers}
           />
         </Elements>
-      ) : (
-        // Render the form content without Stripe Elements if no payment is needed or if there was an error
-        // This ensures the main account creation form is still usable.
-        <CheckoutFormContent
+      ) : !isLoadingClientSecret && !paymentIntentError ? (
+         // If not loading and no error, but still no clientSecret (e.g. Stripe issue not caught by error state)
+         // Or, simply render the main form if clientSecret is still loading initially
+         <div className="my-4 p-4 rounded-md border border-dashed text-center text-muted-foreground">
+           Test payment form will appear here once initialized.
+           <CheckoutFormContent
             allCourses={allCourses}
             selectedCourseIds={selectedCourseIds}
             onSelectedCourseIdsChange={setSelectedCourseIds}
@@ -577,11 +555,13 @@ export default function AdminCheckoutPage() {
             discountPercentInput={discountPercentInput}
             onDiscountPercentInputChange={setDiscountPercentInput}
             appliedDiscountAmount={appliedDiscountAmount}
-            finalTotalAmount={finalTotalAmount}
+            finalTotalAmount={finalTotalAmount} // This is for the main form summary
             maxUsers={maxUsers}
             setMaxUsers={setMaxUsers}
           />
-      )}
+         </div>
+      ) : null /* While loading client secret and if no error, we might not render CheckoutFormContent immediately to avoid context issues */
+      }
     </div>
   );
 }
