@@ -17,8 +17,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { getAllCourses } from '@/lib/firestore-data';
-import { processCheckout } from '@/actions/checkout'; // Corrected import path
-import { createTestPaymentIntent } from '@/actions/stripe'; // For the test payment
+import { processCheckout } from '@/actions/checkout';
+import { createTestPaymentIntent } from '@/actions/stripe';
 import type { Course } from '@/types/course';
 import type { User } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
@@ -55,10 +55,9 @@ interface CheckoutFormContentProps {
   discountPercentInput: string;
   onDiscountPercentInputChange: (value: string) => void;
   appliedDiscountAmount: number;
-  finalTotalAmount: number;
+  finalTotalAmount: number; // This is in dollars
   maxUsers: number | null;
   setMaxUsers: React.Dispatch<React.SetStateAction<number | null>>;
-  // Stripe related props are not passed directly, hooks are used
 }
 
 function CheckoutFormContent({
@@ -69,21 +68,21 @@ function CheckoutFormContent({
   discountPercentInput,
   onDiscountPercentInputChange,
   appliedDiscountAmount,
-  finalTotalAmount,
+  finalTotalAmount, // Received in dollars
   maxUsers,
   setMaxUsers,
 }: CheckoutFormContentProps) {
-  const stripe = useStripe(); // Hook for Stripe.js
-  const elements = useElements(); // Hook for Stripe Elements
+  const stripe = useStripe();
+  const elements = useElements();
   const { toast } = useToast();
   const router = useRouter();
-  const [isProcessingCheckout, setIsProcessingCheckout] = useState(false); // For main form
-  const [formErrorMessage, setFormErrorMessage] = useState<string | null>(null); // For main form
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false); // For Stripe payment
-  const [paymentErrorMessage, setPaymentErrorMessage] = useState<string | null>(null); // For Stripe payment
+  const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
+  const [formErrorMessage, setFormErrorMessage] = useState<string | null>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentErrorMessage, setPaymentErrorMessage] = useState<string | null>(null);
 
 
-  const mainCheckoutForm = useForm<CheckoutFormValues>({ // Renamed form to avoid conflict
+  const mainCheckoutForm = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutFormSchema),
     defaultValues: {
       customerName: '',
@@ -163,15 +162,18 @@ function CheckoutFormContent({
       setPaymentErrorMessage('Stripe.js has not loaded yet. Please try again.');
       return;
     }
+    if (finalTotalAmount <= 0) {
+        setPaymentErrorMessage('Payment amount must be greater than $0.00.');
+        return;
+    }
 
     setIsProcessingPayment(true);
 
     const { error, paymentIntent } = await stripe.confirmPayment({
       elements,
       confirmParams: {
-        return_url: `${window.location.origin}/admin/checkout/success`, // Or a specific test result page
+        return_url: `${window.location.origin}/admin/checkout/success`,
       },
-      // redirect: 'if_required' // Use if_required to handle result client-side, or always to redirect
     });
 
     setIsProcessingPayment(false);
@@ -189,9 +191,8 @@ function CheckoutFormContent({
         case 'succeeded':
           toast({
             title: 'Test Payment Succeeded!',
-            description: 'Your $1.00 test payment was successful.',
+            description: `Your $${finalTotalAmount.toFixed(2)} test payment was successful.`,
           });
-          // router.push(`/admin/checkout/success?payment_intent=${paymentIntent.id}`); // Optional redirect
           break;
         case 'processing':
            toast({
@@ -333,14 +334,14 @@ function CheckoutFormContent({
             <Card className="lg:col-span-1">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><CreditCard className="h-5 w-5" /> Test Payment</CardTitle>
-                <CardDescription>Make a test payment of $1.00.</CardDescription>
+                <CardDescription>Make a test payment for the calculated total.</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleTestPaymentSubmit} id="stripe-payment-form" className="space-y-4">
                   <PaymentElement id="payment-element" options={{layout: "tabs"}} />
-                  <Button type="submit" className="w-full" disabled={!stripe || isProcessingPayment}>
+                  <Button type="submit" className="w-full" disabled={!stripe || isProcessingPayment || finalTotalAmount <= 0}>
                     {isProcessingPayment ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    {isProcessingPayment ? 'Processing...' : 'Pay $1.00 (Test)'}
+                    {isProcessingPayment ? 'Processing...' : `Pay $${finalTotalAmount > 0 ? finalTotalAmount.toFixed(2) : '0.00'} (Test)`}
                   </Button>
                   {paymentErrorMessage && <p className="text-xs text-destructive mt-2">{paymentErrorMessage}</p>}
                 </form>
@@ -349,7 +350,7 @@ function CheckoutFormContent({
           )}
 
           {/* Main Form Submit Button Card */}
-          <div className={stripe && elements ? "lg:col-span-1 flex items-end" : "lg:col-span-2 flex items-end"}> {/* Adjust span based on stripe form visibility */}
+          <div className={stripe && elements ? "lg:col-span-1 flex items-end" : "lg:col-span-2 flex items-end"}>
             <Card className="w-full">
               <CardHeader>
                 <CardTitle>Finalize Account Creation</CardTitle>
@@ -361,7 +362,7 @@ function CheckoutFormContent({
               <CardFooter>
                 <Button
                   type="submit"
-                  form="main-checkout-form" // Ensure this matches the main form's ID
+                  form="main-checkout-form"
                   className="w-full bg-primary hover:bg-primary/90"
                   disabled={isProcessingCheckout || selectedCourseIds.length === 0 }
                 >
@@ -390,7 +391,7 @@ export default function AdminCheckoutPage() {
   const [subtotalAmount, setSubtotalAmount] = useState(0);
   const [discountPercentInput, setDiscountPercentInput] = useState('');
   const [appliedDiscountAmount, setAppliedDiscountAmount] = useState(0);
-  const [finalTotalAmount, setFinalTotalAmount] = useState(0);
+  const [finalTotalAmount, setFinalTotalAmount] = useState(0); // This is in dollars
   const [maxUsers, setMaxUsers] = useState<number | null>(5);
 
   // Stripe PaymentIntent states
@@ -466,18 +467,38 @@ export default function AdminCheckoutPage() {
     setFinalTotalAmount(Math.max(0, finalAmount));
   }, [subtotalAmount, discountPercentInput]);
 
-  // Fetch PaymentIntent clientSecret for the $1.00 test payment
+  // Fetch PaymentIntent clientSecret
   useEffect(() => {
-    const fetchClientSecret = async () => {
+    const fetchClientSecret = async (amountInCents: number) => {
+      // Stripe's minimum is usually $0.50 (50 cents).
+      // createTestPaymentIntent action already checks this (and returns error if < 50).
+      // Client-side check can be good for immediate feedback if desired,
+      // but here we rely on the action's check.
+      if (amountInCents < 50 && amountInCents > 0) { // Special handling for positive but too small
+        setClientSecret(null);
+        setPaymentIntentError(`Amount ($${(amountInCents/100).toFixed(2)}) is less than Stripe's minimum of $0.50.`);
+        setIsLoadingClientSecret(false);
+        return;
+      }
+      if (amountInCents <= 0) { // No payment needed if $0 or less
+        setClientSecret(null);
+        setPaymentIntentError(null); // Not an error if $0
+        setIsLoadingClientSecret(false);
+        return;
+      }
+
+
       setIsLoadingClientSecret(true);
       setPaymentIntentError(null);
+      setClientSecret(null); // Clear previous secret
+
       try {
-        const result = await createTestPaymentIntent(100); // 100 cents for $1.00
+        const result = await createTestPaymentIntent(amountInCents);
         if (result.clientSecret) {
           setClientSecret(result.clientSecret);
         } else {
-          setPaymentIntentError(result.error || 'Failed to initialize test payment.');
-          toast({ title: "Payment Init Error", description: result.error || 'Could not initialize test payment.', variant: "destructive" });
+          setPaymentIntentError(result.error || 'Failed to initialize payment.');
+          toast({ title: "Payment Init Error", description: result.error || 'Could not initialize payment.', variant: "destructive" });
         }
       } catch (err: any) {
         setPaymentIntentError(err.message || 'An unexpected error occurred.');
@@ -487,10 +508,15 @@ export default function AdminCheckoutPage() {
       }
     };
 
-    if (currentUser && !isCheckingAuth) { // Only fetch if user is authorized
-      fetchClientSecret();
+    if (currentUser && !isCheckingAuth) {
+      const finalAmountInCentsValue = Math.round(finalTotalAmount * 100);
+      fetchClientSecret(finalAmountInCentsValue);
+    } else if (!currentUser && !isCheckingAuth) { // User logged out or auth failed
+        setClientSecret(null);
+        setPaymentIntentError(null);
+        setIsLoadingClientSecret(false);
     }
-  }, [currentUser, isCheckingAuth, toast]);
+  }, [currentUser, isCheckingAuth, toast, finalTotalAmount]);
 
 
   if (isCheckingAuth || !currentUser) {
@@ -505,11 +531,28 @@ export default function AdminCheckoutPage() {
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20">
       <h1 className="text-3xl font-bold tracking-tight text-primary mb-8">New Customer Checkout</h1>
-      {isLoadingClientSecret && <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin text-primary" /> <p>Loading payment form...</p></div>}
-      {paymentIntentError && !clientSecret && <Alert variant="destructive" className="mb-4"><AlertCircle className="h-4 w-4" /> <AlertTitle>Payment Error</AlertTitle> <AlertDescription>{paymentIntentError}</AlertDescription></Alert>}
       
-      {stripeElementsOptions && clientSecret ? (
-        <Elements stripe={stripePromise} options={stripeElementsOptions}>
+      {isLoadingClientSecret && finalTotalAmount > 0 && <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin text-primary" /> <p>Loading payment form...</p></div>}
+      
+      {paymentIntentError && !clientSecret && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" /> <AlertTitle>Payment Error</AlertTitle> <AlertDescription>{paymentIntentError}</AlertDescription>
+        </Alert>
+      )}
+      
+      {finalTotalAmount <= 0 && !isLoadingClientSecret && !paymentIntentError && (
+         <Alert variant="default" className="mb-4 border-blue-300 bg-blue-50 dark:bg-blue-900/30">
+            <AlertCircle className="h-4 w-4 text-blue-500" />
+            <AlertTitle className="text-blue-700 dark:text-blue-300">No Payment Required</AlertTitle>
+            <AlertDescription className="text-blue-600 dark:text-blue-400">
+              The current total is $0.00 or less. The payment form is not active.
+            </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Conditionally render Elements provider only if clientSecret and options are available */}
+      {stripeElementsOptions && clientSecret && finalTotalAmount > 0 ? (
+        <Elements stripe={stripePromise} options={stripeElementsOptions} key={clientSecret}>
           <CheckoutFormContent
             allCourses={allCourses}
             selectedCourseIds={selectedCourseIds}
@@ -523,9 +566,9 @@ export default function AdminCheckoutPage() {
             setMaxUsers={setMaxUsers}
           />
         </Elements>
-      ) : !isLoadingClientSecret && !paymentIntentError ? (
-        // Render the form content without Stripe if clientSecret couldn't be fetched but no explicit error (e.g. still loading courses)
-        // Or provide a more specific message
+      ) : (
+        // Render the form content without Stripe Elements if no payment is needed or if there was an error
+        // This ensures the main account creation form is still usable.
         <CheckoutFormContent
             allCourses={allCourses}
             selectedCourseIds={selectedCourseIds}
@@ -538,12 +581,8 @@ export default function AdminCheckoutPage() {
             maxUsers={maxUsers}
             setMaxUsers={setMaxUsers}
           />
-      ) : null /* Covers case where there's an error and we don't want to show the form, or still loading other things */}
+      )}
     </div>
   );
 }
-    
-
-    
-
     
