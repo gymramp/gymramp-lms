@@ -92,6 +92,10 @@ export async function createPaymentIntent(amountInCents: number): Promise<
   if (!Number.isInteger(amountInCents)) {
     return { error: 'Amount must be an integer in cents.'}
   }
+   // Stripe has minimum charge amounts (e.g., $0.50 USD)
+  if (amountInCents < 50) {
+      return { error: 'Amount must be at least $0.50 (or equivalent in cents).' };
+  }
 
   try {
     const paymentIntent = await stripe.paymentIntents.create({
@@ -136,6 +140,8 @@ export async function createTestPaymentIntent(amountInCents?: number): Promise<
       currency: 'usd',
       automatic_payment_methods: { enabled: true },
       description: `Test Payment for Stripe Integration ($${(testAmount / 100).toFixed(2)})`,
+      // Ensure you have a way to identify these as test payments if needed, e.g., metadata
+      // metadata: { test_payment: true } 
     });
 
     if (!paymentIntent.client_secret) {
@@ -151,3 +157,4 @@ export async function createTestPaymentIntent(amountInCents?: number): Promise<
     return { error: errorMessage };
   }
 }
+
