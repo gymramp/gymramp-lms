@@ -19,7 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     Menu, LogOut, User as UserIcon, LayoutDashboard, Settings, Users, BookOpen, FileText,
     ListChecks, Building, ShoppingCart, Award, MapPin, DatabaseZap, BarChartBig, Gift,
-    TestTube2, ChevronDown // Added ChevronDown
+    TestTube2, ChevronDown, UserPlus // Added UserPlus
 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -34,7 +34,7 @@ type NavItemType = {
   href?: string;
   isDropdown?: boolean;
   subItems?: Array<{ href: string; label: string; icon?: React.ElementType }>;
-  icon?: React.ElementType; // For potential top-level icons, though not used in current main nav
+  icon?: React.ElementType; // For top-level dropdown icon
 };
 
 export function Navbar() {
@@ -98,15 +98,23 @@ export function Navbar() {
         {
           label: 'Course Admin',
           isDropdown: true,
+          icon: BookOpen, // Icon for the dropdown trigger
           subItems: [
             { href: '/admin/courses', label: 'Courses', icon: BookOpen },
             { href: '/admin/lessons', label: 'Lessons', icon: FileText },
             { href: '/admin/quizzes', label: 'Quizzes', icon: ListChecks },
           ],
         },
-        { href: '/admin/checkout', label: 'Checkout' },
-        { href: '/admin/free-trial-checkout', label: 'Free Trial' },
-        { href: '/admin/test-checkout', label: 'Test Checkout'}
+        {
+          label: 'New Customers',
+          isDropdown: true,
+          icon: UserPlus, // Icon for the dropdown trigger
+          subItems: [
+            { href: '/admin/checkout', label: 'Paid Checkout', icon: ShoppingCart },
+            { href: '/admin/free-trial-checkout', label: 'Free Trial', icon: Gift },
+            { href: '/admin/test-checkout', label: 'Test Checkout', icon: TestTube2},
+          ],
+        }
       );
     } else if (user.role === 'Admin' || user.role === 'Owner') {
         roleSpecificItems.push(
@@ -194,7 +202,10 @@ export function Navbar() {
                     {navItems.map((item) => (
                         item.isDropdown && item.subItems ? (
                             <React.Fragment key={item.label}>
-                              <div className="px-2 py-1.5 mt-2 text-sm font-semibold text-muted-foreground">{item.label}</div>
+                              <div className="px-2 py-1.5 mt-2 text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                                {item.icon && <item.icon className="h-4 w-4" />}
+                                {item.label}
+                              </div>
                               {item.subItems.map((subItem) => (
                                 <Link
                                   key={subItem.label}
@@ -265,7 +276,8 @@ export function Navbar() {
             item.isDropdown && item.subItems ? (
                 <DropdownMenu key={item.label}>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="px-3 py-1 text-foreground/60 hover:text-foreground/80 hover:bg-muted h-auto">
+                    <Button variant="ghost" className="px-3 py-1 text-foreground/60 hover:text-foreground/80 hover:bg-muted h-auto flex items-center gap-1">
+                      {item.icon && <item.icon className="h-4 w-4" />}
                       {item.label} <ChevronDown className="ml-1 h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -357,3 +369,4 @@ export function Navbar() {
     </header>
   );
 }
+
