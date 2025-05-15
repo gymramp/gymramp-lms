@@ -1,24 +1,19 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { loadStripe, StripeElementsOptions } from '@stripe/stripe-js';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, CreditCard, Tag, Users, ShoppingCart, DollarSign, Percent, Briefcase, User as UserIconLucide, AlertTriangle, AlertCircle } from 'lucide-react';
-import { useForm, Controller } from 'react-hook-form';
+import { Loader2, Tag, Users, ShoppingCart, Percent, Briefcase, User as UserIconLucide, ArrowRight } from 'lucide-react';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { getAllCourses } from '@/lib/firestore-data';
-import { processCheckout } from '@/actions/checkout';
-import { createTestPaymentIntent } from '@/actions/stripe'; // For the test payment
 import type { Course } from '@/types/course';
 import type { User } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
@@ -28,9 +23,8 @@ import { useRouter } from 'next/navigation';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Badge } from '@/components/ui/badge';
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
-
-const checkoutFormSchema = z.object({
+// Schema for Step 1
+const checkoutSetupFormSchema = z.object({
   customerName: z.string().min(2, { message: 'Customer name is required.' }),
   companyName: z.string().min(2, { message: 'Company name is required.' }),
   adminEmail: z.string().email({ message: 'Please enter a valid email address.' }),
@@ -39,15 +33,14 @@ const checkoutFormSchema = z.object({
   state: z.string().optional(),
   zipCode: z.string().optional(),
   country: z.string().optional(),
-  password: z.string().min(6, { message: "Password must be at least 6 characters." }),
   revSharePartnerName: z.string().optional(),
   revSharePartnerCompany: z.string().optional(),
   revSharePartnerPercentage: z.coerce.number().min(0).max(100).optional().nullable(),
+  selectedCourseIds: z.array(z.string()).min(1, "Please select at least one course."),
 });
-type CheckoutFormValues = z.infer<typeof checkoutFormSchema>;
+type CheckoutSetupFormValues = z.infer<typeof checkoutSetupFormSchema>;
 
-
-interface CheckoutFormContentProps {
+interface CheckoutSetupFormContentProps {
   allCourses: Course[];
   selectedCourseIds: string[];
   onSelectedCourseIdsChange: (ids: string[]) => void;
@@ -55,13 +48,12 @@ interface CheckoutFormContentProps {
   discountPercentInput: string;
   onDiscountPercentInputChange: (value: string) => void;
   appliedDiscountAmount: number;
-  finalTotalAmount: number; // This is for the main form's summary
+  finalTotalAmount: number;
   maxUsers: number | null;
   setMaxUsers: React.Dispatch<React.SetStateAction<number | null>>;
-  // No clientSecret needed here directly as Stripe Elements are outside or use hooks
 }
 
-function CheckoutFormContent({
+function CheckoutSetupFormContent({
   allCourses,
   selectedCourseIds,
   onSelectedCourseIdsChange,
@@ -69,22 +61,16 @@ function CheckoutFormContent({
   discountPercentInput,
   onDiscountPercentInputChange,
   appliedDiscountAmount,
-  finalTotalAmount, // For main form summary
+  finalTotalAmount,
   maxUsers,
   setMaxUsers,
-}: CheckoutFormContentProps) {
-  const stripe = useStripe();
-  const elements = useElements();
+}: CheckoutSetupFormContentProps) {
   const { toast } = useToast();
   const router = useRouter();
-  const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
-  const [formErrorMessage, setFormErrorMessage] = useState<string | null>(null);
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [paymentErrorMessage, setPaymentErrorMessage] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-
-  const mainCheckoutForm = useForm<CheckoutFormValues>({
-    resolver: zodResolver(checkoutFormSchema),
+  const setupForm = useForm<CheckoutSetupFormValues>({
+    resolver: zodResolver(checkoutSetupFormSchema),
     defaultValues: {
       customerName: '',
       companyName: '',
@@ -94,12 +80,21 @@ function CheckoutFormContent({
       state: '',
       zipCode: '',
       country: '',
-      password: '',
       revSharePartnerName: '',
       revSharePartnerCompany: '',
       revSharePartnerPercentage: null,
+      selectedCourseIds: [],
     },
   });
+
+  useEffect(() => {
+    // Sync selectedCourseIds prop with form state
+    const currentFormIds = JSON.stringify(setupForm.getValues('selectedCourseIds') || []);
+    const propIds = JSON.stringify(selectedCourseIds || []);
+    if (currentFormIds !== propIds) {
+      setupForm.setValue('selectedCourseIds', selectedCourseIds, { shouldValidate: true });
+    }
+  }, [selectedCourseIds, setupForm]);
 
 
   const handleCourseCheckboxChange = (checked: boolean | string, courseId: string) => {
@@ -111,122 +106,50 @@ function CheckoutFormContent({
       nextSelectedIds = currentSelectedIds.filter((id) => id !== courseId);
     }
     onSelectedCourseIdsChange(nextSelectedIds);
+    setupForm.setValue('selectedCourseIds', nextSelectedIds, { shouldValidate: true });
   };
 
+  const onProceedToPayment = async (formData: CheckoutSetupFormValues) => {
+    setIsProcessing(true);
 
-  const onMainSubmit = async (formData: CheckoutFormValues) => {
-    setFormErrorMessage(null);
+    const finalTotalAmountCents = Math.round(finalTotalAmount * 100);
 
-    if (selectedCourseIds.length === 0) {
-        toast({ title: "No Courses Selected", description: "Please select at least one course.", variant: "destructive" });
-        return;
-    }
-    
-    setIsProcessingCheckout(true);
-
-    try {
-      const checkoutData = {
-        ...formData,
-        selectedCourseIds,
-        maxUsers,
-        subtotalAmount,
-        appliedDiscountPercent: parseFloat(discountPercentInput) || 0,
-        appliedDiscountAmount,
-        finalTotalAmount,
-      };
-
-      const result = await processCheckout(checkoutData);
-
-      setIsProcessingCheckout(false);
-      if (result.success) {
-        toast({ title: "Checkout Complete!", description: `Company "${formData.companyName}" and admin user created.` });
-        mainCheckoutForm.reset();
-        onSelectedCourseIdsChange([]);
-        setMaxUsers(5);
-        onDiscountPercentInputChange('');
-        router.push(`/admin/companies/${result.companyId}/edit`);
-      } else {
-        throw new Error(result.error || "Checkout failed after submission.");
-      }
-    } catch (processError: any) {
-      setIsProcessingCheckout(false);
-      setFormErrorMessage(`Order processing failed: ${processError.message}. Please contact support.`);
-      toast({ title: "Order Processing Error", description: `Order setup failed: ${processError.message}`, variant: "destructive", duration: 10000 });
-    }
-  };
-
-  const handleTestPaymentSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setPaymentErrorMessage(null);
-
-    if (!stripe || !elements) {
-      setPaymentErrorMessage('Stripe.js has not loaded yet. Please try again.');
-      return;
-    }
-    // For fixed $1 test, no need to check finalTotalAmount here
-    // if (finalTotalAmount <= 0) {
-    //     setPaymentErrorMessage('Payment amount must be greater than $0.00.');
-    //     return;
-    // }
-
-    setIsProcessingPayment(true);
-
-    const { error, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: `${window.location.origin}/admin/checkout/success`, // Or a specific test success page
-      },
+    const queryParams = new URLSearchParams({
+      customerName: formData.customerName,
+      companyName: formData.companyName,
+      adminEmail: formData.adminEmail,
+      ...(formData.streetAddress && { streetAddress: formData.streetAddress }),
+      ...(formData.city && { city: formData.city }),
+      ...(formData.state && { state: formData.state }),
+      ...(formData.zipCode && { zipCode: formData.zipCode }),
+      ...(formData.country && { country: formData.country }),
+      ...(formData.revSharePartnerName && { revSharePartnerName: formData.revSharePartnerName }),
+      ...(formData.revSharePartnerCompany && { revSharePartnerCompany: formData.revSharePartnerCompany }),
+      ...(formData.revSharePartnerPercentage !== null && formData.revSharePartnerPercentage !== undefined && { revSharePartnerPercentage: String(formData.revSharePartnerPercentage) }),
+      selectedCourseIds: formData.selectedCourseIds.join(','),
+      ...(maxUsers !== null && maxUsers !== undefined && { maxUsers: String(maxUsers) }),
+      finalTotalAmountCents: String(finalTotalAmountCents),
+      subtotalAmount: String(subtotalAmount),
+      appliedDiscountPercent: String(parseFloat(discountPercentInput) || 0),
+      appliedDiscountAmount: String(appliedDiscountAmount),
     });
 
-    setIsProcessingPayment(false);
-
-    if (error) {
-      console.error('Stripe confirmPayment error:', error);
-      setPaymentErrorMessage(error.message || 'An unexpected error occurred during payment.');
-      toast({
-        title: 'Payment Failed',
-        description: error.message || 'An unexpected error occurred.',
-        variant: 'destructive',
-      });
-    } else if (paymentIntent) {
-      switch (paymentIntent.status) {
-        case 'succeeded':
-          toast({
-            title: 'Test Payment Succeeded!',
-            description: `Your $1.00 test payment was successful.`, // Static amount
-          });
-          break;
-        case 'processing':
-           toast({
-            title: 'Payment Processing',
-            description: 'Your test payment is being processed.',
-          });
-          break;
-        default:
-          setPaymentErrorMessage(`Payment status: ${paymentIntent.status}. Please try again.`);
-          toast({
-            title: 'Payment Error',
-            description: `Test payment error. Status: ${paymentIntent.status}`,
-            variant: 'destructive',
-          });
-          break;
-      }
-    }
+    toast({ title: "Information Saved", description: "Proceeding to payment..." });
+    router.push(`/admin/checkout/payment?${queryParams.toString()}`);
+    //setIsProcessing(false); // Processing continues on the next page
   };
 
-
   return (
-    <Form {...mainCheckoutForm}>
-      <form id="main-checkout-form" onSubmit={mainCheckoutForm.handleSubmit(onMainSubmit)} className="space-y-8">
+    <Form {...setupForm}>
+      <form onSubmit={setupForm.handleSubmit(onProceedToPayment)} className="space-y-8">
         {/* Customer & Company Info */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
             <CardHeader><CardTitle>Customer & Company</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <FormField control={mainCheckoutForm.control} name="customerName" render={({ field }) => ( <FormItem> <FormLabel>Customer Name</FormLabel> <FormControl><Input {...field} /></FormControl> <FormMessage /> </FormItem> )} />
-              <FormField control={mainCheckoutForm.control} name="companyName" render={({ field }) => ( <FormItem> <FormLabel>Company Name</FormLabel> <FormControl><Input {...field} /></FormControl> <FormMessage /> </FormItem> )} />
-              <FormField control={mainCheckoutForm.control} name="adminEmail" render={({ field }) => ( <FormItem> <FormLabel>Admin Email</FormLabel> <FormControl><Input type="email" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
-              <FormField control={mainCheckoutForm.control} name="password" render={({ field }) => ( <FormItem> <FormLabel>Admin Password</FormLabel> <FormControl><Input type="password" {...field} placeholder="Default: 'password'" /></FormControl> <FormMessage /> </FormItem> )} />
+              <FormField control={setupForm.control} name="customerName" render={({ field }) => ( <FormItem> <FormLabel>Customer Name</FormLabel> <FormControl><Input {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+              <FormField control={setupForm.control} name="companyName" render={({ field }) => ( <FormItem> <FormLabel>Company Name</FormLabel> <FormControl><Input {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+              <FormField control={setupForm.control} name="adminEmail" render={({ field }) => ( <FormItem> <FormLabel>Admin Email</FormLabel> <FormControl><Input type="email" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
               <FormItem>
                 <FormLabel className="flex items-center gap-1"><Users className="h-4 w-4" /> Max Users Allowed</FormLabel>
                 <FormControl>
@@ -250,13 +173,13 @@ function CheckoutFormContent({
           <Card>
             <CardHeader><CardTitle>Billing Address (Optional)</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <FormField control={mainCheckoutForm.control} name="streetAddress" render={({ field }) => ( <FormItem> <FormLabel>Street Address</FormLabel> <FormControl><Input {...field} /></FormControl> <FormMessage /> </FormItem> )} />
-              <FormField control={mainCheckoutForm.control} name="city" render={({ field }) => ( <FormItem> <FormLabel>City</FormLabel> <FormControl><Input {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+              <FormField control={setupForm.control} name="streetAddress" render={({ field }) => ( <FormItem> <FormLabel>Street Address</FormLabel> <FormControl><Input {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+              <FormField control={setupForm.control} name="city" render={({ field }) => ( <FormItem> <FormLabel>City</FormLabel> <FormControl><Input {...field} /></FormControl> <FormMessage /> </FormItem> )} />
               <div className="grid grid-cols-2 gap-4">
-                <FormField control={mainCheckoutForm.control} name="state" render={({ field }) => ( <FormItem> <FormLabel>State / Province</FormLabel> <FormControl><Input {...field} /></FormControl> <FormMessage /> </FormItem> )} />
-                <FormField control={mainCheckoutForm.control} name="zipCode" render={({ field }) => ( <FormItem> <FormLabel>Zip / Postal Code</FormLabel> <FormControl><Input {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+                <FormField control={setupForm.control} name="state" render={({ field }) => ( <FormItem> <FormLabel>State / Province</FormLabel> <FormControl><Input {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+                <FormField control={setupForm.control} name="zipCode" render={({ field }) => ( <FormItem> <FormLabel>Zip / Postal Code</FormLabel> <FormControl><Input {...field} /></FormControl> <FormMessage /> </FormItem> )} />
               </div>
-              <FormField control={mainCheckoutForm.control} name="country" render={({ field }) => ( <FormItem> <FormLabel>Country</FormLabel> <FormControl><Input {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+              <FormField control={setupForm.control} name="country" render={({ field }) => ( <FormItem> <FormLabel>Country</FormLabel> <FormControl><Input {...field} /></FormControl> <FormMessage /> </FormItem> )} />
             </CardContent>
           </Card>
         </div>
@@ -268,9 +191,9 @@ function CheckoutFormContent({
             <CardDescription>If applicable, enter details for the revenue share partner.</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <FormField control={mainCheckoutForm.control} name="revSharePartnerName" render={({ field }) => ( <FormItem> <FormLabel>Partner Name</FormLabel> <FormControl><Input {...field} placeholder="e.g., John Smith" /></FormControl> <FormMessage /> </FormItem> )} />
-            <FormField control={mainCheckoutForm.control} name="revSharePartnerCompany" render={({ field }) => ( <FormItem> <FormLabel>Partner Company</FormLabel> <FormControl><Input {...field} placeholder="e.g., Partner Co." /></FormControl> <FormMessage /> </FormItem> )} />
-            <FormField control={mainCheckoutForm.control} name="revSharePartnerPercentage" render={({ field }) => ( <FormItem> <FormLabel>Share Percentage (%)</FormLabel> <FormControl><Input type="number" min="0" max="100" {...field} placeholder="e.g., 10" value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl> <FormMessage /> </FormItem> )} />
+            <FormField control={setupForm.control} name="revSharePartnerName" render={({ field }) => ( <FormItem> <FormLabel>Partner Name</FormLabel> <FormControl><Input {...field} placeholder="e.g., John Smith" /></FormControl> <FormMessage /> </FormItem> )} />
+            <FormField control={setupForm.control} name="revSharePartnerCompany" render={({ field }) => ( <FormItem> <FormLabel>Partner Company</FormLabel> <FormControl><Input {...field} placeholder="e.g., Partner Co." /></FormControl> <FormMessage /> </FormItem> )} />
+            <FormField control={setupForm.control} name="revSharePartnerPercentage" render={({ field }) => ( <FormItem> <FormLabel>Share Percentage (%)</FormLabel> <FormControl><Input type="number" min="0" max="100" {...field} placeholder="e.g., 10" value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl> <FormMessage /> </FormItem> )} />
           </CardContent>
         </Card>
 
@@ -278,35 +201,42 @@ function CheckoutFormContent({
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> Select Courses</CardTitle></CardHeader>
           <CardContent>
-            <ScrollArea className="h-48 w-full rounded-md border p-4">
-              <div className="space-y-2">
-                {allCourses.length === 0 ? (
-                  <p className="text-muted-foreground italic">No courses available in the library.</p>
-                ) : allCourses.map(course => (
-                  <FormItem key={course.id} className="flex items-center space-x-3 p-2 hover:bg-muted/50 rounded-md transition-colors">
-                    <FormControl>
-                      <Checkbox
-                        checked={selectedCourseIds.includes(course.id)}
-                        onCheckedChange={checked => handleCourseCheckboxChange(checked, course.id)}
-                        id={`course-${course.id}`}
-                      />
-                    </FormControl>
-                    <FormLabel htmlFor={`course-${course.id}`} className="flex justify-between w-full cursor-pointer">
-                      <span>{course.title} <Badge variant="outline" className="ml-2">{course.level}</Badge></span>
-                      <span className="text-sm font-semibold text-primary">{course.price}</span>
-                    </FormLabel>
-                  </FormItem>
-                ))}
-              </div>
-            </ScrollArea>
-            {mainCheckoutForm.formState.errors.selectedCourseIds && <p className="text-sm font-medium text-destructive mt-2">{mainCheckoutForm.formState.errors.selectedCourseIds.message}</p>}
+            <FormField
+              control={setupForm.control}
+              name="selectedCourseIds"
+              render={() => ( // No field prop needed directly as Checkbox has its own binding
+                <FormItem>
+                  <ScrollArea className="h-48 w-full rounded-md border p-4">
+                    <div className="space-y-2">
+                      {allCourses.length === 0 ? (
+                        <p className="text-muted-foreground italic">No courses available in the library.</p>
+                      ) : allCourses.map(course => (
+                        <FormItem key={course.id} className="flex items-center space-x-3 p-2 hover:bg-muted/50 rounded-md transition-colors">
+                          <FormControl>
+                            <Checkbox
+                              checked={selectedCourseIds.includes(course.id)}
+                              onCheckedChange={checked => handleCourseCheckboxChange(checked, course.id)}
+                              id={`course-${course.id}`}
+                            />
+                          </FormControl>
+                          <FormLabel htmlFor={`course-${course.id}`} className="flex justify-between w-full cursor-pointer">
+                            <span>{course.title} <Badge variant="outline" className="ml-2">{course.level}</Badge></span>
+                            <span className="text-sm font-semibold text-primary">{course.price}</span>
+                          </FormLabel>
+                        </FormItem>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                  <FormMessage /> {/* For selectedCourseIds error */}
+                </FormItem>
+              )}
+            />
           </CardContent>
         </Card>
 
-        {/* Main Form Summary & Submit Section */}
+        {/* Summary & Proceed Button */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Price Summary (for main form context) */}
-          <Card className="lg:col-span-1">
+          <Card className="lg:col-span-2">
             <CardHeader><CardTitle className="flex items-center gap-2"><Tag className="h-5 w-5" /> Account Order Summary</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <div className="flex justify-between text-sm"><span>Subtotal:</span> <span className="font-medium">${subtotalAmount.toFixed(2)}</span></div>
@@ -331,45 +261,20 @@ function CheckoutFormContent({
             </CardContent>
           </Card>
         
-          {/* Stripe Payment Form Section */}
-          {stripe && elements && ( // Conditionally render if Stripe is loaded
-            <Card className="lg:col-span-1">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2"><CreditCard className="h-5 w-5" /> Test Payment</CardTitle>
-                <CardDescription>Make a test payment for $1.00.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleTestPaymentSubmit} id="stripe-payment-form" className="space-y-4">
-                  <PaymentElement id="payment-element" options={{layout: "tabs"}} />
-                  <Button type="submit" className="w-full" disabled={!stripe || isProcessingPayment}>
-                    {isProcessingPayment ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    {isProcessingPayment ? 'Processing...' : `Pay $1.00 (Test)`} {/* Static amount */}
-                  </Button>
-                  {paymentErrorMessage && <p className="text-xs text-destructive mt-2">{paymentErrorMessage}</p>}
-                </form>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Main Form Submit Button Card */}
-          <div className={stripe && elements ? "lg:col-span-1 flex items-end" : "lg:col-span-2 flex items-end"}>
+          <div className="lg:col-span-1 flex items-end">
             <Card className="w-full">
               <CardHeader>
-                <CardTitle>Finalize Account Creation</CardTitle>
-                <CardDescription>Review the details and create the new company account.</CardDescription>
+                <CardTitle>Proceed to Payment</CardTitle>
+                <CardDescription>Review details and continue to the payment step.</CardDescription>
               </CardHeader>
-              <CardContent>
-                {formErrorMessage && (<p className="text-xs text-destructive text-center mb-2">{formErrorMessage}</p>)}
-              </CardContent>
               <CardFooter>
                 <Button
                   type="submit"
-                  form="main-checkout-form"
                   className="w-full bg-primary hover:bg-primary/90"
-                  disabled={isProcessingCheckout || selectedCourseIds.length === 0 }
+                  disabled={isProcessing || selectedCourseIds.length === 0}
                 >
-                  {isProcessingCheckout ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserIconLucide className="mr-2 h-4 w-4" />}
-                  {isProcessingCheckout ? 'Processing...' : `Create Account & Assign Courses`}
+                  {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
+                  {isProcessing ? 'Processing...' : 'Proceed to Payment & Finalize'}
                 </Button>
               </CardFooter>
             </Card>
@@ -379,7 +284,6 @@ function CheckoutFormContent({
     </Form>
   );
 }
-
 
 export default function AdminCheckoutPage() {
   const [allCourses, setAllCourses] = useState<Course[]>([]);
@@ -395,11 +299,6 @@ export default function AdminCheckoutPage() {
   const [appliedDiscountAmount, setAppliedDiscountAmount] = useState(0);
   const [finalTotalAmount, setFinalTotalAmount] = useState(0);
   const [maxUsers, setMaxUsers] = useState<number | null>(5);
-
-  // Stripe PaymentIntent states for the FIXED $1.00 TEST PAYMENT
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [isLoadingClientSecret, setIsLoadingClientSecret] = useState(true); // Start true
-  const [paymentIntentError, setPaymentIntentError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -444,7 +343,6 @@ export default function AdminCheckoutPage() {
     }
   }, [currentUser, isCheckingAuth, toast]);
 
-  // Calculate totals for the main form
   useEffect(() => {
     let total = 0;
     selectedCourseIds.forEach((id) => {
@@ -470,29 +368,6 @@ export default function AdminCheckoutPage() {
     setFinalTotalAmount(Math.max(0, finalAmount));
   }, [subtotalAmount, discountPercentInput]);
 
-  // Fetch PaymentIntent clientSecret FOR THE FIXED $1.00 TEST
-  useEffect(() => {
-    if (currentUser && !isCheckingAuth) { // Only fetch if authorized
-        setIsLoadingClientSecret(true);
-        setPaymentIntentError(null);
-        createTestPaymentIntent() // Call without arguments to use default $1.00
-            .then(result => {
-                if (result.clientSecret) {
-                    setClientSecret(result.clientSecret);
-                } else {
-                    setPaymentIntentError(result.error || 'Failed to initialize payment.');
-                    toast({ title: "Test Payment Init Error", description: result.error || 'Could not initialize test payment form.', variant: "destructive" });
-                }
-            })
-            .catch(err => {
-                setPaymentIntentError(err.message || 'An unexpected error occurred preparing test payment.');
-                toast({ title: "Test Payment Init Error", description: err.message, variant: "destructive" });
-            })
-            .finally(() => setIsLoadingClientSecret(false));
-    }
-  }, [currentUser, isCheckingAuth, toast]);
-
-
   if (isCheckingAuth || !currentUser) {
     return ( <div className="container mx-auto py-12 text-center"> <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /> <p className="mt-4 text-muted-foreground">Verifying access…</p> </div> );
   }
@@ -500,69 +375,21 @@ export default function AdminCheckoutPage() {
     return ( <div className="container mx-auto py-12 text-center"> <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /> <p className="mt-4 text-muted-foreground">Loading courses…</p> </div> );
   }
 
-  // Options for Stripe Elements, initialized when clientSecret is available
-  const stripeElementsOptions: StripeElementsOptions | undefined = clientSecret ? { clientSecret, appearance: {theme: 'stripe'} } : undefined;
-
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20">
-      <h1 className="text-3xl font-bold tracking-tight text-primary mb-8">New Customer Checkout</h1>
-      
-      {/* Loading or error state for the test payment form */}
-      {isLoadingClientSecret && (
-        <div className="text-center p-4 my-4 rounded-md bg-muted">
-            <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />
-            <p className="mt-2 text-muted-foreground">Loading test payment form...</p>
-        </div>
-      )}
-      
-      {paymentIntentError && !clientSecret && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Test Payment Error</AlertTitle>
-          <AlertDescription>{paymentIntentError}</AlertDescription>
-        </Alert>
-      )}
-      
-      {/* 
-        Render Elements provider and CheckoutFormContent once clientSecret is available.
-        CheckoutFormContent handles its internal Stripe logic based on hooks.
-      */}
-      {clientSecret && stripeElementsOptions ? (
-        <Elements stripe={stripePromise} options={stripeElementsOptions} key={clientSecret}>
-          <CheckoutFormContent
-            allCourses={allCourses}
-            selectedCourseIds={selectedCourseIds}
-            onSelectedCourseIdsChange={setSelectedCourseIds}
-            subtotalAmount={subtotalAmount}
-            discountPercentInput={discountPercentInput}
-            onDiscountPercentInputChange={setDiscountPercentInput}
-            appliedDiscountAmount={appliedDiscountAmount}
-            finalTotalAmount={finalTotalAmount} // This is for the main form summary
-            maxUsers={maxUsers}
-            setMaxUsers={setMaxUsers}
-          />
-        </Elements>
-      ) : !isLoadingClientSecret && !paymentIntentError ? (
-         // If not loading and no error, but still no clientSecret (e.g. Stripe issue not caught by error state)
-         // Or, simply render the main form if clientSecret is still loading initially
-         <div className="my-4 p-4 rounded-md border border-dashed text-center text-muted-foreground">
-           Test payment form will appear here once initialized.
-           <CheckoutFormContent
-            allCourses={allCourses}
-            selectedCourseIds={selectedCourseIds}
-            onSelectedCourseIdsChange={setSelectedCourseIds}
-            subtotalAmount={subtotalAmount}
-            discountPercentInput={discountPercentInput}
-            onDiscountPercentInputChange={setDiscountPercentInput}
-            appliedDiscountAmount={appliedDiscountAmount}
-            finalTotalAmount={finalTotalAmount} // This is for the main form summary
-            maxUsers={maxUsers}
-            setMaxUsers={setMaxUsers}
-          />
-         </div>
-      ) : null /* While loading client secret and if no error, we might not render CheckoutFormContent immediately to avoid context issues */
-      }
+      <h1 className="text-3xl font-bold tracking-tight text-primary mb-8">New Customer Checkout - Step 1: Setup</h1>
+      <CheckoutSetupFormContent
+        allCourses={allCourses}
+        selectedCourseIds={selectedCourseIds}
+        onSelectedCourseIdsChange={setSelectedCourseIds}
+        subtotalAmount={subtotalAmount}
+        discountPercentInput={discountPercentInput}
+        onDiscountPercentInputChange={setDiscountPercentInput}
+        appliedDiscountAmount={appliedDiscountAmount}
+        finalTotalAmount={finalTotalAmount}
+        maxUsers={maxUsers}
+        setMaxUsers={setMaxUsers}
+      />
     </div>
   );
 }
-    
