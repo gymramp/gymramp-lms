@@ -16,13 +16,26 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Menu, LogOut, User as UserIcon, LayoutDashboard, Settings, Users, BookOpen, FileText, ListChecks, Building, ShoppingCart, Award, MapPin, DatabaseZap, BarChartBig, Gift, TestTube2 } from 'lucide-react';
+import {
+    Menu, LogOut, User as UserIcon, LayoutDashboard, Settings, Users, BookOpen, FileText,
+    ListChecks, Building, ShoppingCart, Award, MapPin, DatabaseZap, BarChartBig, Gift,
+    TestTube2, ChevronDown // Added ChevronDown
+} from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { getUserByEmail } from '@/lib/user-data';
 import type { User } from '@/types/user';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
+
+// Define a more flexible type for navigation items
+type NavItemType = {
+  label: string;
+  href?: string;
+  isDropdown?: boolean;
+  subItems?: Array<{ href: string; label: string; icon?: React.ElementType }>;
+  icon?: React.ElementType; // For potential top-level icons, though not used in current main nav
+};
 
 export function Navbar() {
   const router = useRouter();
@@ -41,12 +54,11 @@ export function Navbar() {
       } catch (error) {
         console.error("Error fetching user data:", error);
         setCurrentUser(null);
-         // toast({ title: "Error", description: "Could not load user profile.", variant: "destructive" });
       }
     } else {
       setCurrentUser(null);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     setIsMounted(true);
@@ -72,20 +84,26 @@ export function Navbar() {
     }
   };
 
-  const getNavItems = (user: User | null) => {
-    const baseItems: { href: string; label: string }[] = [];
+  const getNavItems = (user: User | null): NavItemType[] => {
+    const baseItems: NavItemType[] = [];
 
-    if (!user) return baseItems; // No items if not logged in
+    if (!user) return baseItems;
 
-    const roleSpecificItems: { href: string; label: string }[] = [];
+    const roleSpecificItems: NavItemType[] = [];
     if (user.role === 'Super Admin') {
       roleSpecificItems.push(
         { href: '/admin/dashboard', label: 'Dashboard' },
         { href: '/admin/companies', label: 'Companies' },
         { href: '/admin/users', label: 'Users' },
-        { href: '/admin/courses', label: 'Courses' },
-        { href: '/admin/lessons', label: 'Lessons' },
-        { href: '/admin/quizzes', label: 'Quizzes' },
+        {
+          label: 'Course Admin',
+          isDropdown: true,
+          subItems: [
+            { href: '/admin/courses', label: 'Courses', icon: BookOpen },
+            { href: '/admin/lessons', label: 'Lessons', icon: FileText },
+            { href: '/admin/quizzes', label: 'Quizzes', icon: ListChecks },
+          ],
+        },
         { href: '/admin/checkout', label: 'Checkout' },
         { href: '/admin/free-trial-checkout', label: 'Free Trial' },
         { href: '/admin/test-checkout', label: 'Test Checkout'}
@@ -156,7 +174,7 @@ export function Navbar() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className={cn("container flex h-14 items-center justify-between", "mx-auto")}>
         <div className="flex items-center">
-           {isMounted && isLoggedIn && navItems.length > 0 && ( // Only show menu if logged in AND has items
+           {isMounted && isLoggedIn && navItems.length > 0 && (
                 <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
                 <SheetTrigger asChild>
                     <Button
@@ -168,44 +186,64 @@ export function Navbar() {
                     <Menu className="h-5 w-5" />
                     </Button>
                 </SheetTrigger>
-                 <SheetContent side="left" className="w-[300px] sm:w-[400px] p-0">
+                 <SheetContent side="left" className="w-[300px] sm:w-[400px] p-0 overflow-y-auto">
                     <SheetHeader className="p-4 border-b">
                     <SheetTitle className="text-left">Menu</SheetTitle>
                     </SheetHeader>
-                    <nav className="flex flex-col gap-4 p-4">
+                    <nav className="flex flex-col gap-1 p-4">
                     {navItems.map((item) => (
-                        <Link
-                        key={item.label}
-                        href={item.href}
-                        className="block px-2 py-1 text-lg transition-colors hover:text-foreground/80 text-foreground/60"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        >
-                        {item.label}
-                        </Link>
+                        item.isDropdown && item.subItems ? (
+                            <React.Fragment key={item.label}>
+                              <div className="px-2 py-1.5 mt-2 text-sm font-semibold text-muted-foreground">{item.label}</div>
+                              {item.subItems.map((subItem) => (
+                                <Link
+                                  key={subItem.label}
+                                  href={subItem.href}
+                                  className="flex items-center gap-3 pl-4 pr-2 py-2 text-base transition-colors hover:text-foreground/80 text-foreground/60 hover:bg-muted rounded-md"
+                                  onClick={() => setIsMobileMenuOpen(false)}
+                                >
+                                  {subItem.icon && <subItem.icon className="h-5 w-5" />}
+                                  {subItem.label}
+                                </Link>
+                              ))}
+                            </React.Fragment>
+                          ) : item.href ? (
+                            <Link
+                              key={item.label}
+                              href={item.href}
+                              className="block px-2 py-2 text-base transition-colors hover:text-foreground/80 text-foreground/60 hover:bg-muted rounded-md"
+                              onClick={() => setIsMobileMenuOpen(false)}
+                            >
+                              {item.label}
+                            </Link>
+                          ) : null
                     ))}
-                    <hr className="my-2"/>
                     {currentUser && (
-                        <div className="flex flex-col gap-2 mt-auto">
-                            <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">{currentUser.email}</div>
-                            <DropdownMenuSeparator className="-mx-2"/>
+                        <>
+                            <hr className="my-3"/>
+                            <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">User Account</div>
                             {userMenuItems.map((item) => (
-                                <DropdownMenuItem key={item.label} asChild className="cursor-pointer">
+                                <DropdownMenuItem key={item.label} asChild className="cursor-pointer p-0">
                                     <Link
                                         href={item.href}
                                         onClick={() => setIsMobileMenuOpen(false)}
-                                        className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent focus:bg-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                                        className="flex items-center gap-3 pl-4 pr-2 py-2 text-base text-foreground/60 hover:text-foreground/80 hover:bg-muted rounded-md w-full"
                                     >
-                                        <item.icon className="mr-2 h-4 w-4" />
+                                        <item.icon className="h-5 w-5" />
                                         <span>{item.label}</span>
                                     </Link>
                                 </DropdownMenuItem>
                             ))}
-                            <DropdownMenuSeparator className="-mx-2"/>
-                            <DropdownMenuItem onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }} className="cursor-pointer flex justify-start items-center gap-2 px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10 hover:text-destructive">
-                                <LogOut className="mr-2 h-4 w-4" />
+                            <hr className="my-3"/>
+                            <Button
+                                variant="ghost"
+                                onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
+                                className="w-full flex justify-start items-center gap-3 pl-4 pr-2 py-2 text-base text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            >
+                                <LogOut className="h-5 w-5" />
                                 <span>Logout</span>
-                            </DropdownMenuItem>
-                        </div>
+                            </Button>
+                        </>
                     )}
                     </nav>
                  </SheetContent>
@@ -222,18 +260,38 @@ export function Navbar() {
             </Link>
         </div>
 
-        <nav className="hidden md:flex items-center justify-center space-x-4 text-sm font-medium flex-grow">
+        <nav className="hidden md:flex items-center justify-center space-x-1 text-sm font-medium flex-grow">
           {isMounted && isLoggedIn && navItems.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={cn(
-                 "px-3 py-1 rounded-md transition-colors",
-                 "text-foreground/60 hover:text-foreground/80 hover:bg-muted",
-              )}
-            >
-              {item.label}
-            </Link>
+            item.isDropdown && item.subItems ? (
+                <DropdownMenu key={item.label}>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="px-3 py-1 text-foreground/60 hover:text-foreground/80 hover:bg-muted h-auto">
+                      {item.label} <ChevronDown className="ml-1 h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    {item.subItems.map((subItem) => (
+                      <DropdownMenuItem key={subItem.label} asChild className="cursor-pointer">
+                        <Link href={subItem.href} className="flex items-center gap-2">
+                          {subItem.icon && <subItem.icon className="h-4 w-4 text-muted-foreground" />}
+                          <span>{subItem.label}</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : item.href ? (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className={cn(
+                    "px-3 py-2 rounded-md transition-colors", // Increased py for better clickability
+                    "text-foreground/60 hover:text-foreground/80 hover:bg-muted",
+                  )}
+                >
+                  {item.label}
+                </Link>
+              ) : null
           ))}
         </nav>
 
@@ -280,11 +338,11 @@ export function Navbar() {
                     </DropdownMenu>
                 ) : (
                      <>
-                        <Button asChild size="sm" variant="outline">
-                          <span><Link href="/">Login</Link></span>
+                        <Button asChild size="sm" variant="ghost">
+                          <Link href="/">Login</Link>
                         </Button>
-                        <Button asChild size="sm">
-                          <span><Link href="/contact">Schedule A Call</Link></span>
+                        <Button asChild size="sm" className="bg-primary hover:bg-primary/90">
+                          <Link href="/contact">Schedule A Call</Link>
                         </Button>
                      </>
                 )) : (
