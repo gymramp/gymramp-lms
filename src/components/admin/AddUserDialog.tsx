@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useTransition, useState, useEffect } from 'react';
@@ -10,7 +11,7 @@ import {
   DialogContent,
   DialogDescription,
   DialogFooter,
-  DialogHeader,
+  DialogHeader, // Added DialogHeader
   DialogTitle,
   DialogClose
 } from '@/components/ui/dialog';
@@ -31,8 +32,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox"; // Import Checkbox
+import { ScrollArea } from "@/components/ui/scroll-area"; // Import ScrollArea
 import { useToast } from '@/hooks/use-toast';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
@@ -61,9 +62,7 @@ const userFormSchema = z.object({
   companyId: z
     .string()
     .min(1, { message: 'Please select a company.' }),
-  assignedLocationIds: z
-    .array(z.string())
-    .min(1, { message: 'Please assign at least one location.' }),
+  assignedLocationIds: z.array(z.string()).default([]), // Make optional, default to empty array
 });
 
 type UserFormValues = z.infer<typeof userFormSchema>;
@@ -190,10 +189,11 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
               return;
           }
 
-          if (!data.assignedLocationIds || data.assignedLocationIds.length === 0) {
-               form.setError("assignedLocationIds", { type: "manual", message: "User must be assigned to at least one location." });
-               return;
-           }
+           // Location check removed as it's now optional
+           // if (!data.assignedLocationIds || data.assignedLocationIds.length === 0) {
+           //    form.setError("assignedLocationIds", { type: "manual", message: "User must be assigned to at least one location." });
+           //    return;
+           // }
            if (!data.companyId) {
                 form.setError("companyId", { type: "manual", message: "Company selection is required." });
                 return;
@@ -227,7 +227,7 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
             email: data.email,
             role: data.role,
             companyId: data.companyId,
-            assignedLocationIds: data.assignedLocationIds,
+            assignedLocationIds: data.assignedLocationIds || [], // Ensure it's an array
             });
 
             if (newUser) {
@@ -248,23 +248,6 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
                         variant: "destructive",
                      });
                  }
-
-                // Removed direct call to sendWelcomeEmail. Email sending should be handled by a Firebase Cloud Function.
-                // try {
-                //     await sendWelcomeEmail(data.email, data.name, data.password);
-                //     toast({
-                //         title: "Welcome Email Sent",
-                //         description: `A welcome email has been sent to ${data.email}.`,
-                //     });
-                // } catch (emailError: any) {
-                //      console.error("Failed to send welcome email:", emailError);
-                //      toast({
-                //          title: "Email Sending Failed",
-                //          description: `User ${data.name} was created, but the welcome email could not be sent. Error: ${emailError.message}`,
-                //          variant: "destructive",
-                //          duration: 7000,
-                //      });
-                // }
 
                 onUserAdded(newUser);
                 setIsOpen(false);
@@ -425,7 +408,7 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
               name="assignedLocationIds"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Assign to Locations</FormLabel>
+                  <FormLabel>Assign to Locations (Optional)</FormLabel>
                   <FormControl>
                     <ScrollArea className="h-40 w-full rounded-md border p-4">
                         {isLoadingCompanyData ? (
