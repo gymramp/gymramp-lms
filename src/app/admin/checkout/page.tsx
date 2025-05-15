@@ -17,7 +17,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { getAllCourses } from '@/lib/firestore-data';
-import { processCheckout } from '@/app/actions/checkout'; // Corrected import path
+import { processCheckout } from '@/actions/checkout'; // Corrected import path
 import { createTestPaymentIntent } from '@/actions/stripe'; // For the test payment
 import type { Course } from '@/types/course';
 import type { User } from '@/types/user';
@@ -542,4 +542,8 @@ export default function AdminCheckoutPage() {
     </div>
   );
 }
+    
+
+    
+
     
