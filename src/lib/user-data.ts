@@ -103,28 +103,50 @@ export async function getUserById(userId: string): Promise<User | null> {
  */
 export async function getUserByEmail(email: string): Promise<User | null> {
     if (!email) {
-        console.warn("getUserByEmail called with empty email.");
+        console.warn("[getUserByEmail] Called with empty email.");
         return null;
     }
-    const lowercasedEmail = email.toLowerCase(); // Convert search email to lowercase
+    const lowercasedEmail = email.toLowerCase();
+    console.log(`[getUserByEmail] Attempting to find user with lowercase email: '${lowercasedEmail}'`);
+
     return retryOperation(async () => {
         const usersRef = collection(db, USERS_COLLECTION);
-        // Query by the lowercase email
         const q = query(usersRef, where("email", "==", lowercasedEmail));
-        const querySnapshot = await getDocs(q);
-        if (querySnapshot.empty) {
-            return null;
-        }
-        // Assuming email is unique (after lowercasing), get the first match
-        const docSnap = querySnapshot.docs[0];
-        // Check if document exists and isDeleted is not explicitly true
-        if (docSnap.exists() && docSnap.data().isDeleted !== true) {
-            return { id: docSnap.id, ...docSnap.data() } as User;
-        } else {
-            return null; // User found but is soft-deleted
+
+        try {
+            const querySnapshot = await getDocs(q);
+            console.log(`[getUserByEmail] Query for '${lowercasedEmail}' executed. Snapshot empty: ${querySnapshot.empty}. Docs count: ${querySnapshot.docs.length}`);
+
+            if (querySnapshot.empty) {
+                console.log(`[getUserByEmail] No user document found for email: '${lowercasedEmail}' in collection '${USERS_COLLECTION}'.`);
+                return null;
+            }
+
+            const docSnap = querySnapshot.docs[0];
+            const userData = docSnap.data();
+            // Use JSON.stringify for potentially large objects to avoid overly verbose console output by default
+            console.log(`[getUserByEmail] Document found for '${lowercasedEmail}'. ID: ${docSnap.id}. Data (stringified):`, JSON.stringify(userData).substring(0, 500) + (JSON.stringify(userData).length > 500 ? '...' : ''));
+
+
+            if (docSnap.exists() && userData.isDeleted !== true) {
+                console.log(`[getUserByEmail] User '${lowercasedEmail}' is valid and not soft-deleted. Returning user object.`);
+                return { id: docSnap.id, ...userData } as User;
+            } else {
+                if (!docSnap.exists()) { // This condition should ideally not be met if querySnapshot was not empty
+                    console.warn(`[getUserByEmail] Document for '${lowercasedEmail}' was found in query but docSnap.exists() is false. This is unexpected.`);
+                }
+                if (userData.isDeleted === true) {
+                    console.log(`[getUserByEmail] User '${lowercasedEmail}' found but is marked as soft-deleted.`);
+                }
+                return null;
+            }
+        } catch (error) {
+            console.error(`[getUserByEmail] Error during Firestore query for email '${lowercasedEmail}':`, error);
+            throw error; // Re-throw to be caught by retryOperation or calling function
         }
     });
 }
+
 
 /**
  * Fetches all non-soft-deleted users associated with a specific company ID.
@@ -194,6 +216,7 @@ export async function addUser(userData: Omit<UserFormData, 'password'>): Promise
             lastLogin: null, // Example default
             assignedCourseIds: userData.assignedCourseIds || [], // Ensure it's an array
             courseProgress: {}, // Initialize empty progress object
+            profileImageUrl: userData.profileImageUrl || null,
         };
         const docRef = await addDoc(usersRef, newUserDoc);
         const newDocSnap = await getDoc(docRef);
@@ -228,6 +251,9 @@ export async function updateUser(userId: string, userData: Partial<UserFormData>
         }
         if (dataToUpdate.companyId === null) {
             updatePayload.companyId = ''; // Store empty string if company is unassigned
+        }
+        if (dataToUpdate.profileImageUrl === null) {
+            updatePayload.profileImageUrl = null;
         }
 
 
@@ -680,5 +706,3 @@ export async function getUserCompany(): Promise<Company | null> {
   );
   return null;
 }
-
-
