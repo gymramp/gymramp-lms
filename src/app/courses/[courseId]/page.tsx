@@ -4,11 +4,11 @@ import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
 import { CheckCircle, Clock, BarChart, BookOpen } from "lucide-react"; // Added BookOpen
 import Link from "next/link";
-import { getCourseById } from '@/lib/courses-data'; // Import the centralized data function
+import { getCourseById } from '@/lib/firestore-data'; // Import the centralized data function
 
 export default async function CourseDetailPage({ params }: { params: { courseId: string } }) {
   // Fetch course data using the centralized function
-  const course = getCourseById(params.courseId);
+  const course = await getCourseById(params.courseId); // Make sure getCourseById is async if it fetches from DB
 
   if (!course) {
     return <div className="container mx-auto py-12 text-center">Course not found.</div>;
@@ -25,6 +25,7 @@ export default async function CourseDetailPage({ params }: { params: { courseId:
             width={800}
             height={450}
             className="w-full rounded-lg shadow-md object-cover aspect-video"
+            data-ai-hint="course cover" // Assuming this was intended, if not remove.
           />
            <Card>
             <CardHeader>

@@ -25,7 +25,6 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { HexColorPicker } from 'react-colorful';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { getCompanyById, updateCompany, updateCompanyCourseAssignments } from '@/lib/company-data';
 import { getAllCourses } from '@/lib/firestore-data';
@@ -53,10 +52,6 @@ const companyFormSchema = z.object({
   assignedCourseIds: z.array(z.string()).optional(),
   isTrial: z.boolean().optional(), // Keep for display logic, but not directly edited as a checkbox here.
   trialEndsAt: z.date().nullable().optional(),
-  whiteLabelEnabled: z.boolean().optional(),
-  primaryColor: z.string().optional().or(z.literal('')),
-  secondaryColor: z.string().optional().or(z.literal('')),
-  accentColor: z.string().optional().or(z.literal('')),
 });
 
 type CompanyFormValues = z.infer<typeof companyFormSchema>;
@@ -86,14 +81,10 @@ export default function EditCompanyPage() {
       assignedCourseIds: [],
       isTrial: false,
       trialEndsAt: null,
-      primaryColor: '',
-      secondaryColor: '',
-      accentColor: '',
     },
   });
 
-   const logoUrlValue = form.watch('logoUrl'); // Watch logo URL for preview
-   const whiteLabelEnabledValue = form.watch('whiteLabelEnabled'); // Watch white label status for conditional rendering
+   const logoUrlValue = form.watch('logoUrl');
    const isTrialValue = form.watch('isTrial'); // Watch for conditional rendering
 
   // Auth check and initial data fetch
@@ -133,10 +124,6 @@ export default function EditCompanyPage() {
         assignedCourseIds: companyData.assignedCourseIds || [],
         isTrial: companyData.isTrial || false,
         trialEndsAt: companyData.trialEndsAt instanceof Timestamp ? companyData.trialEndsAt.toDate() : null,
-        whiteLabelEnabled: companyData.whiteLabelEnabled || false,
- primaryColor: companyData.primaryColor || '',
- secondaryColor: companyData.secondaryColor || '',
- accentColor: companyData.accentColor || '',
       });
 
       const courses = await getAllCourses();
@@ -191,10 +178,6 @@ export default function EditCompanyPage() {
             maxUsers: data.maxUsers ?? null,
             // isTrial is not directly editable here, it's part of the company's inherent state
             // trialEndsAt can be updated
-            whiteLabelEnabled: data.whiteLabelEnabled,
- primaryColor: data.primaryColor || null,
- secondaryColor: data.secondaryColor || null,
- accentColor: data.accentColor || null,
             trialEndsAt: data.trialEndsAt ? Timestamp.fromDate(data.trialEndsAt) : null,
         };
 
@@ -402,83 +385,10 @@ export default function EditCompanyPage() {
                                        <Input type="url" {...field} value={field.value ?? ''} readOnly />
                                      </FormControl>
                                      <FormMessage />
-                                </FormItem>
-                                )}
-                             />
-                         </FormItem>
-
-                           {/* White Labeling Toggle */}
-                           <FormField
-                                control={form.control}
-                                name="whiteLabelEnabled"
-                                render={({ field }) => (
-                                 <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                                    <FormControl>
-                                        <Checkbox
-                                            checked={field.value}
-                                            onCheckedChange={field.onChange}
-                                        />
-                                    </FormControl>
-                                    <div className="space-y-1 leading-none">
-                                        <FormLabel>Enable White Labeling</FormLabel>
-                                        <FormDescription>Allow this company to customize their logo and colors.</FormDescription>
-                                    </div>
                                    </FormItem>
                                 )}
                               />
                            </FormItem>
-
-                            {/* White Label Settings Section - Conditional */}
-                            {whiteLabelEnabledValue && (
-                               <Card className="mt-8">
-                                   <CardHeader>
-                                       <CardTitle>White Label Settings</CardTitle>
-                                       <CardDescription>Customize the look and feel of the application for this company.</CardDescription>
-                                   </CardHeader>
-                                   <CardContent className="space-y-6">
-                                       {/* Color Pickers */}
-                                       <FormField
-                                          control={form.control}
-                                          name="primaryColor"
-                                          render={({ field }) => (
-                                            <FormItem className="space-y-2">
-                                                <FormLabel>Primary Color</FormLabel>
-                                                <FormControl>
-                                                    <Input type="color" {...field} value={field.value ?? ''} />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                          )}
-                                        />
-                                        <FormField
-                                          control={form.control}
-                                          name="secondaryColor"
-                                          render={({ field }) => (
-                                            <FormItem className="space-y-2">
-                                                <FormLabel>Secondary Color</FormLabel>
-                                                <FormControl>
-                                                    <Input type="color" {...field} value={field.value ?? ''} />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                          )}
-                                        />
-                                         <FormField
-                                          control={form.control}
-                                          name="accentColor"
-                                          render={({ field }) => (
-                                            <FormItem className="space-y-2">
-                                                <FormLabel>Accent Color</FormLabel>
-                                                <FormControl>
-                                                    <Input type="color" {...field} value={field.value ?? ''} />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                          )}
-                                        />
-                                   </CardContent>
-                               </Card>
-                            )}
                     </CardContent>
                 </Card>
              </div>
