@@ -15,7 +15,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { getAllCourses } from '@/lib/firestore-data';
-import { processFreeTrialCheckout } from '@/app/actions/checkout'; // Corrected import path
+import { processFreeTrialCheckout } from '@/actions/checkout'; // Corrected import path
 import type { Course } from '@/types/course';
 import type { User } from '@/types/user'; // Import User type
 import { getUserByEmail } from '@/lib/user-data';
