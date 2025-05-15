@@ -281,7 +281,7 @@ export function Navbar() {
                 ) : (
                      <>
                         <Button asChild size="sm" variant="outline">
-                            <Link href="/login">Login</Link>
+                            <Link href="/">Login</Link> {/* Changed from /login to / */}
                         </Button>
                         <Button asChild size="sm">
                              <Link href="/contact">Schedule A Call</Link>
