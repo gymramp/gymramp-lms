@@ -19,7 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     Menu, LogOut, User as UserIcon, LayoutDashboard, Settings, Users, BookOpen, FileText,
     ListChecks, Building, ShoppingCart, Award, MapPin, DatabaseZap, BarChartBig, Gift,
-    TestTube2, ChevronDown, UserPlus, Percent // Added Percent for Rev Share Report
+    TestTube2, ChevronDown, UserPlus, Percent, HelpCircle // Added HelpCircle
 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -92,9 +92,9 @@ export function Navbar() {
     const roleSpecificItems: NavItemType[] = [];
     if (user.role === 'Super Admin') {
       roleSpecificItems.push(
-        { href: '/admin/dashboard', label: 'Dashboard' },
-        { href: '/admin/companies', label: 'Companies' },
-        { href: '/admin/users', label: 'Users' },
+        { href: '/admin/dashboard', label: 'Dashboard', icon: BarChartBig },
+        { href: '/admin/companies', label: 'Companies', icon: Building },
+        { href: '/admin/users', label: 'Users', icon: Users },
         {
           label: 'Course Admin',
           isDropdown: true,
@@ -115,24 +115,24 @@ export function Navbar() {
             { href: '/admin/test-checkout', label: 'Test Checkout', icon: TestTube2},
           ],
         },
-        { href: '/admin/revenue-share-report', label: 'Rev Share Report', icon: Percent } // New Link
+        { href: '/admin/revenue-share-report', label: 'Rev Share Report', icon: Percent }
       );
     } else if (user.role === 'Admin' || user.role === 'Owner') {
         roleSpecificItems.push(
-            { href: '/dashboard', label: 'Dashboard' },
-             { href: '/admin/users', label: 'Users' },
-             ...(user.companyId ? [{ href: `/admin/companies/${user.companyId}/locations`, label: 'Locations' }] : []),
-            { href: '/courses/my-courses', label: 'My Learning'},
+            { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+             { href: '/admin/users', label: 'Users', icon: Users },
+             ...(user.companyId ? [{ href: `/admin/companies/${user.companyId}/locations`, label: 'Locations', icon: MapPin }] : []),
+            { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen},
         );
     } else if (user.role === 'Manager') {
         roleSpecificItems.push(
-             { href: '/dashboard', label: 'Dashboard' },
-             { href: '/admin/users', label: 'Users' },
-             { href: '/courses/my-courses', label: 'My Learning'},
+             { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+             { href: '/admin/users', label: 'Users', icon: Users },
+             { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen},
          );
     } else if (user.role === 'Staff') {
         roleSpecificItems.push(
-            { href: '/courses/my-courses', label: 'My Learning' },
+            { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },
          );
     }
 
@@ -151,14 +151,9 @@ export function Navbar() {
           { href: '/admin/dashboard', label: 'Super Admin Dashboard', icon: BarChartBig },
           { href: '/admin/companies', label: 'Companies', icon: Building },
           { href: '/admin/users', label: 'Users', icon: Users },
-          { href: '/admin/courses', label: 'Courses', icon: BookOpen },
-          { href: '/admin/lessons', label: 'Lessons', icon: FileText },
-          { href: '/admin/quizzes', label: 'Quizzes', icon: ListChecks },
-          { href: '/admin/checkout', label: 'Paid Checkout', icon: ShoppingCart },
-          { href: '/admin/free-trial-checkout', label: 'Free Trial Checkout', icon: Gift },
-          { href: '/admin/test-checkout', label: 'Test Checkout', icon: TestTube2 },
-          { href: '/admin/revenue-share-report', label: 'Rev Share Report', icon: Percent }, // New Link in dropdown
+          // Course Admin items are now part of main nav for Super Admin desktop
           { href: '/admin/settings', label: 'Settings', icon: Settings },
+          { href: '/admin/migrate-data', label: 'Data Migration', icon: DatabaseZap },
         ]
       : []),
       ...(currentUser.role === 'Admin' || currentUser.role === 'Owner'
@@ -173,6 +168,7 @@ export function Navbar() {
           ] : []),
     { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },
     { href: '/badges', label: 'My Badges', icon: Award },
+    { href: '/site-help', label: 'Site Help', icon: HelpCircle }, // Added Site Help Link
   ] : [];
 
   const getInitials = (name?: string | null): string => {
@@ -227,7 +223,7 @@ export function Navbar() {
                               className="flex items-center gap-3 px-2 py-2 text-base transition-colors hover:text-foreground/80 text-foreground/60 hover:bg-muted rounded-md"
                               onClick={() => setIsMobileMenuOpen(false)}
                             >
-                              {item.icon && <item.icon className="h-5 w-5" />} {/* Added icon for direct links in mobile */}
+                              {item.icon && <item.icon className="h-5 w-5" />}
                               {item.label}
                             </Link>
                           ) : null
@@ -300,11 +296,11 @@ export function Navbar() {
                   key={item.label}
                   href={item.href}
                   className={cn(
-                    "px-3 py-2 rounded-md transition-colors flex items-center gap-2", // Added flex and gap
+                    "px-3 py-2 rounded-md transition-colors flex items-center gap-2",
                     "text-foreground/60 hover:text-foreground/80 hover:bg-muted",
                   )}
                 >
-                  {item.icon && <item.icon className="h-4 w-4" />} {/* Added icon for direct links in desktop */}
+                  {item.icon && <item.icon className="h-4 w-4" />}
                   {item.label}
                 </Link>
               ) : null
@@ -373,4 +369,3 @@ export function Navbar() {
     </header>
   );
 }
-
