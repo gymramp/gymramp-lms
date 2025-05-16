@@ -2,11 +2,12 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { HelpCircle, BookOpen, Users, Building, ShoppingCart, Cog, DatabaseZap, LayoutDashboard, BarChartBig, Percent, UserPlus, Gift, TestTube2, MapPin, Settings, Award } from "lucide-react";
+import { HelpCircle, BookOpen, Users, Building, ShoppingCart, Cog, DatabaseZap, LayoutDashboard, BarChartBig, Percent, UserPlus, Gift, TestTube2, MapPin, Settings as SettingsIcon, Award } from "lucide-react"; // Renamed Settings to SettingsIcon
 import { useToast } from "@/hooks/use-toast";
 import type { User, UserRole } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
@@ -29,10 +30,10 @@ const helpData: Record<UserRole, HelpTopic[]> = {
         <>
           <p>As a Super Admin, you can create, edit, and manage all companies on the platform.</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li>Navigate to <strong>Companies</strong> from the main menu.</li>
-            <li>Use the <strong>Add New Company</strong> button to create new client accounts.</li>
-            <li>Edit company details, assign courses, and manage user limits from the company's edit page.</li>
-            <li>View the <Link href="/admin/revenue-share-report" className="text-primary hover:underline">Revenue Share Report</Link> for insights on partnerships.</li>
+            <li>Navigate to <strong>Admin &gt; Companies</strong> from the main menu (via your user dropdown or direct link if you add one later).</li>
+            <li>Use the <strong>Add New Company</strong> button to create new client accounts. This involves setting company details, max users, and optionally, their logo and a short description.</li>
+            <li>From the company list, you can <strong>Edit Company & Settings</strong> to modify details, manage assigned courses (from the global library), update trial status, and adjust user limits.</li>
+            <li>View the <Link href="/admin/revenue-share-report" className="text-primary hover:underline">Revenue Share Report</Link> for insights on checkouts that included revenue share agreements.</li>
           </ul>
         </>
       ),
@@ -42,10 +43,13 @@ const helpData: Record<UserRole, HelpTopic[]> = {
       icon: Users,
       content: (
         <>
-          <p>You have full control over all user accounts.</p>
+          <p>You have full control over all user accounts across the platform.</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li>Go to <strong>Users</strong> to view and manage users across all companies.</li>
-            <li>You can add new users (including other Super Admins), change roles, assign to companies/locations, and activate/deactivate accounts.</li>
+            <li>Go to <strong>Admin &gt; Users</strong> to view and manage users.</li>
+            <li>You can add new users of any role (including other Super Admins, though this should be done with caution).</li>
+            <li>Assign users to specific companies and locations.</li>
+            <li>Activate or deactivate user accounts.</li>
+            <li>Edit user details, including their name and role (except for other Super Admins).</li>
           </ul>
         </>
       ),
@@ -55,12 +59,12 @@ const helpData: Record<UserRole, HelpTopic[]> = {
       icon: BookOpen,
       content: (
         <>
-          <p>Manage the master library of courses, lessons, and quizzes.</p>
+          <p>Manage the master library of courses, lessons, and quizzes. Access these via the <strong>Course Admin</strong> dropdown in the main navigation.</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li><strong>Courses:</strong> Create new courses, define modules, and set pricing/details.</li>
-            <li><strong>Lessons:</strong> Build individual lesson content, add videos, and set preview availability.</li>
-            <li><strong>Quizzes:</strong> Create quizzes and manage their questions.</li>
-            <li>These library items can then be assigned to companies for their users.</li>
+            <li><strong>Courses:</strong> Create new courses, define the number of modules, set titles, descriptions, pricing, difficulty levels, and duration. Assign lessons and quizzes to the curriculum from the "Manage Curriculum" page for each course.</li>
+            <li><strong>Lessons:</strong> Build individual lesson content. You can add text, embed videos (YouTube, Vimeo, or direct URL), upload featured images, provide exercise file information, and toggle preview availability.</li>
+            <li><strong>Quizzes:</strong> Create quizzes with titles. Then, manage their questions (multiple-choice or true/false) from the "Manage Questions" page for each quiz.</li>
+            <li>These library items can then be assigned to specific companies, making them available to that company's users.</li>
           </ul>
         </>
       ),
@@ -70,11 +74,11 @@ const helpData: Record<UserRole, HelpTopic[]> = {
       icon: UserPlus,
       content: (
         <>
-          <p>Use the dedicated checkout pages to onboard new customers:</p>
+          <p>Use the dedicated checkout pages under the <strong>New Customers</strong> dropdown in the main navigation to onboard new customers:</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li><Link href="/admin/checkout" className="text-primary hover:underline"><strong>Paid Checkout:</strong></Link> For new customers making a purchase. This flow includes payment processing.</li>
-            <li><Link href="/admin/free-trial-checkout" className="text-primary hover:underline"><strong>Free Trial Checkout:</strong></Link> To set up new customers with a trial period.</li>
-            <li><Link href="/admin/test-checkout" className="text-primary hover:underline"><strong>Test Checkout:</strong></Link> For testing Stripe payment integration.</li>
+            <li><Link href="/admin/checkout" className="text-primary hover:underline"><strong>Paid Checkout:</strong></Link> For new customers making a purchase. This flow collects company and admin details, allows course selection, applies discounts, processes payment via Stripe, and optionally records revenue share details.</li>
+            <li><Link href="/admin/free-trial-checkout" className="text-primary hover:underline"><strong>Free Trial Checkout:</strong></Link> To set up new customers with a trial period. Collects company and admin details, allows course selection for the trial, and sets a trial duration.</li>
+            <li><Link href="/admin/test-checkout" className="text-primary hover:underline"><strong>Test Checkout:</strong></Link> A dedicated page for testing the Stripe payment integration with a sample amount.</li>
           </ul>
         </>
       ),
@@ -86,8 +90,22 @@ const helpData: Record<UserRole, HelpTopic[]> = {
         <>
           <p>Configure system-wide settings and manage data integrity.</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li><Link href="/admin/settings" className="text-primary hover:underline"><strong>System Settings:</strong></Link> Configure SMTP mail server settings.</li>
-            <li><Link href="/admin/migrate-data" className="text-primary hover:underline"><strong>Data Migration:</strong></Link> Run scripts for data updates (e.g., adding `isDeleted` flags). Use with caution.</li>
+            <li><Link href="/admin/settings" className="text-primary hover:underline"><strong>System Settings:</strong></Link> Configure SMTP mail server settings for application emails (currently focuses on Google OAuth 2.0 setup via environment variables).</li>
+            <li><Link href="/admin/migrate-data" className="text-primary hover:underline"><strong>Data Migration:</strong></Link> Run scripts for data updates (e.g., adding `isDeleted: false` flags to older documents). This should be used with extreme caution and ideally only once after backing up data.</li>
+          </ul>
+        </>
+      ),
+    },
+     {
+      title: "Understanding the Dashboard",
+      icon: BarChartBig,
+      content: (
+        <>
+          <p>The Super Admin Dashboard provides a high-level overview of the platform.</p>
+          <ul className="list-disc pl-5 mt-2 space-y-1">
+            <li><strong>Key Metrics:</strong> View total users, courses, companies, and recent sales figures.</li>
+            <li><strong>Quick Actions:</strong> Easily navigate to major administrative sections.</li>
+            <li><strong>Recent Platform Additions:</strong> See the latest companies and users added to the system.</li>
           </ul>
         </>
       ),
@@ -97,78 +115,78 @@ const helpData: Record<UserRole, HelpTopic[]> = {
     {
       title: "Admin Dashboard Overview",
       icon: LayoutDashboard,
-      content: "Your dashboard provides a snapshot of your company's learning activity, employee progress, and course engagement. Use it to monitor overall performance and identify areas needing attention.",
+      content: "Your dashboard provides a snapshot of your company's learning activity, employee progress (overall completion, certificates), and active courses. Use it to monitor overall performance and identify areas needing attention. Access this via the 'Dashboard' link in your user menu or main navigation.",
     },
     {
       title: "Managing Company Users",
       icon: Users,
-      content: "Navigate to 'Users' from the main menu. Here you can add new employees (Staff, Managers), assign them to locations, edit their details, and activate/deactivate their accounts within your company.",
+      content: "Navigate to 'Manage Users' from your user menu or main navigation. Here you can add new employees (Staff, Managers), assign them to locations within your company, edit their details (name, locations), and activate/deactivate their accounts. You cannot create users with roles equal to or higher than your own.",
     },
     {
       title: "Managing Company Locations",
       icon: MapPin,
-      content: "From the 'Locations' link (often found via Company Management or a direct link if configured), you can add new physical or virtual locations for your company and assign users to them.",
+      content: "From the 'Manage Locations' link in your user menu (if you have company context) or via 'Companies' &gt; 'Manage Locations' if that path exists. You can add new physical or virtual locations for your company. Users can then be assigned to these locations.",
     },
     {
       title: "Assigning Courses to Users",
       icon: BookOpen,
-      content: "From the User Management page, you can select an employee and use the 'Manage Assigned Courses' option to give them access to specific courses that have been made available to your company.",
+      content: "From the User Management page, select an employee and use the 'Manage Assigned Courses' option (from the actions dropdown). This allows you to give them access to specific courses that have been made available to your company by a Super Admin.",
     },
   ],
-  'Owner': [ // Owner might have similar permissions to Admin
+  'Owner': [
     {
       title: "Owner Dashboard Overview",
       icon: LayoutDashboard,
-      content: "Your dashboard shows your company's learning progress, active users, and course completion rates. Keep an eye on these metrics to ensure your team is on track.",
+      content: "Your dashboard shows your company's learning progress, active users, course completion rates, and issued certificates. Keep an eye on these metrics to ensure your team is on track. Access via 'Dashboard' in your user menu or main navigation.",
     },
     {
       title: "Managing Company Users & Locations",
       icon: Users,
-      content: "As an Owner, you can add/edit users (Managers, Staff) and locations for your company. Access these through the 'Users' and 'Locations' sections in your navigation.",
+      content: "As an Owner, you can manage users (Managers, Staff) and locations for your company. Access these through the 'Manage Users' and 'Manage Locations' sections in your user menu or main navigation. You can add/edit users and assign them to locations. You cannot create users with roles equal to or higher than your own.",
     },
     {
       title: "Course Assignment",
       icon: BookOpen,
-      content: "Assign relevant courses to your employees via the 'Manage Assigned Courses' option on the User Management page to equip them with necessary skills.",
+      content: "Assign relevant courses to your employees via the 'Manage Assigned Courses' option on the User Management page. This helps equip them with necessary skills. Courses available for assignment are those enabled for your company by a Super Admin.",
     },
   ],
   'Manager': [
     {
       title: "Manager Dashboard",
       icon: LayoutDashboard,
-      content: "Your dashboard focuses on your team's progress. Track completion rates for assigned courses and identify team members who might need support.",
+      content: "Your dashboard focuses on your team's progress within your assigned location(s). Track completion rates for assigned courses, view issued certificates, and identify team members who might need support. Access via 'Dashboard' in your user menu or main navigation.",
     },
     {
       title: "Managing Your Team (Staff)",
       icon: Users,
-      content: "You can manage Staff users within your assigned locations. This includes adding new staff, editing their details (if permitted), and assigning them to courses. Navigate to 'Users' to manage your team.",
+      content: "You can manage Staff users within your assigned locations. This includes adding new staff (they will be automatically assigned your locations), editing their details (name, location re-assignment within your accessible locations), and activating/deactivating their accounts. Navigate to 'Manage Users' from your user menu or main navigation.",
     },
     {
       title: "Assigning Courses to Staff",
       icon: BookOpen,
-      content: "Ensure your staff have access to the right training by assigning them courses through the 'Manage Assigned Courses' option in the User Management section for each staff member.",
+      content: "Ensure your staff have access to the right training by assigning them courses through the 'Manage Assigned Courses' option in the User Management section for each staff member. You can assign any course made available to your company.",
     },
   ],
   'Staff': [
     {
       title: "Accessing My Learning",
       icon: BookOpen,
-      content: "Navigate to 'My Learning' from your user menu to see all courses assigned to you. Click on a course to start or continue learning.",
+      content: "Navigate to 'My Learning' from your user menu or main navigation. This page lists all courses assigned to you. Click on a course to start or continue your learning journey.",
     },
     {
       title: "Taking Courses & Quizzes",
       icon: HelpCircle,
-      content: "Follow the course curriculum, watch videos, read lesson content, and complete quizzes. Your progress is saved automatically.",
+      content: "Inside a course, you'll find modules with lessons and quizzes. Follow the curriculum, watch videos, read lesson content, and complete quizzes as required. Your progress (e.g., completed lessons/quizzes) is saved automatically. For quizzes, you typically need to achieve a passing score to proceed.",
     },
     {
       title: "Viewing My Badges",
       icon: Award,
-      content: "Once you complete a course, you'll earn a badge (certificate). You can view all your earned badges by navigating to 'My Badges' from your user menu.",
+      content: "Once you successfully complete a course (finish all required items, including passing quizzes), you'll earn a badge or certificate. You can view all your earned badges by navigating to 'My Badges' from your user menu. These serve as a record of your achievements.",
     },
     {
       title: "Updating My Account",
-      icon: Settings,
-      content: "You can update your profile information, such as your name and profile picture, by going to 'My Account' from the user menu.",
+      icon: SettingsIcon,
+      content: "You can update your profile information, such as your name and profile picture (if enabled), by going to 'My Account' from the user menu. You can also reset your password from this page.",
     }
   ],
 };
@@ -193,8 +211,8 @@ export default function SiteHelpPage() {
                 }
             } else {
                 setCurrentUser(null);
-                // Optionally redirect if no user, or show generic help
-                // router.push('/login'); 
+                // If not logged in, might want to show generic help or redirect
+                // For now, it will show "Help Information Not Available"
             }
             setIsLoading(false);
         });

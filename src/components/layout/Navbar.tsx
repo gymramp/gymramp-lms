@@ -369,4 +369,3 @@ export function Navbar() {
     </header>
   );
 }
-
