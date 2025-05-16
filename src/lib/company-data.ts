@@ -84,8 +84,15 @@ export async function createDefaultCompany(): Promise<Company | null> {
                 revSharePartnerName: null,
                 revSharePartnerCompany: null,
                 revSharePartnerPercentage: null,
+                // White-labeling defaults
+                whiteLabelEnabled: false,
+                primaryColor: null,
+                secondaryColor: null,
+                // logoUrl will be part of CompanyFormData, can be null
+                logoUrl: null,
+                 createdAt: serverTimestamp() as Timestamp, // Ensure createdAt is part of the type
             };
-            const docRef = await addDoc(companiesRef, { ...newCompanyData, isDeleted: false, deletedAt: null });
+            const docRef = await addDoc(companiesRef, { ...newCompanyData, isDeleted: false, deletedAt: null, createdAt: serverTimestamp() });
             const newDocSnap = await getDoc(docRef);
             if (newDocSnap.exists()) {
                 console.log(`Default company "${DEFAULT_COMPANY_NAME}" created with ID: ${docRef.id}`);
@@ -160,8 +167,13 @@ export async function addCompany(companyData: CompanyFormData): Promise<Company 
             revSharePartnerName: companyData.revSharePartnerName?.trim() || null,
             revSharePartnerCompany: companyData.revSharePartnerCompany?.trim() || null,
             revSharePartnerPercentage: companyData.revSharePartnerPercentage ?? null,
+            // White-labeling defaults (if not provided in companyData)
+            whiteLabelEnabled: companyData.whiteLabelEnabled || false,
+            primaryColor: companyData.primaryColor || null,
+            secondaryColor: companyData.secondaryColor || null,
             isDeleted: false,
             deletedAt: null,
+            createdAt: serverTimestamp(), // Add createdAt timestamp
          };
         const docRef = await addDoc(companiesRef, docData);
         const newDocSnap = await getDoc(docRef);
@@ -212,6 +224,11 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
         if (companyData.revSharePartnerCompany !== undefined) dataToUpdate.revSharePartnerCompany = companyData.revSharePartnerCompany?.trim() || null;
         if (companyData.revSharePartnerPercentage !== undefined) dataToUpdate.revSharePartnerPercentage = companyData.revSharePartnerPercentage ?? null;
 
+        // White-labeling fields
+        if (companyData.whiteLabelEnabled !== undefined) dataToUpdate.whiteLabelEnabled = companyData.whiteLabelEnabled;
+        if (companyData.primaryColor !== undefined) dataToUpdate.primaryColor = companyData.primaryColor;
+        if (companyData.secondaryColor !== undefined) dataToUpdate.secondaryColor = companyData.secondaryColor;
+        // logoUrl already handled above
 
         if (Object.keys(dataToUpdate).length === 0) {
             console.warn("updateCompany called with no valid data to update.");
@@ -517,3 +534,4 @@ export async function createDefaultLocation(companyId: string): Promise<Location
         }
     });
 }
+

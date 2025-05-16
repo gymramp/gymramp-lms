@@ -2,18 +2,21 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, BookOpen, Building, CreditCard, Loader2, AlertTriangle } from 'lucide-react';
-import { Button } from '@/components/ui/button'; // Import Button component
+import { Users, BookOpen, Building, CreditCard, Loader2, AlertTriangle, DatabaseZap, Cog, List, CalendarDays } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getUserByEmail, getAllUsers } from '@/lib/user-data';
 import { getAllCourses } from '@/lib/firestore-data';
 import { getAllCompanies } from '@/lib/company-data';
-import type { User } from '@/types/user';
+import type { User, Company } from '@/types/user';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
+import { format } from 'date-fns';
+import { Timestamp } from 'firebase/firestore';
 
 export default function SuperAdminDashboardPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -21,6 +24,8 @@ export default function SuperAdminDashboardPage() {
   const [totalCourses, setTotalCourses] = useState(0);
   const [totalCompanies, setTotalCompanies] = useState(0);
   const [totalSales, setTotalSales] = useState(0); // Placeholder for sales data
+  const [recentCompanies, setRecentCompanies] = useState<Company[]>([]);
+  const [recentUsers, setRecentUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
@@ -30,15 +35,37 @@ export default function SuperAdminDashboardPage() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [users, courses, companies] = await Promise.all([
+      const [usersData, coursesData, companiesData] = await Promise.all([
         getAllUsers(),
         getAllCourses(),
         getAllCompanies(),
       ]);
-      setTotalUsers(users.length);
-      setTotalCourses(courses.length);
-      setTotalCompanies(companies.length);
-      setTotalSales(0); // Placeholder, replace with actual sales fetching logic
+
+      setTotalUsers(usersData.length);
+      setTotalCourses(coursesData.length);
+      setTotalCompanies(companiesData.length);
+      setTotalSales(0); // Placeholder
+
+      // Sort companies by createdAt (descending)
+      const sortedCompanies = companiesData
+        .filter(company => company.createdAt) // Ensure createdAt exists
+        .sort((a, b) => {
+          const dateA = a.createdAt instanceof Timestamp ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+          const dateB = b.createdAt instanceof Timestamp ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+          return dateB.getTime() - dateA.getTime();
+        });
+      setRecentCompanies(sortedCompanies.slice(0, 3)); // Get top 3
+
+      // Sort users by createdAt (descending)
+      const sortedUsers = usersData
+        .filter(user => user.createdAt) // Ensure createdAt exists
+        .sort((a, b) => {
+          const dateA = a.createdAt instanceof Timestamp ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+          const dateB = b.createdAt instanceof Timestamp ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+          return dateB.getTime() - dateA.getTime();
+        });
+      setRecentUsers(sortedUsers.slice(0, 3)); // Get top 3
+
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
       toast({ title: "Error", description: "Could not load dashboard data.", variant: "destructive" });
@@ -96,7 +123,8 @@ export default function SuperAdminDashboardPage() {
             </Card>
           ))}
         </div>
-        <div className="mt-8">
+        <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Skeleton className="h-64 w-full" />
             <Skeleton className="h-64 w-full" />
         </div>
       </div>
@@ -104,7 +132,6 @@ export default function SuperAdminDashboardPage() {
   }
 
   if (!currentUser) {
-    // This should ideally be handled by the redirect in useEffect, but as a fallback:
     return (
         <div className="container mx-auto py-12 text-center">
             <AlertTriangle className="h-12 w-12 mx-auto text-destructive mb-4" />
@@ -113,6 +140,12 @@ export default function SuperAdminDashboardPage() {
         </div>
     );
   }
+
+  const formatDate = (date: Timestamp | Date | undefined): string => {
+    if (!date) return 'N/A';
+    const jsDate = date instanceof Timestamp ? date.toDate() : date;
+    return format(jsDate, 'PPpp'); // e.g., Sep 21, 2023, 4:30 PM
+  };
 
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20">
@@ -164,27 +197,77 @@ export default function SuperAdminDashboardPage() {
         </Card>
       </div>
 
-      <div className="mt-10 grid gap-6">
+      <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
             <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
                 <CardDescription>Navigate to key management areas.</CardDescription>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                <Button variant="outline" onClick={() => router.push('/admin/companies')}>Manage Companies</Button>
-                <Button variant="outline" onClick={() => router.push('/admin/users')}>Manage Users</Button>
-                <Button variant="outline" onClick={() => router.push('/admin/courses')}>Manage Courses</Button>
-                <Button variant="outline" onClick={() => router.push('/admin/checkout')}>New Customer Checkout</Button>
+            <CardContent className="grid grid-cols-2 gap-4">
+                <Button variant="outline" onClick={() => router.push('/admin/companies')} className="justify-start text-left">
+                    <Building className="mr-2 h-4 w-4" /> Manage Companies
+                </Button>
+                <Button variant="outline" onClick={() => router.push('/admin/users')} className="justify-start text-left">
+                    <Users className="mr-2 h-4 w-4" /> Manage Users
+                </Button>
+                <Button variant="outline" onClick={() => router.push('/admin/courses')} className="justify-start text-left">
+                    <BookOpen className="mr-2 h-4 w-4" /> Manage Courses
+                </Button>
+                <Button variant="outline" onClick={() => router.push('/admin/checkout')} className="justify-start text-left">
+                    <CreditCard className="mr-2 h-4 w-4" /> New Customer Checkout
+                </Button>
+                <Button variant="outline" onClick={() => router.push('/admin/settings')} className="justify-start text-left">
+                    <Cog className="mr-2 h-4 w-4" /> System Settings
+                </Button>
+                <Button variant="outline" onClick={() => router.push('/admin/migrate-data')} className="justify-start text-left">
+                    <DatabaseZap className="mr-2 h-4 w-4" /> Data Migration
+                </Button>
             </CardContent>
         </Card>
-         {/* Placeholder for future charts or more detailed reports */}
+
          <Card>
             <CardHeader>
-                <CardTitle>Platform Activity (Placeholder)</CardTitle>
-                <CardDescription>Graphs and reports will be shown here.</CardDescription>
+                <CardTitle>Recent Platform Additions</CardTitle>
+                <CardDescription>Latest companies and users added to the system.</CardDescription>
             </CardHeader>
-            <CardContent className="h-64 flex items-center justify-center text-muted-foreground italic">
-                Chart data and visualizations coming soon.
+            <CardContent className="space-y-6">
+                <div>
+                    <h3 className="text-md font-semibold mb-2 text-muted-foreground flex items-center"><Building className="mr-2 h-4 w-4"/>Recent Companies</h3>
+                    {recentCompanies.length > 0 ? (
+                        <ul className="space-y-2">
+                            {recentCompanies.map(company => (
+                                <li key={company.id} className="text-sm p-2 border-b border-border last:border-b-0">
+                                    <span className="font-medium text-primary">{company.name}</span>
+                                    <span className="text-xs text-muted-foreground block">
+                                        <CalendarDays className="inline mr-1 h-3 w-3"/>
+                                        Added: {formatDate(company.createdAt)}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className="text-sm text-muted-foreground italic">No new companies recently.</p>
+                    )}
+                </div>
+                <div>
+                    <h3 className="text-md font-semibold mb-2 text-muted-foreground flex items-center"><Users className="mr-2 h-4 w-4"/>Recent Users</h3>
+                    {recentUsers.length > 0 ? (
+                        <ul className="space-y-2">
+                            {recentUsers.map(user => (
+                                <li key={user.id} className="text-sm p-2 border-b border-border last:border-b-0">
+                                    <span className="font-medium text-primary">{user.name}</span> ({user.email})
+                                    <span className="text-xs text-muted-foreground block">Role: {user.role}</span>
+                                    <span className="text-xs text-muted-foreground block">
+                                       <CalendarDays className="inline mr-1 h-3 w-3"/>
+                                       Added: {formatDate(user.createdAt)}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className="text-sm text-muted-foreground italic">No new users recently.</p>
+                    )}
+                </div>
             </CardContent>
         </Card>
       </div>

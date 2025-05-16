@@ -48,13 +48,14 @@ export interface Company {
   trialEndsAt?: Timestamp | null; // Timestamp when the trial period ends
   isDeleted?: boolean; // For soft deletes
   deletedAt?: Timestamp | null; // Timestamp of soft deletion
+  createdAt?: Timestamp | Date; // Timestamp of company creation
   // Revenue Share Fields
   revSharePartnerName?: string | null;
   revSharePartnerCompany?: string | null;
   revSharePartnerPercentage?: number | null;
   // White-labeling fields
   whiteLabelEnabled: boolean;
-  logoUrl: string | null;
+  // logoUrl: string | null; // Already present
   primaryColor: string | null;
   secondaryColor: string | null;
 }
