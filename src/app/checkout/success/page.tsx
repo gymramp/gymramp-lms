@@ -1,34 +1,28 @@
 
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react'; // Import Suspense
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, Package } from 'lucide-react';
+import { CheckCircle, Package, Loader2 } from 'lucide-react'; // Import Loader2
 import { useToast } from '@/hooks/use-toast';
 
-export default function CheckoutSuccessPage() {
+// Renamed original component
+function CheckoutSuccessPageContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
   const { toast } = useToast();
 
   useEffect(() => {
-    // Optionally verify the session ID on the server-side
-    // This is a client-side example for simplicity
     if (sessionId) {
       console.log('Checkout successful, session ID:', sessionId);
       toast({
         title: "Payment Successful!",
         description: "Your course purchase is complete.",
-        variant: "default", // Use success variant if available, otherwise default
+        variant: "default",
       });
-
-      // TODO: Trigger fulfillment logic here (e.g., grant access to the course)
-      // This might involve making an API call with the sessionId or user info
-      // to update the user's permissions or assigned courses in your database.
-      // Example: fulfillOrder(sessionId);
     } else {
         toast({
             title: "Checkout Issue",
@@ -72,5 +66,19 @@ export default function CheckoutSuccessPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// New default export with Suspense
+export default function CheckoutSuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-theme(spacing.14)*2)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">Loading payment success page...</p>
+      </div>
+    }>
+      <CheckoutSuccessPageContent />
+    </Suspense>
   );
 }
