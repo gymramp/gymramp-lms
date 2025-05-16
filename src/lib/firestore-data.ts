@@ -1,3 +1,4 @@
+
 import { db } from './firebase';
 import {
     collection,
@@ -15,7 +16,7 @@ import {
     arrayRemove,
     Timestamp // Import Timestamp
 } from 'firebase/firestore';
-import type { Course, Lesson, Quiz, Question, CourseFormData, LessonFormData, QuizFormData, QuestionFormData } from '@/types/course';
+import type { Course, Lesson, Quiz, Question, CourseFormData, LessonFormData, QuizFormData, QuestionFormData, QuestionType } from '@/types/course';
 
 const COURSES_COLLECTION = 'courses';
 const LESSONS_COLLECTION = 'lessons';
@@ -432,16 +433,24 @@ export async function deleteQuiz(quizId: string): Promise<boolean> {
     }, 3);
 }
 
-
 // --- Question Management Functions (within a Quiz) ---
+
+// Define a type for the payload expected by addQuestionToQuiz and updateQuestion
+type QuestionPayload = {
+    type: QuestionType;
+    text: string;
+    options: string[];
+    correctAnswer: string;
+};
+
 
 /**
  * Adds a new question to a specific non-soft-deleted quiz.
  * @param {string} quizId - The ID of the quiz to add the question to.
- * @param {QuestionFormData} questionData - The data for the new question.
+ * @param {QuestionPayload} questionData - The data for the new question, including the final 'options' array.
  * @returns {Promise<Question | null>} The newly created question object or null on failure.
  */
-export async function addQuestionToQuiz(quizId: string, questionData: QuestionFormData): Promise<Question | null> {
+export async function addQuestionToQuiz(quizId: string, questionData: QuestionPayload): Promise<Question | null> {
     if (!quizId) return null;
     return retryOperation(async () => {
         const quizRef = doc(db, QUIZZES_COLLECTION, quizId);
@@ -451,23 +460,12 @@ export async function addQuestionToQuiz(quizId: string, questionData: QuestionFo
         }
 
         const questionId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-        let options: string[] = [];
-        if (questionData.type === 'multiple-choice') {
-            options = [
-                questionData.option1 || '',
-                questionData.option2 || '',
-                questionData.option3 || '',
-                questionData.option4 || '',
-            ].filter(Boolean);
-        } else if (questionData.type === 'true-false') {
-            options = ["True", "False"];
-        }
-
+        
         const newQuestion: Question = {
             id: questionId,
             type: questionData.type,
             text: questionData.text,
-            options: options,
+            options: questionData.options, // Directly use the provided options array
             correctAnswer: questionData.correctAnswer,
         };
 
@@ -486,10 +484,10 @@ export async function addQuestionToQuiz(quizId: string, questionData: QuestionFo
  * Updates an existing question within a specific non-soft-deleted quiz's questions array.
  * @param {string} quizId - The ID of the quiz containing the question.
  * @param {string} questionId - The ID of the question to update.
- * @param {QuestionFormData} questionData - The new data for the question.
+ * @param {QuestionPayload} questionData - The new data for the question, including the final 'options' array.
  * @returns {Promise<Question | null>} The updated question object or null on failure.
  */
-export async function updateQuestion(quizId: string, questionId: string, questionData: QuestionFormData): Promise<Question | null> {
+export async function updateQuestion(quizId: string, questionId: string, questionData: QuestionPayload): Promise<Question | null> {
      if (!quizId || !questionId) return null;
     return retryOperation(async () => {
         const quizRef = doc(db, QUIZZES_COLLECTION, quizId);
@@ -499,39 +497,29 @@ export async function updateQuestion(quizId: string, questionId: string, questio
         }
 
         const currentQuestions: Question[] = quizSnap.data().questions || [];
-        let updatedQuestion: Question | null = null;
+        let updatedQuestionData: Question | null = null; // To store the question data that was updated
         const newQuestionsArray = currentQuestions.map(q => {
             if (q.id === questionId) {
-                let options: string[] = [];
-                 if (questionData.type === 'multiple-choice') {
-                    options = [
-                         questionData.option1 || '',
-                         questionData.option2 || '',
-                         questionData.option3 || '',
-                         questionData.option4 || '',
-                    ].filter(Boolean);
-                } else if (questionData.type === 'true-false') {
-                    options = ["True", "False"];
-                }
-                 updatedQuestion = {
-                    ...q,
+                updatedQuestionData = {
+                    ...q, // Preserves original ID
                     type: questionData.type,
                     text: questionData.text,
-                    options: options,
+                    options: questionData.options, // Directly use the provided options array
                     correctAnswer: questionData.correctAnswer,
                 };
-                 return updatedQuestion;
+                 return updatedQuestionData;
             }
             return q;
         });
 
-        if (!updatedQuestion) {
+        if (!updatedQuestionData) {
              throw new Error(`Question with ID ${questionId} not found in quiz ${quizId}.`);
         }
         await updateDoc(quizRef, { questions: newQuestionsArray });
-        return updatedQuestion;
+        return updatedQuestionData;
     });
 }
+
 
 /**
  * Deletes a question from a specific non-soft-deleted quiz's questions array.
@@ -610,3 +598,5 @@ export async function deleteQuizAndCleanUp(quizId: string): Promise<boolean> {
      await removeItemFromAllCurriculums(prefixedQuizId);
      return deleteQuiz(quizId);
 }
+
+    
