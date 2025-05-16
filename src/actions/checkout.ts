@@ -4,8 +4,7 @@
 import type { CheckoutFormData } from '@/types/user';
 import { addCompany, createDefaultLocation } from '@/lib/company-data';
 import { addUser } from '@/lib/user-data';
-// Removed nodemailer and googleapis as sendWelcomeEmail is not called directly
-// import { auth } from '@/lib/firebase'; // Keep global auth for potential other uses if any, but not for user creation in these functions
+// import { auth } from '@/lib/firebase'; // Not needed for the original admin session
 import { db } from '@/lib/firebase'; // For Firestore operations
 
 // Import Firebase app and auth for local instance creation
@@ -25,11 +24,12 @@ const firebaseConfig = {
 
 // Helper function to initialize Firebase app safely
 const getFirebaseAuthInstance = (appName: string) => {
-  if (!getApps().find(app => app.name === appName)) {
-    const localApp = initializeApp(firebaseConfig, appName);
-    return getAuth(localApp);
+  const existingApp = getApps().find(app => app.name === appName);
+  if (existingApp) {
+    return getAuth(existingApp);
   }
-  return getAuth(getApp(appName));
+  const localApp = initializeApp(firebaseConfig, appName);
+  return getAuth(localApp);
 };
 
 const cleanupFirebaseApp = async (appName: string) => {
@@ -67,6 +67,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         maxUsers: data.maxUsers ?? null,
         isTrial: false,
         trialEndsAt: null,
+        saleAmount: data.finalTotalAmount ?? null, // Store the sale amount
         revSharePartnerName: data.revSharePartnerName || null,
         revSharePartnerCompany: data.revSharePartnerCompany || null,
         revSharePartnerPercentage: data.revSharePartnerPercentage ?? null,
@@ -80,7 +81,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
     const defaultLocation = await createDefaultLocation(newCompany.id); // Uses global db
     const defaultLocationId = defaultLocation ? [defaultLocation.id] : [];
 
-    const tempPassword = data.password || "password";
+    const tempPassword = data.password || "password"; // Use provided password or default
     let authUserUid: string;
     try {
         localAuthInstance = getFirebaseAuthInstance(localAuthAppName);
@@ -89,7 +90,11 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         console.log(`[Server Action] Admin user created in Firebase Auth with UID: ${authUserUid} for email ${data.adminEmail} (Paid) using local auth instance`);
     } catch (authError: any) {
         console.error("[Server Action] Failed to create admin user in Firebase Auth (Paid):", authError);
-        throw new Error(`AuthCreationError: ${authError.code} - ${authError.message}`);
+        // Do not expose full authError to client, log it and throw generic or specific safe message
+        if (authError.message && authError.message.includes("Admin session error")) {
+             throw new Error("Admin session error. Please log in again.");
+        }
+        throw new Error(`AuthCreationError: ${authError.code || 'UnknownCode'} - ${authError.message || 'Failed to create user in authentication service.'}`);
     }
 
     const newAdminUserData = {
@@ -101,13 +106,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
     };
     const newAdminUser = await addUser(newAdminUserData); // Uses global db
     if (!newAdminUser) {
-      // Attempt to delete orphaned Auth user if Firestore add fails
-      if (authUserUid && localAuthInstance) {
-          // To delete the user, we'd ideally need to sign them in or use Admin SDK.
-          // Client SDK deletion of other users is not straightforward.
-          // For now, log the issue. Proper cleanup might require Admin SDK.
-          console.warn(`[Server Action] Firestore user creation failed for Auth UID ${authUserUid}. Manual Auth user cleanup might be needed if this was the first sign-in for this user.`);
-      }
+      console.warn(`[Server Action] Firestore user creation failed for Auth UID ${authUserUid}. Manual Auth user cleanup might be needed.`);
       throw new Error("Failed to create the admin user account in Firestore (Paid).");
     }
     console.log(`[Server Action] Admin user "${newAdminUser.name}" (Paid) created in Firestore`);
@@ -115,10 +114,9 @@ export async function processCheckout(data: CheckoutFormData): Promise<
     await cleanupFirebaseApp(localAuthAppName);
     return { success: true, companyId: newCompany.id, adminUserId: newAdminUser.id };
 
-  } catch (error: any)
-{
+  } catch (error: any) {
     console.error("[Server Action] Error during paid checkout processing:", error);
-    await cleanupFirebaseApp(localAuthAppName);
+    await cleanupFirebaseApp(localAuthAppName); // Ensure cleanup on error too
     return { success: false, error: error.message || "An unexpected error occurred during paid checkout." };
   }
 }
@@ -146,6 +144,7 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
         maxUsers: data.maxUsers ?? null,
         isTrial: true,
         trialEndsAt: trialEndsAtTimestamp,
+        saleAmount: 0, // Free trials have no sale amount
         revSharePartnerName: null,
         revSharePartnerCompany: null,
         revSharePartnerPercentage: null,
@@ -168,7 +167,10 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
         console.log(`[Server Action] Trial Admin user created in Firebase Auth with UID: ${authUserUid} for email ${data.adminEmail} using local auth instance`);
     } catch (authError: any) {
         console.error("[Server Action] Failed to create trial admin user in Firebase Auth:", authError);
-        throw new Error(`AuthCreationError: ${authError.code} - ${authError.message}`);
+         if (authError.message && authError.message.includes("Admin session error")) {
+             throw new Error("Admin session error. Please log in again.");
+        }
+        throw new Error(`AuthCreationError: ${authError.code || 'UnknownCode'} - ${authError.message || 'Failed to create user in authentication service.'}`);
     }
 
     const newAdminUserData = {
@@ -190,13 +192,8 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
 
   } catch (error: any) {
     console.error("[Server Action] Error during free trial checkout processing:", error);
-    await cleanupFirebaseApp(localAuthAppName);
+    await cleanupFirebaseApp(localAuthAppName); // Ensure cleanup on error too
     return { success: false, error: error.message || "An unexpected error occurred during free trial checkout." };
   }
 }
 
-
-// SendWelcomeEmail is not called by these server actions anymore.
-// It can be removed if it's not used elsewhere, or kept for reference.
-// For brevity, I'm omitting it here unless you confirm it's needed.
-// export async function sendWelcomeEmail(...) { ... }

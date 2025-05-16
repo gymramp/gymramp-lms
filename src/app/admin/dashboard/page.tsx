@@ -11,7 +11,7 @@ import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getUserByEmail, getAllUsers } from '@/lib/user-data';
 import { getAllCourses } from '@/lib/firestore-data';
-import { getAllCompanies } from '@/lib/company-data';
+import { getAllCompanies, getSalesTotalLastNDays } from '@/lib/company-data'; // Import getSalesTotalLastNDays
 import type { User, Company } from '@/types/user';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,7 +23,7 @@ export default function SuperAdminDashboardPage() {
   const [totalUsers, setTotalUsers] = useState(0);
   const [totalCourses, setTotalCourses] = useState(0);
   const [totalCompanies, setTotalCompanies] = useState(0);
-  const [totalSales, setTotalSales] = useState(0); // Placeholder for sales data
+  const [totalRecentSales, setTotalRecentSales] = useState(0); // State for recent sales
   const [recentCompanies, setRecentCompanies] = useState<Company[]>([]);
   const [recentUsers, setRecentUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -35,16 +35,17 @@ export default function SuperAdminDashboardPage() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [usersData, coursesData, companiesData] = await Promise.all([
+      const [usersData, coursesData, companiesData, salesData] = await Promise.all([
         getAllUsers(),
         getAllCourses(),
         getAllCompanies(),
+        getSalesTotalLastNDays(30), // Fetch sales for the last 30 days
       ]);
 
       setTotalUsers(usersData.length);
       setTotalCourses(coursesData.length);
       setTotalCompanies(companiesData.length);
-      setTotalSales(0); // Placeholder
+      setTotalRecentSales(salesData); // Set recent sales
 
       // Sort companies by createdAt (descending)
       const sortedCompanies = companiesData
@@ -187,12 +188,12 @@ export default function SuperAdminDashboardPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Sales (Placeholder)</CardTitle>
+            <CardTitle className="text-sm font-medium">Sales (Last 30 Days)</CardTitle>
             <CreditCard className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalSales.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">Lifetime sales volume</p>
+            <div className="text-2xl font-bold">${totalRecentSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <p className="text-xs text-muted-foreground">From new paid checkouts</p>
           </CardContent>
         </Card>
       </div>
@@ -242,6 +243,11 @@ export default function SuperAdminDashboardPage() {
                                         <CalendarDays className="inline mr-1 h-3 w-3"/>
                                         Added: {formatDate(company.createdAt)}
                                     </span>
+                                     {company.saleAmount !== null && company.saleAmount !== undefined && (
+                                        <span className="text-xs text-green-600 block">
+                                            Sale: ${company.saleAmount.toFixed(2)}
+                                        </span>
+                                     )}
                                 </li>
                             ))}
                         </ul>

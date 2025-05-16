@@ -46,6 +46,7 @@ export interface Company {
   maxUsers?: number | null; // Maximum number of users allowed, null for unlimited
   isTrial?: boolean; // Indicates if the company is on a trial
   trialEndsAt?: Timestamp | null; // Timestamp when the trial period ends
+  saleAmount?: number | null; // Amount of the sale if it was a paid checkout
   isDeleted?: boolean; // For soft deletes
   deletedAt?: Timestamp | null; // Timestamp of soft deletion
   createdAt?: Timestamp | Date; // Timestamp of company creation

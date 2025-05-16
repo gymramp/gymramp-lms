@@ -80,6 +80,7 @@ export async function createDefaultCompany(): Promise<Company | null> {
                 assignedCourseIds: [],
                 isTrial: false, // Default company is not a trial
                 trialEndsAt: null,
+                saleAmount: null, // Default company has no initial sale amount
                 // Revenue share fields default to null
                 revSharePartnerName: null,
                 revSharePartnerCompany: null,
@@ -163,6 +164,7 @@ export async function addCompany(companyData: CompanyFormData): Promise<Company 
             assignedCourseIds: companyData.assignedCourseIds || [],
             isTrial: companyData.isTrial || false, // Default to false if not provided
             trialEndsAt: companyData.trialEndsAt instanceof Date ? Timestamp.fromDate(companyData.trialEndsAt) : companyData.trialEndsAt, // Convert Date to Timestamp
+            saleAmount: companyData.saleAmount ?? null, // Handle saleAmount
             // Revenue Share Fields
             revSharePartnerName: companyData.revSharePartnerName?.trim() || null,
             revSharePartnerCompany: companyData.revSharePartnerCompany?.trim() || null,
@@ -208,6 +210,8 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
         dataToUpdate.maxUsers = companyData.maxUsers ?? null;
         if (companyData.assignedCourseIds !== undefined) dataToUpdate.assignedCourseIds = companyData.assignedCourseIds;
         if (companyData.isTrial !== undefined) dataToUpdate.isTrial = companyData.isTrial;
+        if (companyData.saleAmount !== undefined) dataToUpdate.saleAmount = companyData.saleAmount ?? null;
+
 
         // Handle trialEndsAt: convert Date to Timestamp, allow null
         if (companyData.trialEndsAt === null) {
@@ -532,6 +536,38 @@ export async function createDefaultLocation(companyId: string): Promise<Location
             console.error(`Failed to create default location for company ${companyId}.`);
             return null;
         }
+    });
+}
+
+/**
+ * Fetches the total sales amount for non-trial companies created within the last N days.
+ * @param {number} days - The number of past days to include in the sales calculation.
+ * @returns {Promise<number>} A promise that resolves to the total sales amount.
+ */
+export async function getSalesTotalLastNDays(days: number): Promise<number> {
+    return retryOperation(async () => {
+        const companiesRef = collection(db, COMPANIES_COLLECTION);
+        const dateNDaysAgo = new Date();
+        dateNDaysAgo.setDate(dateNDaysAgo.getDate() - days);
+        const timestampNDaysAgo = Timestamp.fromDate(dateNDaysAgo);
+
+        const q = query(
+            companiesRef,
+            where("isDeleted", "==", false),
+            where("isTrial", "==", false),
+            where("createdAt", ">=", timestampNDaysAgo)
+        );
+
+        const querySnapshot = await getDocs(q);
+        let totalSales = 0;
+        querySnapshot.forEach((docSnap) => {
+            const companyData = docSnap.data() as Company;
+            if (typeof companyData.saleAmount === 'number') {
+                totalSales += companyData.saleAmount;
+            }
+        });
+        console.log(`[getSalesTotalLastNDays] Total sales for last ${days} days: ${totalSales}`);
+        return totalSales;
     });
 }
 
