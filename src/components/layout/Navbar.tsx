@@ -18,7 +18,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     Menu, LogOut, User as UserIcon, LayoutDashboard, Settings, Users, BookOpen, FileText,
-    ListChecks, Building, ShoppingCart, Award, MapPin, DatabaseZap, BarChartBig, Gift,
+    ListChecks, Building, ShoppingCart, Award, MapPin, BarChartBig, Gift,
     TestTube2, ChevronDown, UserPlus, Percent, HelpCircle
 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
@@ -151,9 +151,7 @@ export function Navbar() {
           { href: '/admin/dashboard', label: 'Super Admin Dashboard', icon: BarChartBig },
           { href: '/admin/companies', label: 'Companies', icon: Building },
           { href: '/admin/users', label: 'Users', icon: Users },
-          // Course Admin items are now part of main nav for Super Admin desktop
           { href: '/admin/settings', label: 'Settings', icon: Settings },
-          { href: '/admin/migrate-data', label: 'Data Migration', icon: DatabaseZap },
         ]
       : []),
       ...(currentUser.role === 'Admin' || currentUser.role === 'Owner'

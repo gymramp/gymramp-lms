@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, BookOpen, Building, CreditCard, Loader2, AlertTriangle, DatabaseZap, Cog, List, CalendarDays } from 'lucide-react';
+import { Users, BookOpen, Building, CreditCard, Loader2, AlertTriangle, Cog, List, CalendarDays, Percent, UserPlus, BarChartBig, TestTube2, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
@@ -220,8 +220,9 @@ export default function SuperAdminDashboardPage() {
                 <Button variant="outline" onClick={() => router.push('/admin/settings')} className="justify-start text-left">
                     <Cog className="mr-2 h-4 w-4" /> System Settings
                 </Button>
-                <Button variant="outline" onClick={() => router.push('/admin/migrate-data')} className="justify-start text-left">
-                    <DatabaseZap className="mr-2 h-4 w-4" /> Data Migration
+                 {/* Button for Revenue Share Report (placeholder, actual link to be added) */}
+                <Button variant="outline" onClick={() => router.push('/admin/revenue-share-report')} className="justify-start text-left">
+                    <Percent className="mr-2 h-4 w-4" /> Revenue Share Report
                 </Button>
             </CardContent>
         </Card>
@@ -280,4 +281,3 @@ export default function SuperAdminDashboardPage() {
     </div>
   );
 }
-
