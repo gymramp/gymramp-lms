@@ -19,7 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     Menu, LogOut, User as UserIcon, LayoutDashboard, Settings, Users, BookOpen, FileText,
     ListChecks, Building, ShoppingCart, Award, MapPin, DatabaseZap, BarChartBig, Gift,
-    TestTube2, ChevronDown, UserPlus, Percent, HelpCircle // Added HelpCircle
+    TestTube2, ChevronDown, UserPlus, Percent, HelpCircle
 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -168,7 +168,7 @@ export function Navbar() {
           ] : []),
     { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },
     { href: '/badges', label: 'My Badges', icon: Award },
-    { href: '/site-help', label: 'Site Help', icon: HelpCircle }, // Added Site Help Link
+    { href: '/site-help', label: 'Site Help', icon: HelpCircle },
   ] : [];
 
   const getInitials = (name?: string | null): string => {
@@ -369,3 +369,4 @@ export function Navbar() {
     </header>
   );
 }
+
