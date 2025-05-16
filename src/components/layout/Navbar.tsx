@@ -19,7 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     Menu, LogOut, User as UserIcon, LayoutDashboard, Settings, Users, BookOpen, FileText,
     ListChecks, Building, ShoppingCart, Award, MapPin, DatabaseZap, BarChartBig, Gift,
-    TestTube2, ChevronDown, UserPlus // Added UserPlus
+    TestTube2, ChevronDown, UserPlus, Percent // Added Percent for Rev Share Report
 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -98,7 +98,7 @@ export function Navbar() {
         {
           label: 'Course Admin',
           isDropdown: true,
-          icon: BookOpen, // Icon for the dropdown trigger
+          icon: BookOpen,
           subItems: [
             { href: '/admin/courses', label: 'Courses', icon: BookOpen },
             { href: '/admin/lessons', label: 'Lessons', icon: FileText },
@@ -108,13 +108,14 @@ export function Navbar() {
         {
           label: 'New Customers',
           isDropdown: true,
-          icon: UserPlus, // Icon for the dropdown trigger
+          icon: UserPlus,
           subItems: [
             { href: '/admin/checkout', label: 'Paid Checkout', icon: ShoppingCart },
             { href: '/admin/free-trial-checkout', label: 'Free Trial', icon: Gift },
             { href: '/admin/test-checkout', label: 'Test Checkout', icon: TestTube2},
           ],
-        }
+        },
+        { href: '/admin/revenue-share-report', label: 'Rev Share Report', icon: Percent } // New Link
       );
     } else if (user.role === 'Admin' || user.role === 'Owner') {
         roleSpecificItems.push(
@@ -156,6 +157,7 @@ export function Navbar() {
           { href: '/admin/checkout', label: 'Paid Checkout', icon: ShoppingCart },
           { href: '/admin/free-trial-checkout', label: 'Free Trial Checkout', icon: Gift },
           { href: '/admin/test-checkout', label: 'Test Checkout', icon: TestTube2 },
+          { href: '/admin/revenue-share-report', label: 'Rev Share Report', icon: Percent }, // New Link in dropdown
           { href: '/admin/settings', label: 'Settings', icon: Settings },
         ]
       : []),
@@ -222,9 +224,10 @@ export function Navbar() {
                             <Link
                               key={item.label}
                               href={item.href}
-                              className="block px-2 py-2 text-base transition-colors hover:text-foreground/80 text-foreground/60 hover:bg-muted rounded-md"
+                              className="flex items-center gap-3 px-2 py-2 text-base transition-colors hover:text-foreground/80 text-foreground/60 hover:bg-muted rounded-md"
                               onClick={() => setIsMobileMenuOpen(false)}
                             >
+                              {item.icon && <item.icon className="h-5 w-5" />} {/* Added icon for direct links in mobile */}
                               {item.label}
                             </Link>
                           ) : null
@@ -297,10 +300,11 @@ export function Navbar() {
                   key={item.label}
                   href={item.href}
                   className={cn(
-                    "px-3 py-2 rounded-md transition-colors", // Increased py for better clickability
+                    "px-3 py-2 rounded-md transition-colors flex items-center gap-2", // Added flex and gap
                     "text-foreground/60 hover:text-foreground/80 hover:bg-muted",
                   )}
                 >
+                  {item.icon && <item.icon className="h-4 w-4" />} {/* Added icon for direct links in desktop */}
                   {item.label}
                 </Link>
               ) : null
