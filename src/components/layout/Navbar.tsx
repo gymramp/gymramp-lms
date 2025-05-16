@@ -231,16 +231,15 @@ export function Navbar() {
                             <hr className="my-3"/>
                             <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">User Account</div>
                             {userMenuItems.map((item) => (
-                                <DropdownMenuItem key={item.label} asChild className="cursor-pointer p-0">
-                                    <Link
-                                        href={item.href}
-                                        onClick={() => setIsMobileMenuOpen(false)}
-                                        className="flex items-center gap-3 pl-4 pr-2 py-2 text-base text-foreground/60 hover:text-foreground/80 hover:bg-muted rounded-md w-full"
-                                    >
-                                        <item.icon className="h-5 w-5" />
-                                        <span>{item.label}</span>
-                                    </Link>
-                                </DropdownMenuItem>
+                                <Link
+                                    key={item.label}
+                                    href={item.href}
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className="flex items-center gap-3 pl-4 pr-2 py-2 text-base text-foreground/60 hover:text-foreground/80 hover:bg-muted rounded-md w-full"
+                                >
+                                    <item.icon className="h-5 w-5" />
+                                    <span>{item.label}</span>
+                                </Link>
                             ))}
                             <hr className="my-3"/>
                             <Button
