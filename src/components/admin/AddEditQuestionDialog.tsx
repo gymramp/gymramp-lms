@@ -40,11 +40,11 @@ const baseSchema = z.object({
 
 const multipleChoiceSchema = baseSchema.extend({
   type: z.literal('multiple-choice'),
-  option1: z.string().min(1, { message: 'Option 1 cannot be empty.' }),
-  option2: z.string().min(1, { message: 'Option 2 cannot be empty.' }),
-  option3: z.string().min(1, { message: 'Option 3 cannot be empty.' }),
-  option4: z.string().min(1, { message: 'Option 4 cannot be empty.' }),
-  correctAnswer: z.string().min(1, { message: 'Please select the correct answer.' }),
+  option1: z.string().optional(),
+  option2: z.string().optional(),
+  option3: z.string().optional(),
+  option4: z.string().optional(),
+  correctAnswer: z.string().min(1, { message: 'Please select the correct answer.' }), // Keep this, refinement will check validity
 });
 
 const trueFalseSchema = baseSchema.extend({
@@ -61,17 +61,28 @@ const questionFormSchema = z.discriminatedUnion("type", [
   multipleChoiceSchema,
   trueFalseSchema,
 ])
-// Add a refinement to ensure the correctAnswer matches one of the options for multiple choice
-.refine(data => {
+.refine(data => { // Refinement for minimum options for multiple choice
     if (data.type === 'multiple-choice') {
-        const options = [data.option1, data.option2, data.option3, data.option4];
-        // Ensure correctAnswer exists and is included in the options
-        return data.correctAnswer && options.includes(data.correctAnswer);
+        const providedOptions = [data.option1, data.option2, data.option3, data.option4]
+            .filter(opt => typeof opt === 'string' && opt.trim() !== '');
+        return providedOptions.length >= 2;
     }
     return true;
 }, {
-    message: "Correct answer must match one of the provided options.",
-    path: ["correctAnswer"], // Apply the error to the correctAnswer field
+    message: "Multiple choice questions must have at least two filled-in options.",
+    path: ["option1"], // Apply to a general field or the first option
+})
+.refine(data => { // Refinement for correct answer matching provided options
+    if (data.type === 'multiple-choice') {
+        const providedOptions = [data.option1, data.option2, data.option3, data.option4]
+            .filter(opt => typeof opt === 'string' && opt.trim() !== '');
+        // Correct answer must exist and be one of the *provided* (non-empty) options
+        return data.correctAnswer && providedOptions.includes(data.correctAnswer);
+    }
+    return true;
+}, {
+    message: "Correct answer must be selected and match one of the filled-in options.",
+    path: ["correctAnswer"],
 });
 
 
@@ -100,7 +111,7 @@ export function AddEditQuestionDialog({
   const form = useForm<QuestionFormValues>({
     resolver: zodResolver(questionFormSchema),
     defaultValues: {
-      type: initialData?.type || 'multiple-choice', // Default to multiple-choice or existing type
+      type: initialData?.type || 'multiple-choice',
       text: initialData?.text || '',
       option1: initialData?.type === 'multiple-choice' ? initialData?.options?.[0] || '' : '',
       option2: initialData?.type === 'multiple-choice' ? initialData?.options?.[1] || '' : '',
@@ -110,59 +121,79 @@ export function AddEditQuestionDialog({
     },
   });
 
-  // Watch the type field to conditionally render inputs
   const questionType = form.watch('type');
+  const watchedOption1 = form.watch('option1');
+  const watchedOption2 = form.watch('option2');
+  const watchedOption3 = form.watch('option3');
+  const watchedOption4 = form.watch('option4');
 
-  // Effect to populate form when initialData changes (for editing)
   useEffect(() => {
-    if (initialData) {
-      form.reset({
-        type: initialData.type,
-        text: initialData.text,
-        // Populate options only if multiple choice
-        option1: initialData.type === 'multiple-choice' ? initialData.options?.[0] || '' : '',
-        option2: initialData.type === 'multiple-choice' ? initialData.options?.[1] || '' : '',
-        option3: initialData.type === 'multiple-choice' ? initialData.options?.[2] || '' : '',
-        option4: initialData.type === 'multiple-choice' ? initialData.options?.[3] || '' : '',
-        correctAnswer: initialData.correctAnswer,
-      });
-    } else {
-      // Reset with default type when adding new
-      form.reset({
-          type: 'multiple-choice',
-          text: '',
-          option1: '',
-          option2: '',
-          option3: '',
-          option4: '',
-          correctAnswer: '',
-      });
+    if (isOpen) { // Only reset when dialog opens
+        if (initialData) {
+          form.reset({
+            type: initialData.type,
+            text: initialData.text,
+            option1: initialData.type === 'multiple-choice' ? initialData.options?.[0] || '' : '',
+            option2: initialData.type === 'multiple-choice' ? initialData.options?.[1] || '' : '',
+            option3: initialData.type === 'multiple-choice' ? initialData.options?.[2] || '' : '',
+            option4: initialData.type === 'multiple-choice' ? initialData.options?.[3] || '' : '',
+            correctAnswer: initialData.correctAnswer,
+          });
+        } else {
+          form.reset({
+              type: 'multiple-choice',
+              text: '',
+              option1: '',
+              option2: '',
+              option3: '',
+              option4: '',
+              correctAnswer: '',
+          });
+        }
     }
-  }, [initialData, form, isOpen]); // Rerun when dialog opens/closes or initialData changes
+  }, [initialData, form, isOpen]);
 
   const onSubmit = async (data: QuestionFormValues) => {
     try {
-
         let savedQuestion: Question | null = null;
-        // Construct QuestionFormData based on type
-        const questionData: QuestionFormData = {
+        let optionsForStorage: string[] = [];
+
+        if (data.type === 'multiple-choice') {
+            optionsForStorage = [data.option1, data.option2, data.option3, data.option4]
+                .map(opt => typeof opt === 'string' ? opt.trim() : '') // Trim and handle undefined
+                .filter(opt => opt !== ''); // Filter out empty strings
+        } else if (data.type === 'true-false') {
+            optionsForStorage = ["True", "False"];
+        }
+
+        const questionData: QuestionFormData & { optionsForStorage?: string[] } = { // Temporary extend type for clarity if needed
             type: data.type,
             text: data.text,
             correctAnswer: data.correctAnswer,
+            // These are for the schema but not directly used for storage array
             ...(data.type === 'multiple-choice' && {
                 option1: data.option1,
                 option2: data.option2,
                 option3: data.option3,
                 option4: data.option4,
             }),
-            // For true/false, options are implicitly ["True", "False"] handled in firestore function
+        };
+        
+        // The actual data to be saved for Firestore (will use optionsForStorage for the 'options' field)
+        const finalQuestionPayload = {
+            type: data.type,
+            text: data.text,
+            options: optionsForStorage, // Use the filtered options
+            correctAnswer: data.correctAnswer,
         };
 
 
         if (isEditing && initialData) {
-            savedQuestion = await updateQuestion(quizId, initialData.id, questionData);
+            // Cast to any to satisfy updateQuestion's expected QuestionFormData,
+            // but the actual logic in updateQuestion should construct the Question object properly
+            savedQuestion = await updateQuestion(quizId, initialData.id, finalQuestionPayload as any);
         } else {
-             savedQuestion = await addQuestionToQuiz(quizId, questionData);
+             savedQuestion = await addQuestionToQuiz(quizId, finalQuestionPayload as any);
         }
 
         if (savedQuestion) {
@@ -170,8 +201,8 @@ export function AddEditQuestionDialog({
                 title: isEditing ? 'Question Updated' : 'Question Added',
                 description: `The question has been successfully saved.`,
             });
-            onQuestionSaved(savedQuestion); // Call the callback
-            handleClose(); // Close dialog
+            onQuestionSaved(savedQuestion);
+            handleClose();
         } else {
              throw new Error("Failed to save question.");
         }
@@ -185,39 +216,19 @@ export function AddEditQuestionDialog({
     }
   };
 
-  // Handle closing the dialog
   const handleClose = () => {
-    // Don't reset type here, let useEffect handle it based on initialData
-    form.reset({
-        type: initialData?.type || 'multiple-choice', // Keep type or default
-        text: initialData?.text || '',
-        option1: initialData?.type === 'multiple-choice' ? initialData?.options?.[0] || '' : '',
-        option2: initialData?.type === 'multiple-choice' ? initialData?.options?.[1] || '' : '',
-        option3: initialData?.type === 'multiple-choice' ? initialData?.options?.[2] || '' : '',
-        option4: initialData?.type === 'multiple-choice' ? initialData?.options?.[3] || '' : '',
-        correctAnswer: initialData?.correctAnswer || '',
-    });
     setIsOpen(false);
   };
-
-   // Get options from form for Multiple Choice RadioGroup
-   // Ensure options are trimmed and only valid ones are included
-   const watchedOption1 = form.watch('option1')?.trim();
-   const watchedOption2 = form.watch('option2')?.trim();
-   const watchedOption3 = form.watch('option3')?.trim();
-   const watchedOption4 = form.watch('option4')?.trim();
 
    const mcOptions = [
       watchedOption1,
       watchedOption2,
       watchedOption3,
       watchedOption4,
-   ].filter(opt => typeof opt === 'string' && opt.length > 0); // Filter out empty or undefined options
+   ].filter(opt => typeof opt === 'string' && opt.trim() !== ''); // Filter out empty or undefined options
 
-   const allMcOptionsFilled = watchedOption1 && watchedOption2 && watchedOption3 && watchedOption4;
+   const atLeastTwoMcOptionsFilled = mcOptions.length >= 2;
 
-
-  // Options for True/False
   const tfOptions = ["True", "False"];
 
   return (
@@ -231,7 +242,6 @@ export function AddEditQuestionDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
-            {/* Question Type Selection */}
             <FormField
               control={form.control}
               name="type"
@@ -242,12 +252,11 @@ export function AddEditQuestionDialog({
                     <RadioGroup
                       onValueChange={(value) => {
                           field.onChange(value as QuestionType);
-                          // Reset options and correctAnswer when switching types
                           form.setValue('option1', '');
                           form.setValue('option2', '');
                           form.setValue('option3', '');
                           form.setValue('option4', '');
-                          form.setValue('correctAnswer', ''); // Reset correct answer
+                          form.setValue('correctAnswer', '');
                       }}
                       value={field.value}
                       className="flex space-x-4"
@@ -271,7 +280,6 @@ export function AddEditQuestionDialog({
               )}
             />
 
-            {/* Question Text */}
             <FormField
               control={form.control}
               name="text"
@@ -286,25 +294,28 @@ export function AddEditQuestionDialog({
               )}
             />
 
-             {/* Multiple Choice Options (Conditional) */}
              {questionType === 'multiple-choice' && (
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FormField control={form.control} name="option1" render={({ field }) => (
-                        <FormItem><FormLabel>Option 1</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="option2" render={({ field }) => (
-                        <FormItem><FormLabel>Option 2</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                     <FormField control={form.control} name="option3" render={({ field }) => (
-                        <FormItem><FormLabel>Option 3</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                     <FormField control={form.control} name="option4" render={({ field }) => (
-                        <FormItem><FormLabel>Option 4</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
+                 <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <FormField control={form.control} name="option1" render={({ field }) => (
+                            <FormItem><FormLabel>Option 1</FormLabel><FormControl><Input {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={form.control} name="option2" render={({ field }) => (
+                            <FormItem><FormLabel>Option 2</FormLabel><FormControl><Input {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                         <FormField control={form.control} name="option3" render={({ field }) => (
+                            <FormItem><FormLabel>Option 3 (Optional)</FormLabel><FormControl><Input {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                         <FormField control={form.control} name="option4" render={({ field }) => (
+                            <FormItem><FormLabel>Option 4 (Optional)</FormLabel><FormControl><Input {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                     </div>
+                     {!atLeastTwoMcOptionsFilled && (
+                        <p className="text-xs font-medium text-yellow-600">Please fill in at least two options for a multiple-choice question.</p>
+                     )}
                  </div>
              )}
 
-            {/* Correct Answer Selection */}
              <FormField
               control={form.control}
               name="correctAnswer"
@@ -313,43 +324,27 @@ export function AddEditQuestionDialog({
                   <FormLabel>Correct Answer</FormLabel>
                   <FormControl>
                     <RadioGroup
-                      onValueChange={(value) => field.onChange(value)} // Use field.onChange provided by RHF
-                      value={field.value || ''} // Controlled component: value is from RHF state, default to empty string
+                      onValueChange={(value) => field.onChange(value)}
+                      value={field.value || ''}
                       className="flex flex-col space-y-1"
                     >
                       {questionType === 'multiple-choice' ? (
-                        // Directly map the watched option values for MC
-                        [watchedOption1, watchedOption2, watchedOption3, watchedOption4].map((optionValue, index) => (
-                           optionValue !== undefined ? ( // Render only if the corresponding input is filled (allow empty string)
-                            <FormItem key={`mc-${index}-${optionValue || 'empty'}`} className="flex items-center space-x-3 space-y-0">
+                        mcOptions.map((optionValue, index) => (
+                           optionValue ? (
+                            <FormItem key={`mc-${index}-${optionValue}`} className="flex items-center space-x-3 space-y-0">
                               <FormControl>
                                 <RadioGroupItem
-                                  value={optionValue || ''} // The value of this item IS the text from the input
+                                  value={optionValue}
                                   id={`${field.name}-mc-${index}`}
-                                  // Disable if the option input is empty string or null/undefined
-                                  disabled={!optionValue && optionValue !== ''}
                                 />
                               </FormControl>
-                              <FormLabel
-                                htmlFor={`${field.name}-mc-${index}`}
-                                className={cn("font-normal", (!optionValue && optionValue !== '') && "text-muted-foreground opacity-50")} // Style disabled label
-                              >
-                                {optionValue || `Option ${index + 1} (empty)`}
+                              <FormLabel htmlFor={`${field.name}-mc-${index}`} className="font-normal">
+                                {optionValue}
                               </FormLabel>
                             </FormItem>
-                          ) : (
-                             <FormItem key={`mc-empty-${index}`} className="flex items-center space-x-3 space-y-0 opacity-50">
-                                <FormControl>
-                                    <RadioGroupItem value={`empty-${index}`} id={`${field.name}-mc-empty-${index}`} disabled />
-                                </FormControl>
-                                <FormLabel htmlFor={`${field.name}-mc-empty-${index}`} className="font-normal text-muted-foreground">
-                                    Option {index + 1} (empty)
-                                </FormLabel>
-                            </FormItem>
-                          )
+                          ) : null // Don't render radio item for empty/undefined options
                         ))
-                      ) : (
-                        // Map the static True/False options
+                      ) : ( // True/False options
                         tfOptions.map((option, index) => (
                           <FormItem key={`tf-${index}-${option}`} className="flex items-center space-x-3 space-y-0">
                             <FormControl>
@@ -366,15 +361,13 @@ export function AddEditQuestionDialog({
                       )}
                     </RadioGroup>
                   </FormControl>
-                  {/* Display warning if not all options are filled for MC */}
-                  {questionType === 'multiple-choice' && !allMcOptionsFilled && (
-                    <p className="text-xs font-medium text-yellow-600">Please fill all 4 options to select a correct answer.</p>
+                  {questionType === 'multiple-choice' && !atLeastTwoMcOptionsFilled && (
+                    <p className="text-xs font-medium text-muted-foreground">Fill at least two options above to select a correct answer.</p>
                   )}
-                  <FormMessage /> {/* Shows Zod validation errors */}
+                  <FormMessage />
                 </FormItem>
               )}
             />
-
 
             <DialogFooter>
               <DialogClose asChild>
@@ -383,8 +376,7 @@ export function AddEditQuestionDialog({
               <Button
                 type="submit"
                 className="bg-primary hover:bg-primary/90"
-                // Disable if MC and not all options are filled
-                disabled={questionType === 'multiple-choice' && !allMcOptionsFilled}
+                disabled={questionType === 'multiple-choice' && !atLeastTwoMcOptionsFilled}
               >
                 {isEditing ? 'Save Changes' : 'Add Question'}
               </Button>
@@ -395,3 +387,4 @@ export function AddEditQuestionDialog({
     </Dialog>
   );
 }
+
