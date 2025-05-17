@@ -2,10 +2,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link'; 
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input'; 
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -15,7 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, MoreHorizontal, Trash2, Edit, BookOpen, CreditCard, Search, Loader2 } from 'lucide-react'; 
+import { PlusCircle, MoreHorizontal, Trash2, Edit, BookOpen, CreditCard, Search, Loader2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,22 +35,22 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useToast } from '@/hooks/use-toast';
-import type { Course } from '@/types/course'; 
-import { getAllCourses, deleteCourse } from '@/lib/firestore-data'; 
-import { AddEditCourseDialog } from '@/components/admin/AddEditCourseDialog'; 
-import { Skeleton } from '@/components/ui/skeleton'; 
+import type { Course } from '@/types/course';
+import { getAllCourses, deleteCourse } from '@/lib/firestore-data';
+import { AddEditCourseDialog } from '@/components/admin/AddEditCourseDialog';
+import { Skeleton } from '@/components/ui/skeleton';
 
 
 export default function AdminCoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
-  const [filteredCourses, setFilteredCourses] = useState<Course[]>([]); 
-  const [isLoading, setIsLoading] = useState(true); 
+  const [filteredCourses, setFilteredCourses] = useState<Course[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
-  const [isDeleting, setIsDeleting] = useState<string | null>(null); 
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false); 
-  const [courseToDelete, setCourseToDelete] = useState<Course | null>(null); 
-  const [searchTerm, setSearchTerm] = useState(''); 
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
 
   const fetchCourses = async () => {
@@ -58,7 +58,7 @@ export default function AdminCoursesPage() {
     try {
       const coursesData = await getAllCourses();
       setCourses(coursesData);
-      setFilteredCourses(coursesData); 
+      setFilteredCourses(coursesData);
     } catch (error:any) {
       console.error("Failed to fetch courses:", error);
       toast({ title: "Error", description: error.message || "Could not load courses.", variant: "destructive" });
@@ -71,7 +71,7 @@ export default function AdminCoursesPage() {
 
   useEffect(() => {
     fetchCourses();
-  }, []); 
+  }, []);
 
   useEffect(() => {
     const lowercasedFilter = searchTerm.toLowerCase();
@@ -84,7 +84,7 @@ export default function AdminCoursesPage() {
 
 
   const handleAddCourseClick = () => {
-    setEditingCourse(null); 
+    setEditingCourse(null);
     setIsDialogOpen(true);
   };
 
@@ -100,15 +100,15 @@ export default function AdminCoursesPage() {
 
   const confirmDeleteCourse = async () => {
     if (!courseToDelete) return;
-    setIsDeleting(courseToDelete.id); 
+    setIsDeleting(courseToDelete.id);
     try {
         const success = await deleteCourse(courseToDelete.id);
         if (success) {
-            await fetchCourses(); 
+            await fetchCourses();
             toast({
                 title: 'Course Deleted',
                 description: `"${courseToDelete.title}" has been successfully deleted.`,
-                variant: 'default', 
+                variant: 'default',
             });
         } else {
              throw new Error('Delete operation returned false.');
@@ -121,16 +121,16 @@ export default function AdminCoursesPage() {
             variant: 'destructive',
          });
     } finally {
-        setIsDeleting(null); 
-        setIsDeleteDialogOpen(false); 
-        setCourseToDelete(null); 
+        setIsDeleting(null);
+        setIsDeleteDialogOpen(false);
+        setCourseToDelete(null);
     }
   };
 
    const handleSaveCourse = (savedCourse: Course) => {
-       fetchCourses(); 
-       setEditingCourse(null); 
-       setIsDialogOpen(false); 
+       fetchCourses();
+       setEditingCourse(null);
+       setIsDialogOpen(false);
    };
 
 
@@ -176,10 +176,10 @@ export default function AdminCoursesPage() {
                 <TableRow>
                   <TableHead>Title</TableHead>
                   <TableHead>Level</TableHead>
-                  {/* <TableHead>Modules</TableHead> REMOVED */}
-                   <TableHead>Curriculum Items</TableHead> 
-                    <TableHead>Quizzes (In Curriculum)</TableHead> 
+                  <TableHead>Curriculum Items</TableHead>
+                  <TableHead>Quizzes (In Curriculum)</TableHead>
                   <TableHead>Price</TableHead>
+                  <TableHead>Subscription Price</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -190,10 +190,10 @@ export default function AdminCoursesPage() {
                     <TableCell>
                       <Badge variant="secondary">{course.level}</Badge>
                     </TableCell>
-                    {/* <TableCell>{course.modules?.length || 0}</TableCell> REMOVED */}
-                     <TableCell>{course.curriculum?.length || 0}</TableCell> 
-                      <TableCell>{course.curriculum?.filter(id => id.startsWith('quiz-')).length || 0}</TableCell>
+                    <TableCell>{course.curriculum?.length || 0}</TableCell>
+                    <TableCell>{course.curriculum?.filter(id => id.startsWith('quiz-')).length || 0}</TableCell>
                     <TableCell>{course.price}</TableCell>
+                    <TableCell>{course.subscriptionPrice || 'N/A'}</TableCell>
                     <TableCell className="text-right space-x-1">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
