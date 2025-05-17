@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -13,7 +14,9 @@ const Progress = React.forwardRef<
     ref={ref}
     className={cn(
       "relative h-4 w-full overflow-hidden rounded-full bg-secondary",
-      value === 0 ? "animate-pulse" : "",
+      // Removed the animate-pulse when value is 0, as it might not always be desired behavior.
+      // Can be re-added if a loading state for 0% is specifically needed.
+      // value === 0 ? "animate-pulse" : "",
       className
     )}
     {...props}
@@ -21,7 +24,7 @@ const Progress = React.forwardRef<
     <ProgressPrimitive.Indicator
       className={cn(
         "h-full flex-1 bg-primary transition-all duration-500 ease-in-out",
-        value === undefined ? "w-full" : ""
+        value === undefined ? "w-full" : "" // Support indeterminate state if value is undefined
       )}
       style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
     />
@@ -30,3 +33,5 @@ const Progress = React.forwardRef<
 Progress.displayName = ProgressPrimitive.Root.displayName
 
 export { Progress }
+
+    

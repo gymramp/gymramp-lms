@@ -62,7 +62,7 @@ const userFormSchema = z.object({
   companyId: z
     .string()
     .min(1, { message: 'Please select a company.' }),
-  assignedLocationIds: z.array(z.string()).default([]), // Make optional, default to empty array
+  assignedLocationIds: z.array(z.string()).default([]),
 });
 
 type UserFormValues = z.infer<typeof userFormSchema>;
@@ -101,7 +101,7 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
       name: '',
       email: '',
       password: '',
-      role: currentUser?.role === 'Manager' ? 'Staff' : 'Staff', // Default to Staff if Manager is adding
+      role: currentUser?.role === 'Manager' ? 'Staff' : 'Staff',
       companyId: currentUser?.role !== 'Super Admin' ? currentUser?.companyId || '' : '',
       assignedLocationIds: [],
     },
@@ -125,10 +125,9 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
             setSelectedCompanyDetails(companyData);
             setCurrentUserCount(userCount);
 
-            // Filter locations based on current user's access if Manager
             let companySpecificLocations = locations.filter(loc => loc.companyId === selectedCompanyId);
             if (currentUser?.role === 'Manager' && currentUser.assignedLocationIds) {
-                companySpecificLocations = companySpecificLocations.filter(loc => 
+                companySpecificLocations = companySpecificLocations.filter(loc =>
                     (currentUser.assignedLocationIds || []).includes(loc.id)
                 );
             }
@@ -144,7 +143,7 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
              setIsLoadingCompanyData(false);
         }
     };
-    if (isOpen) { 
+    if (isOpen) {
         fetchCompanyData();
     }
   }, [selectedCompanyId, locations, form, toast, isOpen, currentUser]);
@@ -165,21 +164,25 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
 
 
   const onSubmit = async (data: UserFormValues) => {
-       const originalAdminEmail = auth.currentUser?.email;
-       const originalAdminPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "password";
+      // REMOVED: Insecure re-authentication logic with hardcoded/env password.
+      // The admin user might be signed out after this operation if the Firebase client SDK's
+      // auth state changes due to createUserWithEmailAndPassword. They will need to log back in manually.
+      // This is a safer approach than exposing admin credentials or using insecure workarounds.
+      // A robust solution would involve backend functions or a secure re-authentication prompt.
+      // const originalAdminEmail = auth.currentUser?.email;
+      // const originalAdminPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "password"; // CRITICAL SECURITY ISSUE
 
-       if (!originalAdminEmail || !originalAdminPassword) {
-            toast({ title: "Admin Session Error", description: "Could not verify admin session. Please log in again.", variant: "destructive" });
-            return;
-        }
-
+      // if (!originalAdminEmail /*|| !originalAdminPassword*/) { // Original password check removed
+      //      toast({ title: "Admin Session Error", description: "Could not verify admin session. Please log in again.", variant: "destructive" });
+      //      return;
+      //  }
 
       startTransition(async () => {
           if (!currentUser) {
               toast({ title: "Permission Denied", description: "You must be logged in to add users.", variant: "destructive"});
               return;
           }
-          
+
           if (currentUser.role === 'Manager' && data.role !== 'Staff') {
             toast({ title: "Permission Denied", description: "Managers can only create Staff users.", variant: "destructive"});
             return;
@@ -189,11 +192,6 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
               return;
           }
 
-           // Location check removed as it's now optional
-           // if (!data.assignedLocationIds || data.assignedLocationIds.length === 0) {
-           //    form.setError("assignedLocationIds", { type: "manual", message: "User must be assigned to at least one location." });
-           //    return;
-           // }
            if (!data.companyId) {
                 form.setError("companyId", { type: "manual", message: "Company selection is required." });
                 return;
@@ -204,7 +202,7 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
                currentUserCount >= selectedCompanyDetails.maxUsers) {
                    toast({
                        title: "User Limit Reached",
-                       description: `This company (${selectedCompanyDetails.name}) has reached its maximum user limit of ${selectedCompanyDetails.maxUsers}. Contact a Super Admin to increase the limit.`,
+                       description: `This brand (${selectedCompanyDetails.name}) has reached its maximum user limit of ${selectedCompanyDetails.maxUsers}. Contact a Super Admin to increase the limit.`,
                        variant: "destructive",
                        duration: 7000,
                    });
@@ -220,39 +218,24 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
             data.password
             );
             const authUser = userCredential.user;
-            authUserUid = authUser.uid; // Store UID for potential cleanup
+            authUserUid = authUser.uid;
 
             const newUser = await addUserToFirestore({
             name: data.name,
             email: data.email,
             role: data.role,
             companyId: data.companyId,
-            assignedLocationIds: data.assignedLocationIds || [], // Ensure it's an array
+            assignedLocationIds: data.assignedLocationIds || [],
             });
 
             if (newUser) {
                 toast({
                     title: 'User Added',
-                    description: `${data.name} has been successfully added.`,
+                    description: `${data.name} has been successfully added. Note: You may need to log back in if your session changed.`,
                 });
-
-                 try {
-                     console.log(`Attempting to sign back in as ${originalAdminEmail}`);
-                     await signInWithEmailAndPassword(auth, originalAdminEmail, originalAdminPassword);
-                     console.log(`Successfully signed back in as ${originalAdminEmail}`);
-                 } catch (reSignInError) {
-                     console.error("Failed to sign back in as admin:", reSignInError);
-                      toast({
-                        title: "Session Issue",
-                        description: "Could not automatically sign back in. Please refresh or log in again.",
-                        variant: "destructive",
-                     });
-                 }
-
                 onUserAdded(newUser);
                 setIsOpen(false);
             } else {
-                 // Attempt to delete the created Auth user if Firestore add fails only if UID was captured
                  if (authUserUid) {
                      const userToDelete = auth.currentUser;
                      if (userToDelete && userToDelete.uid === authUserUid) {
@@ -270,27 +253,14 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
                 description = 'This email address is already in use.';
             } else if (error.code === 'auth/weak-password') {
                 description = 'The password is too weak.';
-            } else if (error.code === 'auth/invalid-credential'){
-                 description = 'Invalid email or password provided for admin re-authentication.';
-             }
+            }
 
             toast({
             title: 'User Creation Error',
             description: description,
             variant: 'destructive',
             });
-            if (auth.currentUser?.email !== originalAdminEmail) {
-                try {
-                    await signInWithEmailAndPassword(auth, originalAdminEmail, originalAdminPassword);
-                } catch (reSignInError) {
-                    console.error("Failed to sign back in as admin after error:", reSignInError);
-                     toast({
-                        title: "Session Issue",
-                        description: "Could not automatically sign back in after error. Please refresh or log in again.",
-                        variant: "destructive",
-                    });
-                }
-            }
+            // REMOVED: Attempt to sign back in as admin - this part was problematic
         }
         });
     };
@@ -315,7 +285,7 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
         <DialogHeader>
           <DialogTitle>Add New User</DialogTitle>
           <DialogDescription>
-            Enter the details of the new user. They will be added to the selected company and locations.
+            Enter the details of the new user. They will be added to the selected brand and locations.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -365,10 +335,10 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
               name="companyId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Company</FormLabel>
+                  <FormLabel>Brand</FormLabel>
                   {currentUser?.role === 'Super Admin' && companies.length === 0 && (
                     <div className="text-sm text-muted-foreground p-2 border border-dashed rounded-md flex items-center gap-2 h-10 items-center">
-                      <AlertCircle className="h-4 w-4 text-yellow-500" /> No companies found. Please add a company first.
+                      <AlertCircle className="h-4 w-4 text-yellow-500" /> No brands found. Please add a brand first.
                     </div>
                   )}
                     <Select
@@ -378,25 +348,25 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select a company" />
+                          <SelectValue placeholder={!currentUser?.companyId && currentUser?.role !== 'Super Admin' ? "No Brand Assigned" : "Select a brand"} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                         <SelectItem value="placeholder-company" disabled>Select a company...</SelectItem>
+                         <SelectItem value="placeholder-company" disabled>Select a brand...</SelectItem>
                         {companies.map((company) => (
                           <SelectItem key={company.id} value={company.id}>{company.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
 
-                  {isLoadingCompanyData && <p className="text-xs text-muted-foreground">Loading company info...</p>}
+                  {isLoadingCompanyData && <p className="text-xs text-muted-foreground">Loading brand info...</p>}
                   {!isLoadingCompanyData && selectedCompanyDetails && (
                     <p className="text-xs text-muted-foreground">
                       Current Users: {currentUserCount} / {selectedCompanyDetails.maxUsers === null || selectedCompanyDetails.maxUsers === undefined ? 'Unlimited' : selectedCompanyDetails.maxUsers}
                     </p>
                   )}
                   {isLimitReached && !isLoadingCompanyData && (
-                    <p className="text-xs font-medium text-destructive">User limit reached for this company.</p>
+                    <p className="text-xs font-medium text-destructive">User limit reached for this brand.</p>
                   )}
                   <FormMessage />
                 </FormItem>
@@ -446,7 +416,7 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
                           </div>
                         ) : (
                           <div className="text-sm text-muted-foreground italic flex items-center justify-center h-full">
-                            {selectedCompanyId ? 'No locations available for assignment in this company/your access.' : 'Please select a company first.'}
+                            {selectedCompanyId ? 'No locations available for assignment in this brand/your access.' : 'Please select a brand first.'}
                           </div>
                         )}
                     </ScrollArea>
@@ -463,11 +433,11 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
                 render={({ field }) => (
                 <FormItem>
                     <FormLabel>User Role</FormLabel>
-                    <Select 
-                        onValueChange={(value) => field.onChange(value === 'placeholder-role' ? '' : value)} 
-                        value={field.value || 'placeholder-role'} 
+                    <Select
+                        onValueChange={(value) => field.onChange(value === 'placeholder-role' ? '' : value)}
+                        value={field.value || 'placeholder-role'}
                         defaultValue={field.value}
-                        disabled={currentUser?.role === 'Manager'} // Disable role selection for Managers
+                        disabled={currentUser?.role === 'Manager'}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -479,7 +449,6 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
                         {assignableRoles.map((role) => (
                           <SelectItem key={role} value={role}>{role}</SelectItem>
                         ))}
-                        {/* Show non-assignable roles as disabled for clarity */}
                         {ALL_POSSIBLE_ROLES_TO_ASSIGN
                           .filter(r => !assignableRoles.includes(r))
                           .map((role) => (
@@ -511,3 +480,6 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
     </Dialog>
   );
 }
+
+
+    

@@ -10,7 +10,7 @@ import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { MailServerSettingsForm } from '@/components/admin/MailServerSettingsForm'; // Import the new form
+import { MailServerSettingsForm } from '@/components/admin/MailServerSettingsForm';
 
 export default function AdminSettingsPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -28,7 +28,7 @@ export default function AdminSettingsPage() {
             setCurrentUser(userDetails);
           } else {
             toast({ title: "Access Denied", description: "Only Super Admins can access this page.", variant: "destructive" });
-            router.push('/'); // Redirect non-Super Admins
+            router.push('/');
           }
         } catch (error) {
           console.error("Auth check error:", error);
@@ -59,13 +59,14 @@ export default function AdminSettingsPage() {
       <Card className="w-full max-w-2xl mx-auto shadow-lg">
         <CardHeader>
           <CardTitle className="text-xl font-semibold text-primary">Mail Server Configuration (SMTP)</CardTitle>
-          <CardDescription>Configure the SMTP server settings for sending application emails (e.g., welcome emails).</CardDescription>
+          <CardDescription>Configure the SMTP server settings for sending application emails (e.g., welcome emails). Settings are primarily managed via server environment variables.</CardDescription>
         </CardHeader>
         <CardContent>
           <MailServerSettingsForm />
         </CardContent>
       </Card>
-       {/* Add more settings cards/sections here as needed */}
     </div>
   );
 }
+
+    
