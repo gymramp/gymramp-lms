@@ -89,7 +89,7 @@ export default function AdminCompaniesPage() {
       const companiesData = await getAllCompanies();
       const companiesWithCountsPromises = companiesData.map(async (company) => {
           const locations = await getLocationsByCompanyId(company.id);
-          const userCount = await getUserCountByCompanyId(company.id);
+          const userCount = await getUserCountByCompanyId(company.id); 
           const assignedCourseCount = company.assignedCourseIds?.length || 0;
           return { ...company, locationCount: locations.length, userCount: userCount, assignedCourseCount };
       });
@@ -288,3 +288,4 @@ export default function AdminCompaniesPage() {
     </div>
   );
 }
+
