@@ -19,7 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     Menu, LogOut, User as UserIcon, LayoutDashboard, Settings, Users, BookOpen, FileText,
     ListChecks, Building, ShoppingCart, Award, MapPin, BarChartBig, Gift,
-    TestTube2, ChevronDown, UserPlus, Percent, HelpCircle
+    TestTube2, ChevronDown, UserPlus, Percent, HelpCircle, Layers // Added Layers icon
 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -95,6 +95,7 @@ export function Navbar() {
         { href: '/admin/dashboard', label: 'Dashboard', icon: BarChartBig },
         { href: '/admin/companies', label: 'Companies', icon: Building },
         { href: '/admin/users', label: 'Users', icon: Users },
+        { href: '/admin/programs', label: 'Programs', icon: Layers }, // Added Programs link
         {
           label: 'Course Admin',
           isDropdown: true,
@@ -151,6 +152,7 @@ export function Navbar() {
           { href: '/admin/dashboard', label: 'Super Admin Dashboard', icon: BarChartBig },
           { href: '/admin/companies', label: 'Companies', icon: Building },
           { href: '/admin/users', label: 'Users', icon: Users },
+          { href: '/admin/programs', label: 'Programs', icon: Layers }, // Added Programs to dropdown too
           { href: '/admin/settings', label: 'Settings', icon: Settings },
         ]
       : []),

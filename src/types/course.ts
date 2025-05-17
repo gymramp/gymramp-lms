@@ -103,3 +103,20 @@ export interface UserCourseProgress {
 export interface AssignCourseData {
     courseId: string;
 }
+
+// Represents a Program (collection of courses)
+export interface Program {
+  id: string;
+  title: string;
+  description: string;
+  courseIds: string[]; // Array of Course IDs
+  isDeleted?: boolean;
+  deletedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+// Type for form data when adding/editing a Program
+export type ProgramFormData = Omit<Program, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'courseIds'> & {
+  // courseIds will be handled separately
+};

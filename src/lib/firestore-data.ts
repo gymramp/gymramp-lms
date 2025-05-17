@@ -16,11 +16,12 @@ import {
     arrayRemove,
     Timestamp // Import Timestamp
 } from 'firebase/firestore';
-import type { Course, Lesson, Quiz, Question, CourseFormData, LessonFormData, QuizFormData, QuestionFormData, QuestionType } from '@/types/course';
+import type { Course, Lesson, Quiz, Question, CourseFormData, LessonFormData, QuizFormData, QuestionFormData, QuestionType, Program, ProgramFormData } from '@/types/course';
 
 const COURSES_COLLECTION = 'courses';
 const LESSONS_COLLECTION = 'lessons';
 const QUIZZES_COLLECTION = 'quizzes';
+const PROGRAMS_COLLECTION = 'programs'; // New collection for programs
 
 // --- Retry Logic Helper ---
 const MAX_RETRIES = 5;
@@ -109,6 +110,8 @@ export async function addCourse(courseData: CourseFormData): Promise<Course | nu
             moduleAssignments: {},
             isDeleted: false,
             deletedAt: null,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
         };
         const docRef = await addDoc(coursesRef, newCourseDoc);
         const newDocSnap = await getDoc(docRef);
@@ -142,6 +145,7 @@ export async function updateCourseMetadata(courseId: string, courseData: CourseF
             ...currentData, // Preserve existing fields like curriculum, moduleAssignments
             ...restData,    // Apply new metadata
             modules: moduleTitles, // Update module titles based on new numberOfModules
+            updatedAt: serverTimestamp(),
         };
 
         await updateDoc(courseRef, updatedDocData);
@@ -170,7 +174,8 @@ export const updateCourseCurriculum = async (courseId: string, curriculum: strin
 
         await updateDoc(courseRef, {
             curriculum: curriculum,
-            moduleAssignments: moduleAssignments || {}
+            moduleAssignments: moduleAssignments || {},
+            updatedAt: serverTimestamp(),
         });
         return true;
     });
@@ -190,7 +195,8 @@ export const updateCourseModules = async (courseId: string, modules: string[]): 
         if (!courseSnap.exists() || courseSnap.data().isDeleted === true) return false;
 
         await updateDoc(courseRef, {
-            modules: modules
+            modules: modules,
+            updatedAt: serverTimestamp()
         });
         return true;
     });
@@ -231,6 +237,8 @@ export async function createLesson(lessonData: LessonFormData): Promise<Lesson |
             isPreviewAvailable: lessonData.isPreviewAvailable || false,
             isDeleted: false,
             deletedAt: null,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
         };
         const docRef = await addDoc(lessonsRef, dataToSave);
         const newDocSnap = await getDoc(docRef);
@@ -293,16 +301,16 @@ export async function updateLesson(lessonId: string, lessonData: Partial<LessonF
         const lessonSnap = await getDoc(lessonRef);
         if (!lessonSnap.exists() || lessonSnap.data().isDeleted === true) return null;
 
-         const dataToUpdate: Partial<LessonFormData> = {};
+         const dataToUpdate: Partial<LessonFormData & {updatedAt: Timestamp}> = { updatedAt: serverTimestamp() as Timestamp };
          for (const key in lessonData) {
              if (Object.prototype.hasOwnProperty.call(lessonData, key)) {
                  const value = lessonData[key as keyof LessonFormData];
                  if (key === 'videoUrl' || key === 'featuredImageUrl' || key === 'exerciseFilesInfo' || key === 'playbackTime') {
-                     dataToUpdate[key] = (value as string)?.trim() || null;
+                     (dataToUpdate as any)[key] = (value as string)?.trim() || null;
                  } else if (key === 'isPreviewAvailable') {
-                     dataToUpdate[key] = !!value;
+                     (dataToUpdate as any)[key] = !!value;
                  } else {
-                     dataToUpdate[key as keyof LessonFormData] = value;
+                     (dataToUpdate as any)[key as keyof LessonFormData] = value;
                  }
              }
          }
@@ -347,6 +355,8 @@ export async function createQuiz(quizData: QuizFormData): Promise<Quiz | null> {
             questions: [],
             isDeleted: false,
             deletedAt: null,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
         };
         const docRef = await addDoc(quizzesRef, newQuizDoc);
         const newDocSnap = await getDoc(docRef);
@@ -409,7 +419,7 @@ export async function updateQuiz(quizId: string, quizData: Partial<QuizFormData>
         const quizSnap = await getDoc(quizRef);
         if (!quizSnap.exists() || quizSnap.data().isDeleted === true) return null;
 
-        await updateDoc(quizRef, quizData);
+        await updateDoc(quizRef, {...quizData, updatedAt: serverTimestamp() });
         const updatedDocSnap = await getDoc(quizRef);
         if (updatedDocSnap.exists()) {
             return { id: quizId, ...updatedDocSnap.data() } as Quiz;
@@ -470,7 +480,8 @@ export async function addQuestionToQuiz(quizId: string, questionData: QuestionPa
         };
 
         await updateDoc(quizRef, {
-            questions: arrayUnion(newQuestion)
+            questions: arrayUnion(newQuestion),
+            updatedAt: serverTimestamp(),
         });
 
         const updatedQuizSnap = await getDoc(quizRef);
@@ -515,7 +526,7 @@ export async function updateQuestion(quizId: string, questionId: string, questio
         if (!updatedQuestionData) {
              throw new Error(`Question with ID ${questionId} not found in quiz ${quizId}.`);
         }
-        await updateDoc(quizRef, { questions: newQuestionsArray });
+        await updateDoc(quizRef, { questions: newQuestionsArray, updatedAt: serverTimestamp() });
         return updatedQuestionData;
     });
 }
@@ -543,7 +554,7 @@ export async function deleteQuestion(quizId: string, questionId: string): Promis
             return false;
         }
         const newQuestionsArray = currentQuestions.filter(q => q.id !== questionId);
-        await updateDoc(quizRef, { questions: newQuestionsArray });
+        await updateDoc(quizRef, { questions: newQuestionsArray, updatedAt: serverTimestamp() });
         return true;
     }, 3);
 }
@@ -599,4 +610,133 @@ export async function deleteQuizAndCleanUp(quizId: string): Promise<boolean> {
      return deleteQuiz(quizId);
 }
 
-    
+// --- Program Functions ---
+
+/**
+ * Creates a new program in Firestore.
+ * @param {ProgramFormData} programData - The data for the new program.
+ * @returns {Promise<Program | null>} The created program or null on failure.
+ */
+export async function createProgram(programData: ProgramFormData): Promise<Program | null> {
+    return retryOperation(async () => {
+        const programsRef = collection(db, PROGRAMS_COLLECTION);
+        const newProgramDoc = {
+            ...programData,
+            courseIds: [], // Initialize with empty courseIds
+            isDeleted: false,
+            deletedAt: null,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        };
+        const docRef = await addDoc(programsRef, newProgramDoc);
+        const newDocSnap = await getDoc(docRef);
+        if (newDocSnap.exists()) {
+            return { id: docRef.id, ...newDocSnap.data() } as Program;
+        } else {
+            return null;
+        }
+    });
+}
+
+/**
+ * Fetches all non-soft-deleted programs from Firestore.
+ * @returns {Promise<Program[]>} An array of all programs.
+ */
+export async function getAllPrograms(): Promise<Program[]> {
+    return retryOperation(async () => {
+        const programsRef = collection(db, PROGRAMS_COLLECTION);
+        const q = query(programsRef, where("isDeleted", "==", false));
+        const querySnapshot = await getDocs(q);
+        const programs: Program[] = [];
+        querySnapshot.forEach((doc) => {
+            programs.push({ id: doc.id, ...doc.data() } as Program);
+        });
+        return programs;
+    });
+}
+
+/**
+ * Fetches a single non-soft-deleted program by its ID.
+ * @param {string} programId - The ID of the program to fetch.
+ * @returns {Promise<Program | null>} The program or null if not found or soft-deleted.
+ */
+export async function getProgramById(programId: string): Promise<Program | null> {
+    if (!programId) return null;
+    return retryOperation(async () => {
+        const programRef = doc(db, PROGRAMS_COLLECTION, programId);
+        const docSnap = await getDoc(programRef);
+        if (docSnap.exists() && docSnap.data().isDeleted !== true) {
+            return { id: docSnap.id, ...docSnap.data() } as Program;
+        } else {
+            return null;
+        }
+    });
+}
+
+/**
+ * Updates an existing program's title and description in Firestore.
+ * @param {string} programId - The ID of the program to update.
+ * @param {Partial<ProgramFormData>} programData - The data to update (title, description).
+ * @returns {Promise<Program | null>} The updated program or null on failure.
+ */
+export async function updateProgram(programId: string, programData: Partial<ProgramFormData>): Promise<Program | null> {
+    if (!programId) return null;
+    return retryOperation(async () => {
+        const programRef = doc(db, PROGRAMS_COLLECTION, programId);
+        const programSnap = await getDoc(programRef);
+        if (!programSnap.exists() || programSnap.data().isDeleted === true) return null;
+
+        const dataToUpdate: Partial<ProgramFormData & {updatedAt: Timestamp}> = {updatedAt: serverTimestamp() as Timestamp};
+        if (programData.title !== undefined) dataToUpdate.title = programData.title;
+        if (programData.description !== undefined) dataToUpdate.description = programData.description;
+
+
+        if (Object.keys(dataToUpdate).length <= 1 && !dataToUpdate.title && !dataToUpdate.description) { // only updatedAt
+            const currentDoc = await getDoc(programRef);
+            return currentDoc.exists() ? {id: currentDoc.id, ...currentDoc.data()} as Program : null;
+        }
+        
+        await updateDoc(programRef, dataToUpdate);
+        const updatedDocSnap = await getDoc(programRef);
+        if (updatedDocSnap.exists()) {
+            return { id: programId, ...updatedDocSnap.data() } as Program;
+        } else {
+            return null;
+        }
+    });
+}
+
+/**
+ * Updates the list of assigned courses for a program.
+ * @param {string} programId The ID of the program to update.
+ * @param {string[]} courseIds An array of course IDs that should be assigned.
+ * @returns {Promise<boolean>} True if the update was successful, false otherwise.
+ */
+export const updateProgramCourseAssignments = async (programId: string, courseIds: string[]): Promise<boolean> => {
+    if (!programId) return false;
+    return retryOperation(async () => {
+        const programRef = doc(db, PROGRAMS_COLLECTION, programId);
+        const programSnap = await getDoc(programRef);
+        if (!programSnap.exists() || programSnap.data().isDeleted === true) return false;
+
+        await updateDoc(programRef, {
+            courseIds: courseIds,
+            updatedAt: serverTimestamp()
+        });
+        return true;
+    });
+};
+
+/**
+ * Soft deletes a program from Firestore.
+ * @param {string} programId - The ID of the program to soft delete.
+ * @returns {Promise<boolean>} True if successful, false otherwise.
+ */
+export async function deleteProgram(programId: string): Promise<boolean> {
+    if (!programId) return false;
+    return retryOperation(async () => {
+        const programRef = doc(db, PROGRAMS_COLLECTION, programId);
+        await updateDoc(programRef, { isDeleted: true, deletedAt: serverTimestamp() });
+        return true;
+    }, 3);
+}
