@@ -36,7 +36,7 @@ import { Loader2, Upload, ImageIcon, Trash2, Users } from 'lucide-react'; // Imp
 
 // Zod schema for form validation
 const companyFormSchema = z.object({
-  name: z.string().min(2, { message: 'Company name must be at least 2 characters.' }),
+  name: z.string().min(2, { message: 'Brand name must be at least 2 characters.' }),
   shortDescription: z.string().max(150, { message: 'Description must be 150 characters or less.' }).optional().or(z.literal('')), // Optional, max length
   logoUrl: z.string().url({ message: 'Invalid URL format.' }).optional().or(z.literal('')), // Track uploaded logo URL
   maxUsers: z.coerce // Use coerce for number input
@@ -57,7 +57,7 @@ interface AddEditCompanyDialogProps {
   onSave: (companyData: CompanyFormData) => void; // Updated callback type
 }
 
-// This dialog is now only used for ADDING companies
+// This dialog is now only used for ADDING brands
 export function AddEditCompanyDialog({ isOpen, setIsOpen, onSave, initialData }: AddEditCompanyDialogProps) {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
@@ -103,14 +103,14 @@ export function AddEditCompanyDialog({ isOpen, setIsOpen, onSave, initialData }:
            form.setValue('logoUrl', downloadURL, { shouldValidate: true });
            toast({
              title: "Logo Uploaded",
-             description: "Company logo successfully uploaded.",
+             description: "Brand logo successfully uploaded.",
            });
 
        } catch (error: any) {
            setUploadError(error.message || "Failed to upload logo.");
            toast({
              title: "Upload Failed",
-             description: error.message || "Could not upload the company logo.",
+             description: error.message || "Could not upload the brand logo.",
              variant: "destructive",
            });
        } finally {
@@ -153,20 +153,20 @@ export function AddEditCompanyDialog({ isOpen, setIsOpen, onSave, initialData }:
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add New Company</DialogTitle>
+          <DialogTitle>Add New Brand</DialogTitle>
           <DialogDescription>
-            Enter the details for the new company.
+            Enter the details for the new brand.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
-            {/* Company Name */}
+            {/* Brand Name */}
             <FormField
               control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Company Name</FormLabel>
+                  <FormLabel>Brand Name</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g., Global Fitness Inc." {...field} />
                   </FormControl>
@@ -183,7 +183,7 @@ export function AddEditCompanyDialog({ isOpen, setIsOpen, onSave, initialData }:
                 <FormItem>
                   <FormLabel>Short Description (Optional)</FormLabel>
                   <FormControl>
-                    <Textarea rows={3} placeholder="A brief description of the company (max 150 characters)" {...field} value={field.value ?? ''} />
+                    <Textarea rows={3} placeholder="A brief description of the brand (max 150 characters)" {...field} value={field.value ?? ''} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -215,7 +215,7 @@ export function AddEditCompanyDialog({ isOpen, setIsOpen, onSave, initialData }:
                   </FormControl>
                   <FormMessage />
                    <p className="text-xs text-muted-foreground">
-                    Set the maximum number of user accounts for this company. Leave blank for no limit.
+                    Set the maximum number of user accounts for this brand. Leave blank for no limit.
                    </p>
                 </FormItem>
               )}
@@ -223,14 +223,14 @@ export function AddEditCompanyDialog({ isOpen, setIsOpen, onSave, initialData }:
 
             {/* Logo Upload */}
              <FormItem className="space-y-2">
-                 <FormLabel className="text-base font-semibold">Company Logo (Optional)</FormLabel>
+                 <FormLabel className="text-base font-semibold">Brand Logo (Optional)</FormLabel>
                  <FormControl>
                    <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
                      {logoUrlValue && !isUploading ? (
                        <div className="relative w-32 h-32 mx-auto mb-2"> {/* Fixed size preview */}
                          <Image
                            src={logoUrlValue}
-                           alt="Company logo preview"
+                           alt="Brand logo preview"
                            fill
                            style={{ objectFit: 'contain' }} // Use contain to show full logo
                            className="rounded-md"
@@ -301,7 +301,7 @@ export function AddEditCompanyDialog({ isOpen, setIsOpen, onSave, initialData }:
               </DialogClose>
               <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isUploading}>
                  {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                 Add Company
+                 Add Brand
               </Button>
             </DialogFooter>
           </form>

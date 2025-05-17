@@ -89,7 +89,7 @@ export default function AdminCompaniesPage() {
       const companiesData = await getAllCompanies();
       const companiesWithCountsPromises = companiesData.map(async (company) => {
           const locations = await getLocationsByCompanyId(company.id);
-          const userCount = await getUserCountByCompanyId(company.id); 
+          const userCount = await getUserCountByCompanyId(company.id);
           const assignedCourseCount = company.assignedCourseIds?.length || 0;
           return { ...company, locationCount: locations.length, userCount: userCount, assignedCourseCount };
       });
@@ -97,8 +97,8 @@ export default function AdminCompaniesPage() {
       setCompanies(companiesWithCounts);
       setFilteredCompanies(companiesWithCounts);
     } catch (error) {
-      console.error("Failed to fetch companies:", error);
-      toast({ title: "Error", description: "Could not load companies.", variant: "destructive" });
+      console.error("Failed to fetch brands:", error);
+      toast({ title: "Error", description: "Could not load brands.", variant: "destructive" });
       setCompanies([]);
       setFilteredCompanies([]);
     } finally {
@@ -138,15 +138,15 @@ export default function AdminCompaniesPage() {
       if (success) {
         await fetchCompanies();
         toast({
-          title: 'Company Deleted',
-          description: `Company "${companyToDelete.name}" and all associated locations/users have been deleted.`,
+          title: 'Brand Deleted',
+          description: `Brand "${companyToDelete.name}" and all associated locations/users have been deleted.`,
         });
       } else {
         throw new Error('Delete operation returned false.');
       }
     } catch (error) {
-      console.error("Failed to delete company:", error);
-      toast({ title: 'Error Deleting Company', description: `Could not delete company "${companyToDelete.name}".`, variant: 'destructive' });
+      console.error("Failed to delete brand:", error);
+      toast({ title: 'Error Deleting Brand', description: `Could not delete brand "${companyToDelete.name}".`, variant: 'destructive' });
     } finally {
       setIsLoading(false);
       setIsDeleteDialogOpen(false);
@@ -157,10 +157,10 @@ export default function AdminCompaniesPage() {
    const handleSaveNewCompany = async (companyData: CompanyFormData) => {
        const added = await addCompany(companyData);
        if (added) {
-          toast({ title: "Company Added", description: `"${added.name}" added successfully.` });
+          toast({ title: "Brand Added", description: `"${added.name}" added successfully.` });
           fetchCompanies();
        } else {
-           toast({ title: "Error", description: "Failed to add company.", variant: "destructive" });
+           toast({ title: "Error", description: "Failed to add brand.", variant: "destructive" });
        }
      setIsAddDialogOpen(false);
    };
@@ -172,27 +172,27 @@ export default function AdminCompaniesPage() {
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Company Management</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-primary">Brand Management</h1>
         <Button onClick={handleAddCompanyClick} className="bg-accent text-accent-foreground hover:bg-accent/90">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add New Company
+          <PlusCircle className="mr-2 h-4 w-4" /> Add New Brand
         </Button>
       </div>
       <div className="mb-6 flex items-center gap-2">
         <Search className="h-5 w-5 text-muted-foreground" />
-        <Input type="text" placeholder="Search companies by name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="max-w-sm"/>
+        <Input type="text" placeholder="Search brands by name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="max-w-sm"/>
       </div>
       <Card>
-        <CardHeader> <CardTitle>Company List</CardTitle> <CardDescription>Manage companies, locations, courses, and users.</CardDescription> </CardHeader>
+        <CardHeader> <CardTitle>Brand List</CardTitle> <CardDescription>Manage brands, locations, courses, and users.</CardDescription> </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="space-y-4 py-4"> <Skeleton className="h-12 w-full" /> <Skeleton className="h-10 w-full" /> <Skeleton className="h-10 w-full" /> </div>
           ) : filteredCompanies.length === 0 ? (
-            <div className="text-center text-muted-foreground py-8"> {searchTerm ? `No companies found matching "${searchTerm}".` : "No companies found. Add one to get started."} </div>
+            <div className="text-center text-muted-foreground py-8"> {searchTerm ? `No brands found matching "${searchTerm}".` : "No brands found. Add one to get started."} </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Company Name</TableHead>
+                  <TableHead>Brand Name</TableHead>
                   <TableHead className="text-center">Locations</TableHead>
                   <TableHead className="text-center">Users (Active)</TableHead>
                   <TableHead className="text-center">Max Users</TableHead>
@@ -241,7 +241,7 @@ export default function AdminCompaniesPage() {
                                 <Link href={`/admin/companies/${company.id}/edit`}>
                                   <span className="flex items-center gap-2">
                                     <Edit className="mr-2 h-4 w-4" />
-                                    <span>Edit Company &amp; Settings</span>
+                                    <span>Edit Brand &amp; Settings</span>
                                   </span>
                                 </Link>
                               </DropdownMenuItem>
@@ -264,7 +264,7 @@ export default function AdminCompaniesPage() {
                               <DropdownMenuSeparator />
                               <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => openDeleteConfirmation(company)}>
                                 <>
-                                  <Trash2 className="mr-2 h-4 w-4" /> <span>Delete Company</span>
+                                  <Trash2 className="mr-2 h-4 w-4" /> <span>Delete Brand</span>
                                 </>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -281,8 +281,8 @@ export default function AdminCompaniesPage() {
       <AddEditCompanyDialog isOpen={isAddDialogOpen} setIsOpen={setIsAddDialogOpen} initialData={null} onSave={handleSaveNewCompany}/>
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader> <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle> <AlertDialogDescription> This action cannot be undone. This will permanently delete the company "{companyToDelete?.name}", all its locations, and all associated user accounts. </AlertDialogDescription> </AlertDialogHeader>
-          <AlertDialogFooter> <AlertDialogCancel onClick={() => setCompanyToDelete(null)}>Cancel</AlertDialogCancel> <AlertDialogAction onClick={confirmDeleteCompany} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isLoading}> {isLoading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>) : 'Yes, delete company'} </AlertDialogAction> </AlertDialogFooter>
+          <AlertDialogHeader> <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle> <AlertDialogDescription> This action cannot be undone. This will permanently delete the brand "{companyToDelete?.name}", all its locations, and all associated user accounts. </AlertDialogDescription> </AlertDialogHeader>
+          <AlertDialogFooter> <AlertDialogCancel onClick={() => setCompanyToDelete(null)}>Cancel</AlertDialogCancel> <AlertDialogAction onClick={confirmDeleteCompany} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isLoading}> {isLoading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>) : 'Yes, delete brand'} </AlertDialogAction> </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

@@ -14,6 +14,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { getAllCourses } from '@/lib/firestore-data';
+import { processCheckout } from '@/actions/checkout';
 import type { Course } from '@/types/course';
 import type { User } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
@@ -26,7 +27,7 @@ import { Badge } from '@/components/ui/badge';
 // Schema for Step 1
 const checkoutSetupFormSchema = z.object({
   customerName: z.string().min(2, { message: 'Customer name is required.' }),
-  companyName: z.string().min(2, { message: 'Company name is required.' }),
+  companyName: z.string().min(2, { message: 'Brand name is required.' }),
   adminEmail: z.string().email({ message: 'Please enter a valid email address.' }),
   streetAddress: z.string().optional(),
   city: z.string().optional(),
@@ -88,7 +89,6 @@ function CheckoutSetupFormContent({
   });
 
   useEffect(() => {
-    // Sync selectedCourseIds prop with form state
     const currentFormIds = JSON.stringify(setupForm.getValues('selectedCourseIds') || []);
     const propIds = JSON.stringify(selectedCourseIds || []);
     if (currentFormIds !== propIds) {
@@ -136,19 +136,17 @@ function CheckoutSetupFormContent({
 
     toast({ title: "Information Saved", description: "Proceeding to payment..." });
     router.push(`/admin/checkout/payment?${queryParams.toString()}`);
-    //setIsProcessing(false); // Processing continues on the next page
   };
 
   return (
     <Form {...setupForm}>
       <form onSubmit={setupForm.handleSubmit(onProceedToPayment)} className="space-y-8">
-        {/* Customer & Company Info */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
-            <CardHeader><CardTitle>Customer & Company</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Customer & Brand</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <FormField control={setupForm.control} name="customerName" render={({ field }) => ( <FormItem> <FormLabel>Customer Name</FormLabel> <FormControl><Input {...field} /></FormControl> <FormMessage /> </FormItem> )} />
-              <FormField control={setupForm.control} name="companyName" render={({ field }) => ( <FormItem> <FormLabel>Company Name</FormLabel> <FormControl><Input {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+              <FormField control={setupForm.control} name="companyName" render={({ field }) => ( <FormItem> <FormLabel>Brand Name</FormLabel> <FormControl><Input {...field} /></FormControl> <FormMessage /> </FormItem> )} />
               <FormField control={setupForm.control} name="adminEmail" render={({ field }) => ( <FormItem> <FormLabel>Admin Email</FormLabel> <FormControl><Input type="email" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
               <FormItem>
                 <FormLabel className="flex items-center gap-1"><Users className="h-4 w-4" /> Max Users Allowed</FormLabel>
@@ -169,7 +167,6 @@ function CheckoutSetupFormContent({
             </CardContent>
           </Card>
 
-          {/* Billing Address */}
           <Card>
             <CardHeader><CardTitle>Billing Address (Optional)</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -184,7 +181,6 @@ function CheckoutSetupFormContent({
           </Card>
         </div>
 
-        {/* Revenue Share Section */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5" /> Revenue Share (Optional)</CardTitle>
@@ -192,19 +188,18 @@ function CheckoutSetupFormContent({
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <FormField control={setupForm.control} name="revSharePartnerName" render={({ field }) => ( <FormItem> <FormLabel>Partner Name</FormLabel> <FormControl><Input {...field} placeholder="e.g., John Smith" /></FormControl> <FormMessage /> </FormItem> )} />
-            <FormField control={setupForm.control} name="revSharePartnerCompany" render={({ field }) => ( <FormItem> <FormLabel>Partner Company</FormLabel> <FormControl><Input {...field} placeholder="e.g., Partner Co." /></FormControl> <FormMessage /> </FormItem> )} />
+            <FormField control={setupForm.control} name="revSharePartnerCompany" render={({ field }) => ( <FormItem> <FormLabel>Partner Brand</FormLabel> <FormControl><Input {...field} placeholder="e.g., Partner Co." /></FormControl> <FormMessage /> </FormItem> )} />
             <FormField control={setupForm.control} name="revSharePartnerPercentage" render={({ field }) => ( <FormItem> <FormLabel>Share Percentage (%)</FormLabel> <FormControl><Input type="number" min="0" max="100" {...field} placeholder="e.g., 10" value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl> <FormMessage /> </FormItem> )} />
           </CardContent>
         </Card>
 
-        {/* Course Selection */}
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> Select Courses</CardTitle></CardHeader>
           <CardContent>
             <FormField
               control={setupForm.control}
               name="selectedCourseIds"
-              render={() => ( // No field prop needed directly as Checkbox has its own binding
+              render={() => (
                 <FormItem>
                   <ScrollArea className="h-48 w-full rounded-md border p-4">
                     <div className="space-y-2">
@@ -227,14 +222,13 @@ function CheckoutSetupFormContent({
                       ))}
                     </div>
                   </ScrollArea>
-                  <FormMessage /> {/* For selectedCourseIds error */}
+                  <FormMessage />
                 </FormItem>
               )}
             />
           </CardContent>
         </Card>
 
-        {/* Summary & Proceed Button */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2">
             <CardHeader><CardTitle className="flex items-center gap-2"><Tag className="h-5 w-5" /> Account Order Summary</CardTitle></CardHeader>
@@ -260,7 +254,7 @@ function CheckoutSetupFormContent({
               <div className="flex justify-between text-lg font-bold text-primary"><span>Total Account Value:</span> <span>${finalTotalAmount.toFixed(2)}</span></div>
             </CardContent>
           </Card>
-        
+
           <div className="lg:col-span-1 flex items-end">
             <Card className="w-full">
               <CardHeader>

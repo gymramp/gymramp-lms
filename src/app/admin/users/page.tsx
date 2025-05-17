@@ -79,10 +79,9 @@ export default function AdminUsersPage() {
         setCurrentUser(userDetails);
         setCurrentUserName(userDetails?.name || 'User');
 
-        // Authorization: Super Admin, Admin, Owner, or Manager can access
         if (!userDetails || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(userDetails.role)) {
            toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
-           router.push('/'); // Redirect if not authorized
+           router.push('/');
            return;
         }
 
@@ -94,7 +93,6 @@ export default function AdminUsersPage() {
            setSelectedLocationId('all');
         }
       } else {
-        // No user logged in
         setCurrentUser(null);
         setCurrentUserName('');
         setSelectedCompanyId('all');
@@ -127,9 +125,8 @@ export default function AdminUsersPage() {
                  if (currentUser.role === 'Admin' || currentUser.role === 'Owner') {
                     fetchedUsers = companyUsers;
                 } else if (currentUser.role === 'Manager') {
-                    // Managers see Staff in their company. Specific location filtering for display is done client-side.
                     fetchedUsers = companyUsers.filter((emp) => emp.role === 'Staff' || emp.id === currentUser.id);
-                } else { // Should not happen due to page access check, but as a fallback
+                } else {
                     fetchedUsers = companyUsers.filter(emp => emp.id === currentUser.id);
                 }
             } else {
@@ -140,7 +137,7 @@ export default function AdminUsersPage() {
                     setSelectedCompanyId(defaultCompany.id);
                     setCurrentUser(prev => prev ? {...prev, companyId: defaultCompany.id} : null);
                  } else {
-                     toast({ title: "Error", description: "Could not assign default company.", variant: "destructive" });
+                     toast({ title: "Error", description: "Could not assign default brand.", variant: "destructive" });
                      fetchedCompanies = [];
                      fetchedUsers = currentUser ? [currentUser] : [];
                      setSelectedCompanyId('all');
@@ -154,7 +151,7 @@ export default function AdminUsersPage() {
 
         } catch (error) {
             console.error("Error fetching data:", error);
-            toast({ title: "Error", description: "Could not load companies, locations, or users.", variant: "destructive" });
+            toast({ title: "Error", description: "Could not load brands, locations, or users.", variant: "destructive" });
         } finally {
              setIsLoading(false);
         }
@@ -177,7 +174,6 @@ export default function AdminUsersPage() {
         if (selectedLocationId && selectedLocationId !== 'all') {
              tempUsers = tempUsers.filter(user => Array.isArray(user.assignedLocationIds) && user.assignedLocationIds.includes(selectedLocationId));
         }
-        // Further filter for Manager role if needed (e.g., only show Staff)
         if (currentUser?.role === 'Manager') {
             tempUsers = tempUsers.filter(user => user.role === 'Staff' || user.id === currentUser.id);
         }
@@ -193,13 +189,11 @@ export default function AdminUsersPage() {
             if (currentUser?.role === 'Super Admin') {
                 setFilteredLocations(allLocations);
             } else if (currentUser?.companyId) {
-                // For non-SuperAdmins, if 'all' company means all locations in *their* company
                 setFilteredLocations(allLocations.filter(loc => loc.companyId === currentUser.companyId));
             } else {
                 setFilteredLocations([]);
             }
         } else {
-            // Filter by selected company, but also by manager's assigned locations if manager
             let companySpecificLocations = allLocations.filter(loc => loc.companyId === selectedCompanyId);
             if (currentUser?.role === 'Manager') {
                  companySpecificLocations = companySpecificLocations.filter(loc =>
@@ -208,7 +202,7 @@ export default function AdminUsersPage() {
             }
             setFilteredLocations(companySpecificLocations);
         }
-        setSelectedLocationId('all'); // Reset location filter when company changes
+        setSelectedLocationId('all');
     }, [selectedCompanyId, allLocations, currentUser]);
 
 
@@ -223,11 +217,11 @@ export default function AdminUsersPage() {
        return;
      }
      if (currentUser.role !== 'Super Admin' && !currentUser.companyId) {
-        toast({ title: "Company Required", description: "You must be associated with a company to add users.", variant: "destructive"});
+        toast({ title: "Brand Required", description: "You must be associated with a brand to add users.", variant: "destructive"});
         return;
      }
      if (companies.length === 0 && currentUser.role === 'Super Admin') {
-        toast({ title: "No Companies Exist", description: "Please add a company before adding users.", variant: "destructive"});
+        toast({ title: "No Brands Exist", description: "Please add a brand before adding users.", variant: "destructive"});
         return;
      }
     setIsAddUserDialogOpen(true);
@@ -289,15 +283,13 @@ export default function AdminUsersPage() {
 
   const canPerformAction = (targetUser: User): boolean => {
     if (!currentUser) return false;
-    if (currentUser.role === 'Super Admin') return true; // Super Admin can do anything to anyone (except demote other Super Admins perhaps)
-    if (currentUser.id === targetUser.id) return false; // Cannot act on self
-    if (!currentUser.companyId || currentUser.companyId !== targetUser.companyId) return false; // Must be in same company
+    if (currentUser.role === 'Super Admin') return true;
+    if (currentUser.id === targetUser.id) return false;
+    if (!currentUser.companyId || currentUser.companyId !== targetUser.companyId) return false;
 
-    // Admin/Owner can act on roles lower than theirs in their company
     if ((currentUser.role === 'Admin' || currentUser.role === 'Owner') && ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[targetUser.role]) {
         return true;
     }
-    // Manager can only act on Staff in their company
     if (currentUser.role === 'Manager' && targetUser.role === 'Staff') {
         return true;
     }
@@ -307,14 +299,12 @@ export default function AdminUsersPage() {
   const canEditUser = (targetUser: User): boolean => {
      if (!currentUser) return false;
      if (currentUser.role === 'Super Admin') return true;
-     if (currentUser.id === targetUser.id) return true; // Can edit self
-     if (!currentUser.companyId || currentUser.companyId !== targetUser.companyId) return false; // Must be in same company
+     if (currentUser.id === targetUser.id) return true;
+     if (!currentUser.companyId || currentUser.companyId !== targetUser.companyId) return false;
 
-     // Admin/Owner can edit roles lower than or equal to theirs in their company (but not higher)
      if ((currentUser.role === 'Admin' || currentUser.role === 'Owner') && ROLE_HIERARCHY[currentUser.role] >= ROLE_HIERARCHY[targetUser.role]) {
         return true;
      }
-     // Manager can only edit Staff in their company
      if (currentUser.role === 'Manager' && targetUser.role === 'Staff') {
          return true;
      }
@@ -331,7 +321,7 @@ export default function AdminUsersPage() {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
 
-  if (isLoading && !currentUser) { // Show loading skeleton only if currentUser is not yet determined
+  if (isLoading && !currentUser) {
     return (
       <div className="container mx-auto py-12 md:py-16 lg:py-20">
         <Skeleton className="h-10 w-1/3 mb-8" />
@@ -349,7 +339,6 @@ export default function AdminUsersPage() {
     );
   }
   if (!currentUser || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role)) {
-     // This case should be handled by the redirect in fetchCurrentUser, but as a safeguard
      return <div className="container mx-auto py-12 text-center">Access Denied. Redirecting...</div>;
   }
 
@@ -363,14 +352,14 @@ export default function AdminUsersPage() {
               <DialogHeader>
                 <DialogTitle>Add New User</DialogTitle>
                  <DialogDescription>
-                    Enter the details of the new user. They will be added to the selected company and locations.
+                    Enter the details of the new user. They will be added to the selected brand and locations.
                  </DialogDescription>
                </DialogHeader>
                   <Button
                     onClick={handleAddUserClick}
                     className="bg-accent text-accent-foreground hover:bg-accent/90"
                     disabled={!currentUser || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role) || isLoading || (companies.length === 0 && currentUser.role === 'Super Admin')}
-                    title={ (companies.length === 0 && currentUser?.role === 'Super Admin') ? "Add a company before adding users" : (!['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser?.role || 'Staff') ? "You do not have permission to add users" : "")}
+                    title={ (companies.length === 0 && currentUser?.role === 'Super Admin') ? "Add a brand before adding users" : (!['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser?.role || 'Staff') ? "You do not have permission to add users" : "")}
                    >
                     <PlusCircle className="mr-2 h-4 w-4" /> Add New User
                   </Button>
@@ -379,7 +368,7 @@ export default function AdminUsersPage() {
                     setIsOpen={setIsAddUserDialogOpen}
                     onUserAdded={refreshUsers}
                     companies={companies}
-                    locations={allLocations} // Pass all locations, AddUserDialog will filter by selected company
+                    locations={allLocations}
                     currentUser={currentUser}
                  />
             </Dialog>
@@ -390,13 +379,13 @@ export default function AdminUsersPage() {
          <h2 className="text-lg font-semibold mr-4">Filters:</h2>
          {currentUser?.role === 'Super Admin' && (
            <div className="flex items-center gap-2">
-             <Label htmlFor="company-filter">Company:</Label>
+             <Label htmlFor="company-filter">Brand:</Label>
              <Select value={selectedCompanyId} onValueChange={(value) => {setSelectedCompanyId(value === 'all-companies' ? 'all' : value); setSelectedLocationId('all');}}>
                <SelectTrigger id="company-filter" className="w-[200px] bg-background">
-                 <SelectValue placeholder="All Companies" />
+                 <SelectValue placeholder="All Brands" />
                </SelectTrigger>
                <SelectContent>
-                 <SelectItem value="all-companies">All Companies</SelectItem>
+                 <SelectItem value="all-companies">All Brands</SelectItem>
                  {companies.map(company => (
                    <SelectItem key={company.id} value={company.id}>{company.name}</SelectItem>
                  ))}
@@ -422,7 +411,7 @@ export default function AdminUsersPage() {
                             <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem>
                         ))}
                          {selectedCompanyId !== 'all' && filteredLocations.length === 0 && (
-                           <SelectItem value="none" disabled>No locations for this company</SelectItem>
+                           <SelectItem value="none" disabled>No locations for this brand</SelectItem>
                          )}
                     </SelectContent>
                 </Select>
@@ -451,7 +440,7 @@ export default function AdminUsersPage() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Company</TableHead>
+                  <TableHead>Brand</TableHead>
                   <TableHead>Locations</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
@@ -478,7 +467,7 @@ export default function AdminUsersPage() {
                             <span className="flex items-center gap-1 text-sm text-muted-foreground">
                                 <Building className="h-4 w-4 opacity-70" />
                                 {companyName || 'Missing'}
-                                {!user.companyId && <AlertTriangle className="h-4 w-4 text-yellow-500" title="Company Missing"/>}
+                                {!user.companyId && <AlertTriangle className="h-4 w-4 text-yellow-500" title="Brand Missing"/>}
                             </span>
                             </TableCell>
                             <TableCell>
@@ -591,10 +580,9 @@ export default function AdminUsersPage() {
             onUserUpdated={handleUserUpdated}
             currentUser={currentUser}
             companies={companies}
-            locations={allLocations} // Pass all locations, EditUserDialog will filter
+            locations={allLocations}
          />
        )}
     </div>
   );
 }
-

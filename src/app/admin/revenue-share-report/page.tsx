@@ -123,7 +123,7 @@ export default function RevenueShareReportPage() {
         <Search className="h-5 w-5 text-muted-foreground" />
         <Input
           type="text"
-          placeholder="Search by Company or Partner Name..."
+          placeholder="Search by Brand or Partner Name..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="max-w-sm"
@@ -150,9 +150,9 @@ export default function RevenueShareReportPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Customer Company</TableHead>
+                    <TableHead>Customer Brand</TableHead>
                     <TableHead>Partner Name</TableHead>
-                    <TableHead>Partner Company</TableHead>
+                    <TableHead>Partner Brand</TableHead>
                     <TableHead className="text-center">Share %</TableHead>
                     <TableHead className="text-right">Total Sale</TableHead>
                     <TableHead className="text-right">Rev Share Amount</TableHead>

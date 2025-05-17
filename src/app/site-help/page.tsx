@@ -7,7 +7,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { HelpCircle, BookOpen, Users, Building, ShoppingCart, Cog, DatabaseZap, LayoutDashboard, BarChartBig, Percent, UserPlus, Gift, TestTube2, MapPin, Settings as SettingsIcon, Award } from "lucide-react"; // Renamed Settings to SettingsIcon
+import { HelpCircle, BookOpen, Users, Building, ShoppingCart, Cog, DatabaseZap, LayoutDashboard, BarChartBig, Percent, UserPlus, Gift, TestTube2, MapPin, Settings as SettingsIcon, Award } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { User, UserRole } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
@@ -24,15 +24,15 @@ interface HelpTopic {
 const helpData: Record<UserRole, HelpTopic[]> = {
   'Super Admin': [
     {
-      title: "Managing Companies",
+      title: "Managing Brands",
       icon: Building,
       content: (
         <>
-          <p>As a Super Admin, you can create, edit, and manage all companies on the platform.</p>
+          <p>As a Super Admin, you can create, edit, and manage all brands on the platform.</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li>Navigate to <strong>Admin &gt; Companies</strong> from the main menu (via your user dropdown or direct link if you add one later).</li>
-            <li>Use the <strong>Add New Company</strong> button to create new client accounts. This involves setting company details, max users, and optionally, their logo and a short description.</li>
-            <li>From the company list, you can <strong>Edit Company & Settings</strong> to modify details, manage assigned courses (from the global library), update trial status, and adjust user limits.</li>
+            <li>Navigate to <strong>Admin &gt; Brands</strong> from the main menu (via your user dropdown or direct link if you add one later).</li>
+            <li>Use the <strong>Add New Brand</strong> button to create new client accounts. This involves setting brand details, max users, and optionally, their logo and a short description.</li>
+            <li>From the brand list, you can <strong>Edit Brand & Settings</strong> to modify details, manage assigned courses (from the global library), update trial status, and adjust user limits.</li>
             <li>View the <Link href="/admin/revenue-share-report" className="text-primary hover:underline">Revenue Share Report</Link> for insights on checkouts that included revenue share agreements.</li>
           </ul>
         </>
@@ -47,7 +47,7 @@ const helpData: Record<UserRole, HelpTopic[]> = {
           <ul className="list-disc pl-5 mt-2 space-y-1">
             <li>Go to <strong>Admin &gt; Users</strong> to view and manage users.</li>
             <li>You can add new users of any role (including other Super Admins, though this should be done with caution).</li>
-            <li>Assign users to specific companies and locations.</li>
+            <li>Assign users to specific brands and locations.</li>
             <li>Activate or deactivate user accounts.</li>
             <li>Edit user details, including their name and role (except for other Super Admins).</li>
           </ul>
@@ -61,10 +61,10 @@ const helpData: Record<UserRole, HelpTopic[]> = {
         <>
           <p>Manage the master library of courses, lessons, and quizzes. Access these via the <strong>Course Admin</strong> dropdown in the main navigation.</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li><strong>Courses:</strong> Create new courses, define the number of modules, set titles, descriptions, pricing, difficulty levels, and duration. Assign lessons and quizzes to the curriculum from the "Manage Curriculum" page for each course.</li>
+            <li><strong>Courses:</strong> Create new courses, define titles, descriptions, pricing, difficulty levels, and duration. Assign lessons and quizzes to the curriculum from the "Manage Curriculum" page for each course.</li>
             <li><strong>Lessons:</strong> Build individual lesson content. You can add text, embed videos (YouTube, Vimeo, or direct URL), upload featured images, provide exercise file information, and toggle preview availability.</li>
             <li><strong>Quizzes:</strong> Create quizzes with titles. Then, manage their questions (multiple-choice or true/false) from the "Manage Questions" page for each quiz.</li>
-            <li>These library items can then be assigned to specific companies, making them available to that company's users.</li>
+            <li>These library items can then be assigned to specific brands, making them available to that brand's users.</li>
           </ul>
         </>
       ),
@@ -76,8 +76,8 @@ const helpData: Record<UserRole, HelpTopic[]> = {
         <>
           <p>Use the dedicated checkout pages under the <strong>New Customers</strong> dropdown in the main navigation to onboard new customers:</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li><Link href="/admin/checkout" className="text-primary hover:underline"><strong>Paid Checkout:</strong></Link> For new customers making a purchase. This flow collects company and admin details, allows course selection, applies discounts, processes payment via Stripe, and optionally records revenue share details.</li>
-            <li><Link href="/admin/free-trial-checkout" className="text-primary hover:underline"><strong>Free Trial Checkout:</strong></Link> To set up new customers with a trial period. Collects company and admin details, allows course selection for the trial, and sets a trial duration.</li>
+            <li><Link href="/admin/checkout" className="text-primary hover:underline"><strong>Paid Checkout:</strong></Link> For new customers making a purchase. This flow collects brand and admin details, allows course selection, applies discounts, processes payment via Stripe, and optionally records revenue share details.</li>
+            <li><Link href="/admin/free-trial-checkout" className="text-primary hover:underline"><strong>Free Trial Checkout:</strong></Link> To set up new customers with a trial period. Collects brand and admin details, allows course selection for the trial, and sets a trial duration.</li>
             <li><Link href="/admin/test-checkout" className="text-primary hover:underline"><strong>Test Checkout:</strong></Link> A dedicated page for testing the Stripe payment integration with a sample amount.</li>
           </ul>
         </>
@@ -103,9 +103,9 @@ const helpData: Record<UserRole, HelpTopic[]> = {
         <>
           <p>The Super Admin Dashboard provides a high-level overview of the platform.</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li><strong>Key Metrics:</strong> View total users, courses, companies, and recent sales figures.</li>
+            <li><strong>Key Metrics:</strong> View total users, courses, brands, and recent sales figures.</li>
             <li><strong>Quick Actions:</strong> Easily navigate to major administrative sections.</li>
-            <li><strong>Recent Platform Additions:</strong> See the latest companies and users added to the system.</li>
+            <li><strong>Recent Platform Additions:</strong> See the latest brands and users added to the system.</li>
           </ul>
         </>
       ),
@@ -115,39 +115,39 @@ const helpData: Record<UserRole, HelpTopic[]> = {
     {
       title: "Admin Dashboard Overview",
       icon: LayoutDashboard,
-      content: "Your dashboard provides a snapshot of your company's learning activity, employee progress (overall completion, certificates), and active courses. Use it to monitor overall performance and identify areas needing attention. Access this via the 'Dashboard' link in your user menu or main navigation.",
+      content: "Your dashboard provides a snapshot of your brand's learning activity, employee progress (overall completion, certificates), and active courses. Use it to monitor overall performance and identify areas needing attention. Access this via the 'Dashboard' link in your user menu or main navigation.",
     },
     {
-      title: "Managing Company Users",
+      title: "Managing Brand Users",
       icon: Users,
-      content: "Navigate to 'Manage Users' from your user menu or main navigation. Here you can add new employees (Staff, Managers), assign them to locations within your company, edit their details (name, locations), and activate/deactivate their accounts. You cannot create users with roles equal to or higher than your own.",
+      content: "Navigate to 'Manage Users' from your user menu or main navigation. Here you can add new employees (Staff, Managers), assign them to locations within your brand, edit their details (name, locations), and activate/deactivate their accounts. You cannot create users with roles equal to or higher than your own.",
     },
     {
-      title: "Managing Company Locations",
+      title: "Managing Brand Locations",
       icon: MapPin,
-      content: "From the 'Manage Locations' link in your user menu (if you have company context) or via 'Companies' &gt; 'Manage Locations' if that path exists. You can add new physical or virtual locations for your company. Users can then be assigned to these locations.",
+      content: "From the 'Manage Locations' link in your user menu (if you have brand context) or via 'Brands' > 'Manage Locations' if that path exists. You can add new physical or virtual locations for your brand. Users can then be assigned to these locations.",
     },
     {
       title: "Assigning Courses to Users",
       icon: BookOpen,
-      content: "From the User Management page, select an employee and use the 'Manage Assigned Courses' option (from the actions dropdown). This allows you to give them access to specific courses that have been made available to your company by a Super Admin.",
+      content: "From the User Management page, select an employee and use the 'Manage Assigned Courses' option (from the actions dropdown). This allows you to give them access to specific courses that have been made available to your brand by a Super Admin.",
     },
   ],
   'Owner': [
     {
       title: "Owner Dashboard Overview",
       icon: LayoutDashboard,
-      content: "Your dashboard shows your company's learning progress, active users, course completion rates, and issued certificates. Keep an eye on these metrics to ensure your team is on track. Access via 'Dashboard' in your user menu or main navigation.",
+      content: "Your dashboard shows your brand's learning progress, active users, course completion rates, and issued certificates. Keep an eye on these metrics to ensure your team is on track. Access via 'Dashboard' in your user menu or main navigation.",
     },
     {
-      title: "Managing Company Users & Locations",
+      title: "Managing Brand Users & Locations",
       icon: Users,
-      content: "As an Owner, you can manage users (Managers, Staff) and locations for your company. Access these through the 'Manage Users' and 'Manage Locations' sections in your user menu or main navigation. You can add/edit users and assign them to locations. You cannot create users with roles equal to or higher than your own.",
+      content: "As an Owner, you can manage users (Managers, Staff) and locations for your brand. Access these through the 'Manage Users' and 'Manage Locations' sections in your user menu or main navigation. You can add/edit users and assign them to locations. You cannot create users with roles equal to or higher than your own.",
     },
     {
       title: "Course Assignment",
       icon: BookOpen,
-      content: "Assign relevant courses to your employees via the 'Manage Assigned Courses' option on the User Management page. This helps equip them with necessary skills. Courses available for assignment are those enabled for your company by a Super Admin.",
+      content: "Assign relevant courses to your employees via the 'Manage Assigned Courses' option on the User Management page. This helps equip them with necessary skills. Courses available for assignment are those enabled for your brand by a Super Admin.",
     },
   ],
   'Manager': [
@@ -164,7 +164,7 @@ const helpData: Record<UserRole, HelpTopic[]> = {
     {
       title: "Assigning Courses to Staff",
       icon: BookOpen,
-      content: "Ensure your staff have access to the right training by assigning them courses through the 'Manage Assigned Courses' option in the User Management section for each staff member. You can assign any course made available to your company.",
+      content: "Ensure your staff have access to the right training by assigning them courses through the 'Manage Assigned Courses' option in the User Management section for each staff member. You can assign any course made available to your brand.",
     },
   ],
   'Staff': [
@@ -176,7 +176,7 @@ const helpData: Record<UserRole, HelpTopic[]> = {
     {
       title: "Taking Courses & Quizzes",
       icon: HelpCircle,
-      content: "Inside a course, you'll find modules with lessons and quizzes. Follow the curriculum, watch videos, read lesson content, and complete quizzes as required. Your progress (e.g., completed lessons/quizzes) is saved automatically. For quizzes, you typically need to achieve a passing score to proceed.",
+      content: "Inside a course, you'll find lessons and quizzes. Follow the curriculum, watch videos, read lesson content, and complete quizzes as required. Your progress (e.g., completed lessons/quizzes) is saved automatically. For quizzes, you typically need to achieve a passing score to proceed.",
     },
     {
       title: "Viewing My Badges",
@@ -211,8 +211,6 @@ export default function SiteHelpPage() {
                 }
             } else {
                 setCurrentUser(null);
-                // If not logged in, might want to show generic help or redirect
-                // For now, it will show "Help Information Not Available"
             }
             setIsLoading(false);
         });

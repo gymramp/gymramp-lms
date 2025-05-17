@@ -132,7 +132,6 @@ export default function AccountPage() {
                 title: "Profile Image Removed",
                 description: "Your profile image has been removed.",
             });
-             // Optionally delete the image from storage here if needed (requires backend logic or more complex setup)
         } else {
             throw new Error("Failed to remove profile image from database.");
         }
@@ -149,7 +148,6 @@ export default function AccountPage() {
   };
 
 
-  // Function to get initials from name
   const getInitials = (name?: string | null): string => {
     if (!name) return '??';
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
@@ -167,7 +165,6 @@ export default function AccountPage() {
         <CardContent className="space-y-6">
           {isLoading ? (
             <>
-              {/* Skeleton Loader */}
                <div className="flex items-center gap-4">
                    <Skeleton className="h-20 w-20 rounded-full" />
                    <div className="space-y-2 flex-1">
@@ -183,7 +180,6 @@ export default function AccountPage() {
             </>
           ) : currentUser ? (
             <>
-               {/* Profile Image Section */}
                <div className="space-y-4">
                  <Label className="text-base font-semibold">Profile Image</Label>
                  <div className="flex items-center gap-6">
@@ -213,7 +209,6 @@ export default function AccountPage() {
                                  <Trash2 className="mr-2 h-4 w-4" /> Remove Image
                              </Button>
                          )}
-                         {/* Hidden file input */}
                          <Input
                            ref={fileInputRef}
                            type="file"
@@ -233,7 +228,6 @@ export default function AccountPage() {
                 </div>
                </div>
 
-              {/* Other Fields */}
               <div className="space-y-2">
                 <Label htmlFor="name" className="flex items-center gap-1 text-muted-foreground"><UserIcon className="h-4 w-4" /> Name</Label>
                 <Input id="name" value={currentUser.name} readOnly disabled />
@@ -243,9 +237,8 @@ export default function AccountPage() {
                 <Input id="email" value={currentUser.email} readOnly disabled />
               </div>
                <div className="space-y-2">
-                 <Label htmlFor="company" className="flex items-center gap-1 text-muted-foreground"><Building className="h-4 w-4" /> Company</Label>
-                 {/* Display company name if available, otherwise ID or 'N/A' */}
-                 <Input id="company" value={currentUser.company || currentUser.companyId || 'N/A'} readOnly disabled />
+                 <Label htmlFor="brand" className="flex items-center gap-1 text-muted-foreground"><Building className="h-4 w-4" /> Brand</Label>
+                 <Input id="brand" value={currentUser.company || currentUser.companyId || 'N/A'} readOnly disabled />
                </div>
               <div className="space-y-2">
                 <Label htmlFor="role" className="flex items-center gap-1 text-muted-foreground"><Building className="h-4 w-4" /> Role</Label>

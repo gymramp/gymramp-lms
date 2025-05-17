@@ -18,7 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { processCheckout } from '@/actions/checkout';
 import { createPaymentIntent } from '@/actions/stripe';
 import type { CheckoutFormData } from '@/types/user';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"; // Added this line
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
@@ -54,7 +54,7 @@ function PaymentFormElements({ orderDetails }: { orderDetails: OrderDetails }) {
   const router = useRouter();
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentErrorMessage, setPaymentErrorMessage] = useState<string | null>(null);
-  
+
   const paymentForm = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentFormSchema),
     defaultValues: { adminPassword: '' },
@@ -76,10 +76,9 @@ function PaymentFormElements({ orderDetails }: { orderDetails: OrderDetails }) {
       const { error: submitError, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          // return_url is not strictly needed here if we handle result on this page
-          return_url: `${window.location.origin}/admin/checkout/success`, // Or a specific success page
+          return_url: `${window.location.origin}/admin/checkout/success`,
         },
-        redirect: 'if_required', // Handle result on this page
+        redirect: 'if_required',
       });
 
       if (submitError) {
@@ -101,23 +100,19 @@ function PaymentFormElements({ orderDetails }: { orderDetails: OrderDetails }) {
           return;
         }
       } else {
-        // This case should ideally not be reached if redirect: 'if_required' and no error
         setPaymentErrorMessage('Payment intent not confirmed. Please try again.');
         setIsProcessingPayment(false);
         return;
       }
     } else {
-      // Amount is $0, skip Stripe payment
       toast({ title: "No Payment Required", description: "Order total is $0.00." });
     }
 
-    // Proceed to create company and user
     try {
       const checkoutData: CheckoutFormData = {
         ...orderDetails,
         password: formData.adminPassword,
         paymentIntentId: paymentIntentId,
-        // Ensure amounts are passed correctly if needed by processCheckout
         subtotalAmount: orderDetails.subtotalAmount,
         appliedDiscountPercent: orderDetails.appliedDiscountPercent,
         appliedDiscountAmount: orderDetails.appliedDiscountAmount,
@@ -127,7 +122,7 @@ function PaymentFormElements({ orderDetails }: { orderDetails: OrderDetails }) {
       const result = await processCheckout(checkoutData);
 
       if (result.success) {
-        toast({ title: "Checkout Complete!", description: `Company "${orderDetails.companyName}" and admin user created.` });
+        toast({ title: "Checkout Complete!", description: `Brand "${orderDetails.companyName}" and admin user created.` });
         router.push(`/admin/companies/${result.companyId}/edit`);
       } else {
         throw new Error(result.error || "Checkout failed after payment/finalization.");
@@ -148,7 +143,7 @@ function PaymentFormElements({ orderDetails }: { orderDetails: OrderDetails }) {
           <CardContent className="space-y-4">
             <div>
               <h3 className="font-semibold">Order Summary:</h3>
-              <p className="text-sm">Company: {orderDetails.companyName}</p>
+              <p className="text-sm">Brand: {orderDetails.companyName}</p>
               <p className="text-sm">Admin Email: {orderDetails.adminEmail}</p>
               <p className="text-sm">Courses: {orderDetails.selectedCourseIds.length}</p>
               <p className="text-lg font-bold mt-2">Total Due: ${(orderDetails.finalTotalAmountCents / 100).toFixed(2)}</p>
@@ -210,7 +205,7 @@ function PaymentPageContent() {
         if (!customerName || !companyName || !adminEmail || !selectedCourseIdsString || !finalTotalAmountCentsString) {
           throw new Error("Required checkout information is missing from URL.");
         }
-        
+
         const parsedDetails: OrderDetails = {
           customerName,
           companyName,
@@ -240,15 +235,12 @@ function PaymentPageContent() {
             throw new Error(paymentIntentResult.error || "Failed to initialize payment.");
           }
         } else {
-          // Amount is $0, no client secret needed
           setClientSecret(null);
         }
       } catch (e: any) {
         console.error("Error loading payment page:", e);
         setError(e.message || "Failed to load payment details.");
         toast({ title: "Error", description: e.message, variant: "destructive" });
-        // Optionally redirect back or show error prominently
-        // router.push('/admin/checkout'); 
       } finally {
         setIsLoading(false);
       }
@@ -280,10 +272,9 @@ function PaymentPageContent() {
     );
   }
 
-  // Options for Stripe Elements, initialized when clientSecret is available or not needed
-  const stripeElementsOptions: StripeElementsOptions | undefined = 
-    orderDetails.finalTotalAmountCents > 0 && clientSecret 
-      ? { clientSecret, appearance: { theme: 'stripe' } } 
+  const stripeElementsOptions: StripeElementsOptions | undefined =
+    orderDetails.finalTotalAmountCents > 0 && clientSecret
+      ? { clientSecret, appearance: { theme: 'stripe' } }
       : undefined;
 
   return (
@@ -293,10 +284,8 @@ function PaymentPageContent() {
           <PaymentFormElements orderDetails={orderDetails} />
         </Elements>
       ) : orderDetails.finalTotalAmountCents <= 0 ? (
-        // Render form for $0 amount (no Stripe PaymentElement needed)
         <PaymentFormElements orderDetails={orderDetails} />
       ) : (
-        // Case where amount > 0 but clientSecret failed (should be caught by error state ideally)
         <Alert variant="destructive" className="max-w-md mx-auto">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Payment Initialization Error</AlertTitle>
@@ -309,12 +298,9 @@ function PaymentPageContent() {
 
 
 export default function AdminCheckoutPaymentPage() {
-  // Using Suspense to ensure useSearchParams is used correctly
   return (
     <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>}>
       <PaymentPageContent />
     </Suspense>
   );
 }
-
-    

@@ -19,7 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     Menu, LogOut, User as UserIcon, LayoutDashboard, Settings, Users, BookOpen, FileText,
     ListChecks, Building, ShoppingCart, Award, MapPin, BarChartBig, Gift,
-    TestTube2, ChevronDown, UserPlus, Percent, HelpCircle, Layers // Added Layers icon
+    TestTube2, ChevronDown, UserPlus, Percent, HelpCircle, Layers
 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -28,13 +28,12 @@ import type { User } from '@/types/user';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 
-// Define a more flexible type for navigation items
 type NavItemType = {
   label: string;
   href?: string;
   isDropdown?: boolean;
   subItems?: Array<{ href: string; label: string; icon?: React.ElementType }>;
-  icon?: React.ElementType; // For top-level dropdown icon
+  icon?: React.ElementType;
 };
 
 export function Navbar() {
@@ -93,9 +92,9 @@ export function Navbar() {
     if (user.role === 'Super Admin') {
       roleSpecificItems.push(
         { href: '/admin/dashboard', label: 'Dashboard', icon: BarChartBig },
-        { href: '/admin/companies', label: 'Companies', icon: Building },
+        { href: '/admin/companies', label: 'Brands', icon: Building },
         { href: '/admin/users', label: 'Users', icon: Users },
-        { href: '/admin/programs', label: 'Programs', icon: Layers }, // Added Programs link
+        { href: '/admin/programs', label: 'Programs', icon: Layers },
         {
           label: 'Course Admin',
           isDropdown: true,
@@ -150,9 +149,9 @@ export function Navbar() {
     ...(currentUser.role === 'Super Admin'
       ? [
           { href: '/admin/dashboard', label: 'Super Admin Dashboard', icon: BarChartBig },
-          { href: '/admin/companies', label: 'Companies', icon: Building },
+          { href: '/admin/companies', label: 'Brands', icon: Building },
           { href: '/admin/users', label: 'Users', icon: Users },
-          { href: '/admin/programs', label: 'Programs', icon: Layers }, // Added Programs to dropdown too
+          { href: '/admin/programs', label: 'Programs', icon: Layers },
           { href: '/admin/settings', label: 'Settings', icon: Settings },
         ]
       : []),

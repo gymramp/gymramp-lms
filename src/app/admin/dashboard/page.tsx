@@ -4,14 +4,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, BookOpen, Building, CreditCard, Loader2, AlertTriangle, Cog, List, CalendarDays, Percent, UserPlus, BarChartBig, TestTube2, Gift } from 'lucide-react';
+import { Users, BookOpen, Building, CreditCard, Loader2, AlertTriangle, Cog, List, CalendarDays, Percent, UserPlus, BarChartBig, TestTube2, Gift, DatabaseZap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getUserByEmail, getAllUsers } from '@/lib/user-data';
 import { getAllCourses } from '@/lib/firestore-data';
-import { getAllCompanies, getSalesTotalLastNDays } from '@/lib/company-data'; // Import getSalesTotalLastNDays
+import { getAllCompanies, getSalesTotalLastNDays } from '@/lib/company-data';
 import type { User, Company } from '@/types/user';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,7 +23,7 @@ export default function SuperAdminDashboardPage() {
   const [totalUsers, setTotalUsers] = useState(0);
   const [totalCourses, setTotalCourses] = useState(0);
   const [totalCompanies, setTotalCompanies] = useState(0);
-  const [totalRecentSales, setTotalRecentSales] = useState(0); // State for recent sales
+  const [totalRecentSales, setTotalRecentSales] = useState(0);
   const [recentCompanies, setRecentCompanies] = useState<Company[]>([]);
   const [recentUsers, setRecentUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -39,33 +39,31 @@ export default function SuperAdminDashboardPage() {
         getAllUsers(),
         getAllCourses(),
         getAllCompanies(),
-        getSalesTotalLastNDays(30), // Fetch sales for the last 30 days
+        getSalesTotalLastNDays(30),
       ]);
 
       setTotalUsers(usersData.length);
       setTotalCourses(coursesData.length);
       setTotalCompanies(companiesData.length);
-      setTotalRecentSales(salesData); // Set recent sales
+      setTotalRecentSales(salesData);
 
-      // Sort companies by createdAt (descending)
       const sortedCompanies = companiesData
-        .filter(company => company.createdAt) // Ensure createdAt exists
+        .filter(company => company.createdAt)
         .sort((a, b) => {
           const dateA = a.createdAt instanceof Timestamp ? a.createdAt.toDate() : new Date(a.createdAt || 0);
           const dateB = b.createdAt instanceof Timestamp ? b.createdAt.toDate() : new Date(b.createdAt || 0);
           return dateB.getTime() - dateA.getTime();
         });
-      setRecentCompanies(sortedCompanies.slice(0, 3)); // Get top 3
+      setRecentCompanies(sortedCompanies.slice(0, 3));
 
-      // Sort users by createdAt (descending)
       const sortedUsers = usersData
-        .filter(user => user.createdAt) // Ensure createdAt exists
+        .filter(user => user.createdAt)
         .sort((a, b) => {
           const dateA = a.createdAt instanceof Timestamp ? a.createdAt.toDate() : new Date(a.createdAt || 0);
           const dateB = b.createdAt instanceof Timestamp ? b.createdAt.toDate() : new Date(b.createdAt || 0);
           return dateB.getTime() - dateA.getTime();
         });
-      setRecentUsers(sortedUsers.slice(0, 3)); // Get top 3
+      setRecentUsers(sortedUsers.slice(0, 3));
 
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
@@ -145,7 +143,7 @@ export default function SuperAdminDashboardPage() {
   const formatDate = (date: Timestamp | Date | undefined): string => {
     if (!date) return 'N/A';
     const jsDate = date instanceof Timestamp ? date.toDate() : date;
-    return format(jsDate, 'PPpp'); // e.g., Sep 21, 2023, 4:30 PM
+    return format(jsDate, 'PPpp');
   };
 
   return (
@@ -178,12 +176,12 @@ export default function SuperAdminDashboardPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Companies</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Brands</CardTitle>
             <Building className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalCompanies}</div>
-            <p className="text-xs text-muted-foreground">Registered companies</p>
+            <p className="text-xs text-muted-foreground">Registered brands</p>
           </CardContent>
         </Card>
         <Card>
@@ -206,7 +204,7 @@ export default function SuperAdminDashboardPage() {
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-4">
                 <Button variant="outline" onClick={() => router.push('/admin/companies')} className="justify-start text-left">
-                    <Building className="mr-2 h-4 w-4" /> Manage Companies
+                    <Building className="mr-2 h-4 w-4" /> Manage Brands
                 </Button>
                 <Button variant="outline" onClick={() => router.push('/admin/users')} className="justify-start text-left">
                     <Users className="mr-2 h-4 w-4" /> Manage Users
@@ -220,9 +218,11 @@ export default function SuperAdminDashboardPage() {
                 <Button variant="outline" onClick={() => router.push('/admin/settings')} className="justify-start text-left">
                     <Cog className="mr-2 h-4 w-4" /> System Settings
                 </Button>
-                 {/* Button for Revenue Share Report (placeholder, actual link to be added) */}
                 <Button variant="outline" onClick={() => router.push('/admin/revenue-share-report')} className="justify-start text-left">
                     <Percent className="mr-2 h-4 w-4" /> Revenue Share Report
+                </Button>
+                 <Button variant="outline" onClick={() => router.push('/admin/migrate-data')} className="justify-start text-left">
+                    <DatabaseZap className="mr-2 h-4 w-4" /> Data Migration
                 </Button>
             </CardContent>
         </Card>
@@ -230,11 +230,11 @@ export default function SuperAdminDashboardPage() {
          <Card>
             <CardHeader>
                 <CardTitle>Recent Platform Additions</CardTitle>
-                <CardDescription>Latest companies and users added to the system.</CardDescription>
+                <CardDescription>Latest brands and users added to the system.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
                 <div>
-                    <h3 className="text-md font-semibold mb-2 text-muted-foreground flex items-center"><Building className="mr-2 h-4 w-4"/>Recent Companies</h3>
+                    <h3 className="text-md font-semibold mb-2 text-muted-foreground flex items-center"><Building className="mr-2 h-4 w-4"/>Recent Brands</h3>
                     {recentCompanies.length > 0 ? (
                         <ul className="space-y-2">
                             {recentCompanies.map(company => (
@@ -253,7 +253,7 @@ export default function SuperAdminDashboardPage() {
                             ))}
                         </ul>
                     ) : (
-                        <p className="text-sm text-muted-foreground italic">No new companies recently.</p>
+                        <p className="text-sm text-muted-foreground italic">No new brands recently.</p>
                     )}
                 </div>
                 <div>

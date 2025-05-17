@@ -4,15 +4,12 @@
 import type { CheckoutFormData } from '@/types/user';
 import { addCompany, createDefaultLocation } from '@/lib/company-data';
 import { addUser } from '@/lib/user-data';
-// import { auth } from '@/lib/firebase'; // Not needed for the original admin session
-import { db } from '@/lib/firebase'; // For Firestore operations
+import { db } from '@/lib/firebase';
 
-// Import Firebase app and auth for local instance creation
-import { initializeApp, deleteApp, getApp, getApps } from 'firebase/app';
+import { initializeApp, deleteApp, getApps } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
 
-// Define firebaseConfig directly here or import if made exportable from lib/firebase
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -22,7 +19,6 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Helper function to initialize Firebase app safely
 const getFirebaseAuthInstance = (appName: string) => {
   const existingApp = getApps().find(app => app.name === appName);
   if (existingApp) {
@@ -45,12 +41,11 @@ const cleanupFirebaseApp = async (appName: string) => {
 };
 
 
-// --- Process Paid Checkout Function ---
 export async function processCheckout(data: CheckoutFormData): Promise<
   { success: boolean; companyId?: string; adminUserId?: string; error?: undefined }
 | { success: boolean; error: string }
 > {
-  console.log("[Server Action] Starting processCheckout (Paid) for company:", data.companyName);
+  console.log("[Server Action] Starting processCheckout (Paid) for brand:", data.companyName);
   if (data.paymentIntentId) {
     console.log("[Server Action] Payment Intent ID received:", data.paymentIntentId);
   } else {
@@ -67,21 +62,21 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         maxUsers: data.maxUsers ?? null,
         isTrial: false,
         trialEndsAt: null,
-        saleAmount: data.finalTotalAmount ?? null, // Store the sale amount
+        saleAmount: data.finalTotalAmount ?? null,
         revSharePartnerName: data.revSharePartnerName || null,
         revSharePartnerCompany: data.revSharePartnerCompany || null,
         revSharePartnerPercentage: data.revSharePartnerPercentage ?? null,
     };
-    const newCompany = await addCompany(newCompanyData); // Uses global db
+    const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
-      throw new Error("Failed to create the company in the database.");
+      throw new Error("Failed to create the brand in the database.");
     }
-    console.log(`[Server Action] Company "${newCompany.name}" (Paid) created with ID: ${newCompany.id}`);
+    console.log(`[Server Action] Brand "${newCompany.name}" (Paid) created with ID: ${newCompany.id}`);
 
-    const defaultLocation = await createDefaultLocation(newCompany.id); // Uses global db
+    const defaultLocation = await createDefaultLocation(newCompany.id);
     const defaultLocationId = defaultLocation ? [defaultLocation.id] : [];
 
-    const tempPassword = data.password || "password"; // Use provided password or default
+    const tempPassword = data.password || "password";
     let authUserUid: string;
     try {
         localAuthInstance = getFirebaseAuthInstance(localAuthAppName);
@@ -90,7 +85,6 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         console.log(`[Server Action] Admin user created in Firebase Auth with UID: ${authUserUid} for email ${data.adminEmail} (Paid) using local auth instance`);
     } catch (authError: any) {
         console.error("[Server Action] Failed to create admin user in Firebase Auth (Paid):", authError);
-        // Do not expose full authError to client, log it and throw generic or specific safe message
         if (authError.message && authError.message.includes("Admin session error")) {
              throw new Error("Admin session error. Please log in again.");
         }
@@ -104,7 +98,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         companyId: newCompany.id,
         assignedLocationIds: defaultLocationId,
     };
-    const newAdminUser = await addUser(newAdminUserData); // Uses global db
+    const newAdminUser = await addUser(newAdminUserData);
     if (!newAdminUser) {
       console.warn(`[Server Action] Firestore user creation failed for Auth UID ${authUserUid}. Manual Auth user cleanup might be needed.`);
       throw new Error("Failed to create the admin user account in Firestore (Paid).");
@@ -116,18 +110,17 @@ export async function processCheckout(data: CheckoutFormData): Promise<
 
   } catch (error: any) {
     console.error("[Server Action] Error during paid checkout processing:", error);
-    await cleanupFirebaseApp(localAuthAppName); // Ensure cleanup on error too
+    await cleanupFirebaseApp(localAuthAppName);
     return { success: false, error: error.message || "An unexpected error occurred during paid checkout." };
   }
 }
 
 
-// --- Process Free Trial Checkout Function ---
 export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
   { success: boolean; companyId?: string; adminUserId?: string; error?: undefined }
 | { success: boolean; error: string }
 > {
-  console.log("[Server Action] Starting processFreeTrialCheckout for company:", data.companyName);
+  console.log("[Server Action] Starting processFreeTrialCheckout for brand:", data.companyName);
 
   const localAuthAppName = `freeTrialAuthApp-${Date.now()}`;
   let localAuthInstance;
@@ -144,21 +137,21 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
         maxUsers: data.maxUsers ?? null,
         isTrial: true,
         trialEndsAt: trialEndsAtTimestamp,
-        saleAmount: 0, // Free trials have no sale amount
+        saleAmount: 0,
         revSharePartnerName: null,
         revSharePartnerCompany: null,
         revSharePartnerPercentage: null,
     };
-    const newCompany = await addCompany(newCompanyData); // Uses global db
+    const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
-      throw new Error("Failed to create the trial company in the database.");
+      throw new Error("Failed to create the trial brand in the database.");
     }
-    console.log(`[Server Action] Trial Company "${newCompany.name}" created with ID: ${newCompany.id}, ends: ${trialEndsDate.toLocaleDateString()}`);
+    console.log(`[Server Action] Trial Brand "${newCompany.name}" created with ID: ${newCompany.id}, ends: ${trialEndsDate.toLocaleDateString()}`);
 
-    const defaultLocation = await createDefaultLocation(newCompany.id); // Uses global db
+    const defaultLocation = await createDefaultLocation(newCompany.id);
     const defaultLocationId = defaultLocation ? [defaultLocation.id] : [];
 
-    const tempPassword = "password"; // Default password for trial admin
+    const tempPassword = "password";
     let authUserUid: string;
     try {
         localAuthInstance = getFirebaseAuthInstance(localAuthAppName);
@@ -180,7 +173,7 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
         companyId: newCompany.id,
         assignedLocationIds: defaultLocationId,
     };
-    const newAdminUser = await addUser(newAdminUserData); // Uses global db
+    const newAdminUser = await addUser(newAdminUserData);
     if (!newAdminUser) {
       console.warn(`[Server Action] Firestore user creation failed for trial Auth UID ${authUserUid}. Manual Auth user cleanup might be needed.`);
       throw new Error("Failed to create the trial admin user account in Firestore.");
@@ -192,8 +185,7 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
 
   } catch (error: any) {
     console.error("[Server Action] Error during free trial checkout processing:", error);
-    await cleanupFirebaseApp(localAuthAppName); // Ensure cleanup on error too
+    await cleanupFirebaseApp(localAuthAppName);
     return { success: false, error: error.message || "An unexpected error occurred during free trial checkout." };
   }
 }
-

@@ -9,27 +9,26 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, Users, Gift, BookOpen } from 'lucide-react'; // Changed icons for free trial
+import { Loader2, Users, Gift, BookOpen } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { getAllCourses } from '@/lib/firestore-data';
-import { processFreeTrialCheckout } from '@/actions/checkout'; // Corrected import path
+import { processFreeTrialCheckout } from '@/actions/checkout';
 import type { Course } from '@/types/course';
-import type { User } from '@/types/user'; // Import User type
+import type { User } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Badge } from '@/components/ui/badge';
-import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets'; // For Trial End Date
+import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
 
-// Zod schema for validation (no payment fields)
 const freeTrialCheckoutFormSchema = z.object({
   customerName: z.string().min(2, { message: 'Customer name is required.' }),
-  companyName: z.string().min(2, { message: 'Company name is required.' }),
+  companyName: z.string().min(2, { message: 'Brand name is required.' }),
   streetAddress: z.string().min(5, { message: 'Street address is required.' }),
   city: z.string().min(2, { message: 'City is required.' }),
   state: z.string().min(2, { message: 'State is required.' }),
@@ -37,7 +36,7 @@ const freeTrialCheckoutFormSchema = z.object({
   country: z.string().min(2, { message: 'Country is required.' }),
   adminEmail: z.string().email({ message: 'Please enter a valid email address.' }),
   selectedCourseIds: z.array(z.string()).min(1, { message: 'Please select at least one course.' }),
-  trialDurationDays: z.coerce.number().int().min(1, { message: "Trial duration must be at least 1 day."}).default(7), // Default to 7 days
+  trialDurationDays: z.coerce.number().int().min(1, { message: "Trial duration must be at least 1 day."}).default(7),
 });
 type FreeTrialCheckoutFormValues = z.infer<typeof freeTrialCheckoutFormSchema>;
 
@@ -104,15 +103,15 @@ function FreeTrialFormContent({
     setIsProcessing(true);
     try {
       const checkoutData = {
-        ...data, // Contains all form fields including trialDurationDays
+        ...data,
         maxUsers,
-        isTrial: true, // Explicitly set isTrial for the server action
+        isTrial: true,
       };
 
       const result = await processFreeTrialCheckout(checkoutData);
 
       if (result.success) {
-        toast({ title: "Free Trial Started!", description: "Company and admin created for the trial." });
+        toast({ title: "Free Trial Started!", description: "Brand and admin created for the trial." });
         form.reset();
         setMaxUsers(5);
         onSelectedCourseIdsChange([]);
@@ -130,10 +129,9 @@ function FreeTrialFormContent({
   return (
     <Form {...form}>
       <form ref={formRef} onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        {/* Customer & Company Info */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
-            <CardHeader><CardTitle>Customer & Company Information</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Customer & Brand Information</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <FormField control={form.control} name="customerName" render={({ field }) => (
                 <FormItem>
@@ -144,7 +142,7 @@ function FreeTrialFormContent({
               )} />
               <FormField control={form.control} name="companyName" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Company Name</FormLabel>
+                  <FormLabel>Brand Name</FormLabel>
                   <FormControl><Input {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -186,9 +184,8 @@ function FreeTrialFormContent({
               )} />
             </CardContent>
           </Card>
-          {/* Billing Address */}
           <Card>
-            <CardHeader><CardTitle>Company Address</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Brand Address</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <FormField control={form.control} name="streetAddress" render={({ field }) => (
                 <FormItem>
@@ -231,7 +228,6 @@ function FreeTrialFormContent({
           </Card>
         </div>
 
-        {/* Course Selection */}
         <Card>
           <CardHeader><CardTitle>Select Courses for Trial</CardTitle></CardHeader>
           <CardContent>
@@ -271,7 +267,7 @@ function FreeTrialFormContent({
           <CardHeader><CardTitle>Trial Summary</CardTitle></CardHeader>
           <CardContent>
             <p className="text-muted-foreground">
-              This will set up a new company with a free trial for the selected courses and duration.
+              This will set up a new brand with a free trial for the selected courses and duration.
               No payment is required at this time.
             </p>
           </CardContent>
