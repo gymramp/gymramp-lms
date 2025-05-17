@@ -29,6 +29,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator, // Added DropdownMenuSeparator here
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PlusCircle, MoreHorizontal, Trash2, Edit, Loader2, ArrowLeft, MapPin } from 'lucide-react';
