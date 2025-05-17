@@ -8,22 +8,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Tag, Users, ShoppingCart, Percent, Briefcase, User as UserIconLucide, ArrowRight, PlusCircle, Trash2 } from 'lucide-react'; // Added PlusCircle, Trash2
-import { useForm, useFieldArray } from 'react-hook-form'; // Added useFieldArray
+import { Loader2, Tag, Users, ShoppingCart, Percent, Briefcase, User as UserIconLucide, ArrowRight, PlusCircle, Trash2, RadioTower, Radio } from 'lucide-react';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { getAllCourses } from '@/lib/firestore-data';
 import type { Course } from '@/types/course';
-import type { User, RevenueSharePartner } from '@/types/user'; // Import RevenueSharePartner
+import type { User, RevenueSharePartner } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Badge } from '@/components/ui/badge';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
-// Schema for Step 1
 const checkoutSetupFormSchema = z.object({
   customerName: z.string().min(2, { message: 'Customer name is required.' }),
   companyName: z.string().min(2, { message: 'Brand name is required.' }),
@@ -36,11 +36,12 @@ const checkoutSetupFormSchema = z.object({
   revenueSharePartners: z.array(
     z.object({
       name: z.string().min(1, "Partner name is required."),
-      companyName: z.string().optional(), // Optional company name
+      companyName: z.string().optional(),
       percentage: z.coerce
         .number({ invalid_type_error: "Percentage must be a number." })
         .min(0.01, "Percentage must be greater than 0.")
-        .max(100, "Percentage cannot exceed 100.")
+        .max(100, "Percentage cannot exceed 100."),
+      shareBasis: z.enum(['coursePrice', 'subscriptionPrice'], { required_error: "Please select a share basis." }),
     })
   ).optional(),
   selectedCourseIds: z.array(z.string()).min(1, "Please select at least one course."),
@@ -87,7 +88,7 @@ function CheckoutSetupFormContent({
       state: '',
       zipCode: '',
       country: '',
-      revenueSharePartners: [], // Default to empty array
+      revenueSharePartners: [],
       selectedCourseIds: [],
     },
   });
@@ -120,14 +121,11 @@ function CheckoutSetupFormContent({
 
   const onProceedToPayment = async (formData: CheckoutSetupFormValues) => {
     setIsProcessing(true);
-
     const finalTotalAmountCents = Math.round(finalTotalAmount * 100);
 
-    // Prepare revenueSharePartners for URL, handling undefined or empty array
     const revenueShareParams = formData.revenueSharePartners && formData.revenueSharePartners.length > 0
-        ? { revenueSharePartners: JSON.stringify(formData.revenueSharePartners.map(p => ({ name: p.name, companyName: p.companyName || null, percentage: p.percentage }))) }
+        ? { revenueSharePartners: JSON.stringify(formData.revenueSharePartners.map(p => ({ name: p.name, companyName: p.companyName || null, percentage: p.percentage, shareBasis: p.shareBasis }))) }
         : {};
-
 
     const queryParams = new URLSearchParams({
       customerName: formData.customerName,
@@ -138,7 +136,7 @@ function CheckoutSetupFormContent({
       ...(formData.state && { state: formData.state }),
       ...(formData.zipCode && { zipCode: formData.zipCode }),
       ...(formData.country && { country: formData.country }),
-      ...revenueShareParams, // Spread the revenue share params
+      ...revenueShareParams,
       selectedCourseIds: formData.selectedCourseIds.join(','),
       ...(maxUsers !== null && maxUsers !== undefined && { maxUsers: String(maxUsers) }),
       finalTotalAmountCents: String(finalTotalAmountCents),
@@ -200,13 +198,13 @@ function CheckoutSetupFormContent({
               <CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5" /> Revenue Share (Optional)</CardTitle>
               <CardDescription>If applicable, enter details for revenue share partners.</CardDescription>
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => appendRevShare({ name: '', companyName: '', percentage: 0 })}>
+            <Button type="button" variant="outline" size="sm" onClick={() => appendRevShare({ name: '', companyName: '', percentage: 0, shareBasis: 'coursePrice' })}>
               <PlusCircle className="mr-2 h-4 w-4" /> Add Partner
             </Button>
           </CardHeader>
           <CardContent className="space-y-4">
             {revShareFields.map((field, index) => (
-              <div key={field.id} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end p-4 border rounded-md relative">
+              <div key={field.id} className="grid grid-cols-1 md:grid-cols-4 gap-x-4 gap-y-6 items-start p-4 border rounded-md relative">
                 <FormField
                   control={setupForm.control}
                   name={`revenueSharePartners.${index}.name`}
@@ -240,12 +238,38 @@ function CheckoutSetupFormContent({
                     </FormItem>
                   )}
                 />
+                 <FormField
+                  control={setupForm.control}
+                  name={`revenueSharePartners.${index}.shareBasis`}
+                  render={({ field: formField }) => (
+                    <FormItem className="md:col-span-4 pt-2"> {/* Spans full width below other fields */}
+                      <FormLabel className="text-sm font-medium">Share Basis</FormLabel>
+                      <FormControl>
+                        <RadioGroup
+                          onValueChange={formField.onChange}
+                          defaultValue={formField.value}
+                          className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 pt-1"
+                        >
+                          <FormItem className="flex items-center space-x-2">
+                            <FormControl><RadioGroupItem value="coursePrice" id={`shareBasis-${index}-course`} /></FormControl>
+                            <FormLabel htmlFor={`shareBasis-${index}-course`} className="font-normal text-sm">One-Time Course Price</FormLabel>
+                          </FormItem>
+                          <FormItem className="flex items-center space-x-2">
+                            <FormControl><RadioGroupItem value="subscriptionPrice" id={`shareBasis-${index}-sub`} /></FormControl>
+                            <FormLabel htmlFor={`shareBasis-${index}-sub`} className="font-normal text-sm">Monthly Subscription Price</FormLabel>
+                          </FormItem>
+                        </RadioGroup>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
                   onClick={() => removeRevShare(index)}
-                  className="md:col-span-1 text-destructive hover:bg-destructive/10 justify-self-end md:justify-self-start"
+                  className="absolute top-2 right-2 md:relative md:top-0 md:right-0 md:col-span-1 md:justify-self-end md:self-center text-destructive hover:bg-destructive/10"
                   aria-label="Remove partner"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -260,7 +284,7 @@ function CheckoutSetupFormContent({
                     <div key={index} className="text-sm font-medium text-destructive">
                         {error.name && <p>Partner {index+1} Name: {error.name.message}</p>}
                         {error.percentage && <p>Partner {index+1} Percentage: {error.percentage.message}</p>}
-                         {/* Add companyName error if needed */}
+                        {error.shareBasis && <p>Partner {index+1} Share Basis: {error.shareBasis.message}</p>}
                     </div>
                 )
             ))}
@@ -289,9 +313,14 @@ function CheckoutSetupFormContent({
                               id={`course-${course.id}`}
                             />
                           </FormControl>
-                          <FormLabel htmlFor={`course-${course.id}`} className="flex justify-between w-full cursor-pointer">
-                            <span>{course.title} <Badge variant="outline" className="ml-2">{course.level}</Badge></span>
-                            <span className="text-sm font-semibold text-primary">{course.price}</span>
+                          <FormLabel htmlFor={`course-${course.id}`} className="flex justify-between items-center w-full cursor-pointer">
+                            <div className="flex flex-col">
+                                <span>{course.title} <Badge variant="outline" className="ml-2">{course.level}</Badge></span>
+                                {course.subscriptionPrice && (
+                                    <span className="text-xs text-muted-foreground mt-0.5">Sub: {course.subscriptionPrice}</span>
+                                )}
+                            </div>
+                            <span className="text-sm font-semibold text-primary text-right">{course.price}</span>
                           </FormLabel>
                         </FormItem>
                       ))}
@@ -308,9 +337,9 @@ function CheckoutSetupFormContent({
           <Card className="lg:col-span-2">
             <CardHeader><CardTitle className="flex items-center gap-2"><Tag className="h-5 w-5" /> Account Order Summary</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex justify-between text-sm"><span>Subtotal:</span> <span className="font-medium">${subtotalAmount.toFixed(2)}</span></div>
+              <div className="flex justify-between text-sm"><span>Subtotal (One-time):</span> <span className="font-medium">${subtotalAmount.toFixed(2)}</span></div>
               <FormItem>
-                <FormLabel htmlFor="discountPercent" className="text-sm">Discount (%):</FormLabel>
+                <FormLabel htmlFor="discountPercent" className="text-sm">Discount (% on One-time Subtotal):</FormLabel>
                 <FormControl>
                   <Input
                     id="discountPercent"
@@ -326,7 +355,7 @@ function CheckoutSetupFormContent({
               </FormItem>
               {appliedDiscountAmount > 0 && <div className="flex justify-between text-sm text-green-600"><span>Discount Applied:</span> <span className="font-medium">-${appliedDiscountAmount.toFixed(2)}</span></div>}
               <hr />
-              <div className="flex justify-between text-lg font-bold text-primary"><span>Total Account Value:</span> <span>${finalTotalAmount.toFixed(2)}</span></div>
+              <div className="flex justify-between text-lg font-bold text-primary"><span>Total Account Value (One-time):</span> <span>${finalTotalAmount.toFixed(2)}</span></div>
             </CardContent>
           </Card>
 
@@ -463,3 +492,4 @@ export default function AdminCheckoutPage() {
   );
 }
 
+    

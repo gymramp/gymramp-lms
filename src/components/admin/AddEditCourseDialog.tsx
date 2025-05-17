@@ -19,7 +19,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Progress } from '@/components/ui/progress'; 
+import { Progress } from '@/components/ui/progress';
 import {
     Select,
     SelectContent,
@@ -38,24 +38,20 @@ import {
 import type { Course, CourseFormData } from '@/types/course';
 import { addCourse, updateCourseMetadata, getCourseById } from '@/lib/firestore-data';
 import { useToast } from '@/hooks/use-toast';
-import { uploadImage, STORAGE_PATHS } from '@/lib/storage'; 
-import { ScrollArea } from '../ui/scroll-area'; 
-import { Loader2, Upload, ImageIcon, Trash2 } from 'lucide-react'; 
+import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
+import { ScrollArea } from '../ui/scroll-area';
+import { Loader2, Upload, ImageIcon, Trash2 } from 'lucide-react';
 
-// Zod schema: removed numberOfModules
 const courseFormSchema = z.object({
   title: z.string().min(3, { message: 'Title must be at least 3 characters.' }),
   description: z.string().min(10, { message: 'Short description must be at least 10 characters.' }),
   longDescription: z.string().min(20, { message: 'Detailed description must be at least 20 characters.' }),
-  imageUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')), 
-  featuredImageUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')), 
-  // numberOfModules: z.coerce // REMOVED
-  //   .number({ invalid_type_error: "Please enter a number." })
-  //   .int({ message: "Number of modules must be a whole number."})
-  //   .min(1, { message: 'Must have at least 1 module.' }), 
+  imageUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')),
+  featuredImageUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')),
   level: z.enum(['Beginner', 'Intermediate', 'Advanced'], { required_error: 'Please select a difficulty level.' }),
   duration: z.string().min(3, { message: 'Please enter an approximate duration.' }),
   price: z.string().regex(/^\$?\d+(\.\d{1,2})?$/, { message: 'Please enter a valid price (e.g., $199 or 199.99).' }),
+  subscriptionPrice: z.string().regex(/^\$?\d+(\.\d{1,2})?(\/(mo|month))?$/i, { message: 'Valid format: $29/mo or 29.99' }).optional().or(z.literal('')),
 });
 
 
@@ -64,15 +60,15 @@ type CourseFormValues = z.infer<typeof courseFormSchema>;
 interface AddEditCourseDialogProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
-  onSave: (course: Course) => void; 
-  initialData: Course | null; 
+  onSave: (course: Course) => void;
+  initialData: Course | null;
 }
 
 export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: AddEditCourseDialogProps) {
   const isEditing = !!initialData;
   const { toast } = useToast();
-  const [isSaving, setIsSaving] = useState(false); 
-  const [isUploading, setIsUploading] = useState(false); 
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -82,16 +78,16 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
       title: '',
       description: '',
       longDescription: '',
-      imageUrl: '', 
-      featuredImageUrl: '', 
-      // numberOfModules: 1, // REMOVED
-      level: undefined, 
+      imageUrl: '',
+      featuredImageUrl: '',
+      level: undefined,
       duration: '',
       price: '',
+      subscriptionPrice: '',
     },
   });
 
-  const featuredImageUrlValue = form.watch('featuredImageUrl'); 
+  const featuredImageUrlValue = form.watch('featuredImageUrl');
 
    useEffect(() => {
     if (isOpen) {
@@ -100,24 +96,24 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
             title: initialData.title,
             description: initialData.description,
             longDescription: initialData.longDescription,
-            imageUrl: initialData.imageUrl || '', 
-            featuredImageUrl: initialData.featuredImageUrl || '', 
-            // numberOfModules: initialData.modules?.length || 1, // REMOVED
+            imageUrl: initialData.imageUrl || '',
+            featuredImageUrl: initialData.featuredImageUrl || '',
             level: initialData.level,
             duration: initialData.duration,
             price: initialData.price,
+            subscriptionPrice: initialData.subscriptionPrice || '',
           });
         } else {
-          form.reset({ 
+          form.reset({
             title: '',
             description: '',
             longDescription: '',
-            imageUrl: '', 
-            featuredImageUrl: '', 
-            // numberOfModules: 1, // REMOVED
+            imageUrl: '',
+            featuredImageUrl: '',
             level: undefined,
             duration: '',
             price: '',
+            subscriptionPrice: '',
           });
         }
          setIsUploading(false);
@@ -139,11 +135,11 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
            const uniqueFileName = isEditing && initialData?.id
              ? `${initialData.id}-courseimg-${file.name}`
              : `${Date.now()}-courseimg-${file.name}`;
-           const storagePath = `${STORAGE_PATHS.COURSE_IMAGES}/${uniqueFileName}`; 
+           const storagePath = `${STORAGE_PATHS.COURSE_IMAGES}/${uniqueFileName}`;
 
            const downloadURL = await uploadImage(file, storagePath, setUploadProgress);
 
-           form.setValue('featuredImageUrl', downloadURL, { shouldValidate: true }); 
+           form.setValue('featuredImageUrl', downloadURL, { shouldValidate: true });
            toast({
              title: "Image Uploaded",
              description: "Featured image successfully uploaded.",
@@ -163,19 +159,20 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
 
 
   const onSubmit = async (data: CourseFormValues) => {
-     setIsSaving(true); 
+     setIsSaving(true);
      const finalFeaturedImageUrl = data.featuredImageUrl?.trim() === '' ? null : data.featuredImageUrl;
+     const finalSubscriptionPrice = data.subscriptionPrice?.trim() === '' ? null : data.subscriptionPrice;
 
      const formData: CourseFormData = {
          title: data.title,
          description: data.description,
          longDescription: data.longDescription,
-         imageUrl: data.imageUrl || `https://picsum.photos/seed/${encodeURIComponent(data.title)}/600/350`, 
-         featuredImageUrl: finalFeaturedImageUrl, 
-        //  numberOfModules: data.numberOfModules, // REMOVED
+         imageUrl: data.imageUrl || `https://picsum.photos/seed/${encodeURIComponent(data.title)}/600/350`,
+         featuredImageUrl: finalFeaturedImageUrl,
          level: data.level,
          duration: data.duration,
          price: data.price,
+         subscriptionPrice: finalSubscriptionPrice,
      };
 
 
@@ -185,7 +182,7 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
             savedCourse = await updateCourseMetadata(initialData.id, formData);
             if (savedCourse) {
                 toast({ title: 'Course Updated', description: `"${data.title}" has been successfully updated.` });
-                onSave(savedCourse); 
+                onSave(savedCourse);
             } else {
                  throw new Error("Failed to update course.");
             }
@@ -193,13 +190,13 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
             savedCourse = await addCourse(formData);
             if (savedCourse) {
                 toast({ title: 'Course Added', description: `"${data.title}" has been successfully added.` });
-                onSave(savedCourse); 
+                onSave(savedCourse);
             } else {
                 throw new Error("Failed to add course.");
             }
         }
 
-        handleClose(); 
+        handleClose();
 
     } catch (error: any) {
         console.error("Failed to save course:", error);
@@ -209,7 +206,7 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
             variant: 'destructive',
         });
     } finally {
-        setIsSaving(false); 
+        setIsSaving(false);
     }
   };
 
@@ -274,16 +271,16 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
                 <FormLabel className="text-base font-semibold">Featured Image</FormLabel>
                 <FormControl>
                   <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
-                    {featuredImageUrlValue && !isUploading ? ( 
-                      <div className="relative w-full max-w-xs mx-auto aspect-video mb-2"> 
+                    {featuredImageUrlValue && !isUploading ? (
+                      <div className="relative w-full max-w-xs mx-auto aspect-video mb-2">
                         <Image
-                          src={featuredImageUrlValue} 
+                          src={featuredImageUrlValue}
                           alt="Featured image preview"
                           fill
-                          style={{ objectFit: 'cover' }} 
+                          style={{ objectFit: 'cover' }}
                           className="rounded-md"
                           onError={() => {
-                            form.setValue('featuredImageUrl', ''); 
+                            form.setValue('featuredImageUrl', '');
                             toast({ title: "Image Load Error", variant: "destructive" });
                           }}
                         />
@@ -292,7 +289,7 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
                           variant="destructive"
                           size="icon"
                           className="absolute top-1 right-1 h-6 w-6 opacity-80 hover:opacity-100 z-10"
-                          onClick={() => form.setValue('featuredImageUrl', '')} 
+                          onClick={() => form.setValue('featuredImageUrl', '')}
                           aria-label="Remove Image"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -312,7 +309,7 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
                         <Input
                           id="course-image-upload"
                           type="file"
-                          accept="image/*" 
+                          accept="image/*"
                           className="hidden"
                           onChange={handleImageFileChange}
                           disabled={isUploading}
@@ -323,34 +320,18 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
                 </FormControl>
                 <FormField
                   control={form.control}
-                  name="featuredImageUrl" 
+                  name="featuredImageUrl"
                   render={({ field }) => (
                      <FormItem className="hidden">
                        <FormControl>
                           <Input type="url" {...field} value={field.value ?? ''} readOnly />
                        </FormControl>
-                       <FormMessage /> 
+                       <FormMessage />
                      </FormItem>
                   )}
                 />
                  <p className="text-xs text-muted-foreground">Upload a featured image for the course.</p>
               </FormItem>
-
-            {/* Number of Modules Input REMOVED */}
-            {/* <FormField
-              control={form.control}
-              name="numberOfModules"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Number of Modules</FormLabel>
-                  <FormControl>
-                    <Input type="number" min="1" step="1" placeholder="e.g., 5" {...field} />
-                  </FormControl>
-                   <FormMessage />
-                   <p className="text-xs text-muted-foreground">Enter the total number of modules in this course.</p>
-                </FormItem>
-              )}
-            /> */}
 
             <FormField
               control={form.control}
@@ -389,19 +370,35 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
               )}
             />
 
-             <FormField
-              control={form.control}
-              name="price"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Price</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., $199.99" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                control={form.control}
+                name="price"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>One-time Price</FormLabel>
+                    <FormControl>
+                        <Input placeholder="e.g., $199.99" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+                <FormField
+                control={form.control}
+                name="subscriptionPrice"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Subscription Price (Optional)</FormLabel>
+                    <FormControl>
+                        <Input placeholder="e.g., $29/mo or $29" {...field} value={field.value ?? ''} />
+                    </FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+            </div>
+
 
              <DialogFooter>
                 <DialogClose asChild>
@@ -418,3 +415,4 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
     </Dialog>
   );
 }
+    
