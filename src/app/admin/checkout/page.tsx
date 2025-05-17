@@ -8,15 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Tag, Users, ShoppingCart, Percent, Briefcase, User as UserIconLucide, ArrowRight } from 'lucide-react';
-import { useForm } from 'react-hook-form';
+import { Loader2, Tag, Users, ShoppingCart, Percent, Briefcase, User as UserIconLucide, ArrowRight, PlusCircle, Trash2 } from 'lucide-react'; // Added PlusCircle, Trash2
+import { useForm, useFieldArray } from 'react-hook-form'; // Added useFieldArray
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { getAllCourses } from '@/lib/firestore-data';
-import { processCheckout } from '@/actions/checkout';
 import type { Course } from '@/types/course';
-import type { User } from '@/types/user';
+import type { User, RevenueSharePartner } from '@/types/user'; // Import RevenueSharePartner
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -34,9 +33,16 @@ const checkoutSetupFormSchema = z.object({
   state: z.string().optional(),
   zipCode: z.string().optional(),
   country: z.string().optional(),
-  revSharePartnerName: z.string().optional(),
-  revSharePartnerCompany: z.string().optional(),
-  revSharePartnerPercentage: z.coerce.number().min(0).max(100).optional().nullable(),
+  revenueSharePartners: z.array(
+    z.object({
+      name: z.string().min(1, "Partner name is required."),
+      companyName: z.string().optional(), // Optional company name
+      percentage: z.coerce
+        .number({ invalid_type_error: "Percentage must be a number." })
+        .min(0.01, "Percentage must be greater than 0.")
+        .max(100, "Percentage cannot exceed 100.")
+    })
+  ).optional(),
   selectedCourseIds: z.array(z.string()).min(1, "Please select at least one course."),
 });
 type CheckoutSetupFormValues = z.infer<typeof checkoutSetupFormSchema>;
@@ -81,11 +87,14 @@ function CheckoutSetupFormContent({
       state: '',
       zipCode: '',
       country: '',
-      revSharePartnerName: '',
-      revSharePartnerCompany: '',
-      revSharePartnerPercentage: null,
+      revenueSharePartners: [], // Default to empty array
       selectedCourseIds: [],
     },
+  });
+
+  const { fields: revShareFields, append: appendRevShare, remove: removeRevShare } = useFieldArray({
+    control: setupForm.control,
+    name: "revenueSharePartners"
   });
 
   useEffect(() => {
@@ -114,6 +123,12 @@ function CheckoutSetupFormContent({
 
     const finalTotalAmountCents = Math.round(finalTotalAmount * 100);
 
+    // Prepare revenueSharePartners for URL, handling undefined or empty array
+    const revenueShareParams = formData.revenueSharePartners && formData.revenueSharePartners.length > 0
+        ? { revenueSharePartners: JSON.stringify(formData.revenueSharePartners.map(p => ({ name: p.name, company: p.companyName || null, percentage: p.percentage }))) }
+        : {};
+
+
     const queryParams = new URLSearchParams({
       customerName: formData.customerName,
       companyName: formData.companyName,
@@ -123,9 +138,7 @@ function CheckoutSetupFormContent({
       ...(formData.state && { state: formData.state }),
       ...(formData.zipCode && { zipCode: formData.zipCode }),
       ...(formData.country && { country: formData.country }),
-      ...(formData.revSharePartnerName && { revSharePartnerName: formData.revSharePartnerName }),
-      ...(formData.revSharePartnerCompany && { revSharePartnerCompany: formData.revSharePartnerCompany }),
-      ...(formData.revSharePartnerPercentage !== null && formData.revSharePartnerPercentage !== undefined && { revSharePartnerPercentage: String(formData.revSharePartnerPercentage) }),
+      ...revenueShareParams, // Spread the revenue share params
       selectedCourseIds: formData.selectedCourseIds.join(','),
       ...(maxUsers !== null && maxUsers !== undefined && { maxUsers: String(maxUsers) }),
       finalTotalAmountCents: String(finalTotalAmountCents),
@@ -182,16 +195,77 @@ function CheckoutSetupFormContent({
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5" /> Revenue Share (Optional)</CardTitle>
-            <CardDescription>If applicable, enter details for the revenue share partner.</CardDescription>
+          <CardHeader className="flex justify-between items-center">
+            <div>
+              <CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5" /> Revenue Share (Optional)</CardTitle>
+              <CardDescription>If applicable, enter details for revenue share partners.</CardDescription>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => appendRevShare({ name: '', companyName: '', percentage: '' })}>
+              <PlusCircle className="mr-2 h-4 w-4" /> Add Partner
+            </Button>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <FormField control={setupForm.control} name="revSharePartnerName" render={({ field }) => ( <FormItem> <FormLabel>Partner Name</FormLabel> <FormControl><Input {...field} placeholder="e.g., John Smith" /></FormControl> <FormMessage /> </FormItem> )} />
-            <FormField control={setupForm.control} name="revSharePartnerCompany" render={({ field }) => ( <FormItem> <FormLabel>Partner Brand</FormLabel> <FormControl><Input {...field} placeholder="e.g., Partner Co." /></FormControl> <FormMessage /> </FormItem> )} />
-            <FormField control={setupForm.control} name="revSharePartnerPercentage" render={({ field }) => ( <FormItem> <FormLabel>Share Percentage (%)</FormLabel> <FormControl><Input type="number" min="0" max="100" {...field} placeholder="e.g., 10" value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl> <FormMessage /> </FormItem> )} />
+          <CardContent className="space-y-4">
+            {revShareFields.map((field, index) => (
+              <div key={field.id} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end p-4 border rounded-md relative">
+                <FormField
+                  control={setupForm.control}
+                  name={`revenueSharePartners.${index}.name`}
+                  render={({ field: formField }) => (
+                    <FormItem className="md:col-span-1">
+                      <FormLabel>Partner Name</FormLabel>
+                      <FormControl><Input {...formField} placeholder="e.g., John Smith" /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={setupForm.control}
+                  name={`revenueSharePartners.${index}.companyName`}
+                  render={({ field: formField }) => (
+                    <FormItem className="md:col-span-1">
+                      <FormLabel>Partner Brand (Optional)</FormLabel>
+                      <FormControl><Input {...formField} placeholder="e.g., Partner Co." /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={setupForm.control}
+                  name={`revenueSharePartners.${index}.percentage`}
+                  render={({ field: formField }) => (
+                    <FormItem className="md:col-span-1">
+                      <FormLabel>Share Percentage (%)</FormLabel>
+                      <FormControl><Input type="number" min="0.01" max="100" step="0.01" {...formField} placeholder="e.g., 10" /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeRevShare(index)}
+                  className="md:col-span-1 text-destructive hover:bg-destructive/10"
+                  aria-label="Remove partner"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+            {setupForm.formState.errors.revenueSharePartners && (
+                 <p className="text-sm font-medium text-destructive">{setupForm.formState.errors.revenueSharePartners.message || (setupForm.formState.errors.revenueSharePartners.root && setupForm.formState.errors.revenueSharePartners.root.message)}</p>
+            )}
+            {Array.isArray(setupForm.formState.errors.revenueSharePartners) && setupForm.formState.errors.revenueSharePartners.map((error, index) => (
+                error && (
+                    <div key={index} className="text-sm font-medium text-destructive">
+                        {error.name && <p>Partner {index+1} Name: {error.name.message}</p>}
+                        {error.percentage && <p>Partner {index+1} Percentage: {error.percentage.message}</p>}
+                    </div>
+                )
+            ))}
           </CardContent>
         </Card>
+
 
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> Select Courses</CardTitle></CardHeader>
@@ -387,3 +461,4 @@ export default function AdminCheckoutPage() {
     </div>
   );
 }
+
