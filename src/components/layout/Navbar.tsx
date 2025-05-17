@@ -93,7 +93,7 @@ export function Navbar() {
       roleSpecificItems.push(
         { href: '/admin/dashboard', label: 'Dashboard', icon: BarChartBig },
         { href: '/admin/companies', label: 'Brands', icon: Building },
-        { href: '/admin/users', label: 'Users', icon: Users },
+        // { href: '/admin/users', label: 'Users', icon: Users }, // Removed from main nav for Super Admin
         { href: '/admin/programs', label: 'Programs', icon: Layers },
         {
           label: 'Course Admin',
@@ -150,7 +150,7 @@ export function Navbar() {
       ? [
           { href: '/admin/dashboard', label: 'Super Admin Dashboard', icon: BarChartBig },
           { href: '/admin/companies', label: 'Brands', icon: Building },
-          { href: '/admin/users', label: 'Users', icon: Users },
+          { href: '/admin/users', label: 'Users', icon: Users }, // Still available in dropdown
           { href: '/admin/programs', label: 'Programs', icon: Layers },
           { href: '/admin/settings', label: 'Settings', icon: Settings },
         ]
