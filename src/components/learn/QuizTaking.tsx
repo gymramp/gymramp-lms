@@ -24,6 +24,7 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
   const [quizSubmitted, setQuizSubmitted] = useState(isCompleted); // Initialize as submitted if already completed
   const [score, setScore] = useState(0); // Will be recalculated if submitted initially
   const [passed, setPassed] = useState(false); // Will be recalculated if submitted initially
+  const [incorrectQuestionNumbers, setIncorrectQuestionNumbers] = useState<number[]>([]); // State for incorrect question numbers
 
   const totalQuestions = quiz.questions?.length || 0; // Handle cases where questions might be undefined
   const currentQuestion = totalQuestions > 0 ? quiz.questions[currentQuestionIndex] : null;
@@ -37,6 +38,7 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
       setScore(100);
       setPassed(true);
       setQuizSubmitted(true);
+      setIncorrectQuestionNumbers([]); // Ensure this is cleared if starting as completed & passed
     } else if (!isCompleted) {
         // Reset if completion status changes back to false
         setCurrentQuestionIndex(0);
@@ -45,6 +47,7 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
         setQuizSubmitted(false);
         setScore(0);
         setPassed(false);
+        setIncorrectQuestionNumbers([]);
     }
   }, [isCompleted, quiz, totalQuestions]);
 
@@ -81,9 +84,12 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
 
     // Grade the quiz
     let correctCount = 0;
-    quiz.questions?.forEach((q) => { // Check if questions exist
+    const incorrectNumbers: number[] = []; // Local array for this submission
+    quiz.questions?.forEach((q, index) => { // Check if questions exist
       if (finalAnswers[q.id] === q.correctAnswer) {
         correctCount++;
+      } else {
+        incorrectNumbers.push(index + 1); // Store 1-based question number
       }
     });
 
@@ -92,10 +98,12 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
 
     setScore(calculatedScore);
     setPassed(didPass);
+    if (!didPass) {
+        setIncorrectQuestionNumbers(incorrectNumbers); // Set state for incorrect numbers
+    } else {
+        setIncorrectQuestionNumbers([]); // Clear if passed
+    }
     setQuizSubmitted(true);
-
-    // If passed, immediately notify parent (or wait for continue button?)
-    // Let's notify parent via onComplete when "Continue" is clicked after passing.
   };
 
   const handleRetry = () => {
@@ -106,6 +114,7 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
     setQuizSubmitted(false);
     setScore(0);
     setPassed(false);
+    setIncorrectQuestionNumbers([]); // Reset incorrect numbers
   };
 
   const handleContinue = () => {
@@ -127,6 +136,11 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
   }
 
   if (quizSubmitted) {
+    let incorrectMessagePart = "";
+    if (!passed && incorrectQuestionNumbers.length > 0) {
+        incorrectMessagePart = ` You answered the following questions incorrectly: ${incorrectQuestionNumbers.map(n => `#${n}`).join(', ')}.`;
+    }
+
     return (
       <Card className="my-6">
         <CardHeader>
@@ -147,7 +161,7 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
               <XCircle className="h-4 w-4" />
                <AlertTitle>Quiz Failed</AlertTitle>
                <AlertDescription>
-                Your score: {score}%. You must score 100% to pass. Please review the material and try again.
+                Your score: {score}%.{incorrectMessagePart} You must score 100% to pass. Please review the material and try again.
               </AlertDescription>
             </Alert>
           )}
