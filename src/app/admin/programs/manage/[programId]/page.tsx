@@ -20,6 +20,7 @@ import { ArrowLeft, BookCheck, Layers, Loader2 } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod'; // Added this import
 
 const manageCoursesFormSchema = z.object({
   assignedCourseIds: z.array(z.string()).optional(),
