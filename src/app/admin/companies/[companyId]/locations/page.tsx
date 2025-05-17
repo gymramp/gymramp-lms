@@ -2,11 +2,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation'; // Import useParams and useRouter
 import Link from 'next/link';
-import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -30,49 +29,41 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { PlusCircle, MoreHorizontal, Trash2, Edit, Users, MapPin, Loader2, BookOpen, Search, Infinity, Gift, AlertTriangle } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Trash2, Edit, Loader2, ArrowLeft, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { Company, User } from '@/types/user';
-import { getAllCompanies, deleteCompany, addCompany, getLocationsByCompanyId } from '@/lib/company-data';
-import { getUsersByCompanyId, getUserCountByCompanyId } from '@/lib/user-data';
-import { AddEditCompanyDialog } from '@/components/admin/AddEditCompanyDialog';
+import type { Company, Location as LocationType, User } from '@/types/user'; // Renamed Location to LocationType to avoid conflict
+import { getCompanyById, getLocationsByCompanyId, addLocation, updateLocation, deleteLocation } from '@/lib/company-data';
+import { AddEditLocationDialog } from '@/components/admin/AddEditLocationDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { useRouter } from 'next/navigation';
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Timestamp } from 'firebase/firestore'; // Import Timestamp
-import { Badge } from '@/components/ui/badge'; // Import Badge
 
-type CompanyWithCounts = Company & { locationCount: number; userCount: number; assignedCourseCount: number };
-
-export default function AdminCompaniesPage() {
-  const [companies, setCompanies] = useState<CompanyWithCounts[]>([]);
-  const [filteredCompanies, setFilteredCompanies] = useState<CompanyWithCounts[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingCounts, setIsLoadingCounts] = useState(true);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const { toast } = useToast();
+export default function AdminCompanyLocationsPage() {
+  const params = useParams();
   const router = useRouter();
+  const companyId = params.companyId as string;
+
+  const [company, setCompany] = useState<Company | null>(null);
+  const [locations, setLocations] = useState<LocationType[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAddEditDialogOpen, setIsAddEditDialogOpen] = useState(false);
+  const [editingLocation, setEditingLocation] = useState<LocationType | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [locationToDelete, setLocationToDelete] = useState<LocationType | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
         const userDetails = await getUserByEmail(firebaseUser.email);
         setCurrentUser(userDetails);
-        if (userDetails?.role !== 'Super Admin') {
-          toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
-          router.push('/');
-        } else {
-          fetchCompanies();
+        if (userDetails?.role !== 'Super Admin' && userDetails?.companyId !== companyId && userDetails?.role !== 'Admin' && userDetails?.role !== 'Owner') {
+          toast({ title: "Access Denied", description: "You do not have permission to manage these locations.", variant: "destructive" });
+          router.push(userDetails?.role === 'Super Admin' ? '/admin/companies' : '/dashboard');
         }
       } else {
         setCurrentUser(null);
@@ -80,211 +71,214 @@ export default function AdminCompaniesPage() {
       }
     });
     return () => unsubscribe();
-  }, [router, toast]);
+  }, [router, toast, companyId]);
 
-  const fetchCompanies = useCallback(async () => {
+
+  const fetchCompanyAndLocations = useCallback(async () => {
+    if (!companyId || !currentUser) return;
     setIsLoading(true);
-    setIsLoadingCounts(true);
     try {
-      const companiesData = await getAllCompanies();
-      const companiesWithCountsPromises = companiesData.map(async (company) => {
-          const locations = await getLocationsByCompanyId(company.id);
-          const userCount = await getUserCountByCompanyId(company.id); 
-          const assignedCourseCount = company.assignedCourseIds?.length || 0;
-          return { ...company, locationCount: locations.length, userCount: userCount, assignedCourseCount };
-      });
-      const companiesWithCounts = await Promise.all(companiesWithCountsPromises);
-      setCompanies(companiesWithCounts);
-      setFilteredCompanies(companiesWithCounts);
+      const companyData = await getCompanyById(companyId);
+      if (!companyData) {
+        toast({ title: "Error", description: "Brand not found.", variant: "destructive" });
+        router.push('/admin/companies');
+        return;
+      }
+      setCompany(companyData);
+
+      const locationsData = await getLocationsByCompanyId(companyId);
+      setLocations(locationsData);
+
     } catch (error) {
-      console.error("Failed to fetch companies:", error);
-      toast({ title: "Error", description: "Could not load companies.", variant: "destructive" });
-      setCompanies([]);
-      setFilteredCompanies([]);
+      console.error("Failed to fetch brand or locations:", error);
+      toast({ title: "Error", description: "Could not load brand or location data.", variant: "destructive" });
     } finally {
       setIsLoading(false);
-      setIsLoadingCounts(false);
     }
-  }, [toast]);
+  }, [companyId, toast, router, currentUser]);
 
   useEffect(() => {
-    if (currentUser?.role === 'Super Admin') {
-      fetchCompanies();
+    if (currentUser) { // Only fetch if currentUser is determined
+        fetchCompanyAndLocations();
     }
-  }, [currentUser, fetchCompanies]);
+  }, [fetchCompanyAndLocations, currentUser]);
 
-  useEffect(() => {
-    const lowercasedFilter = searchTerm.toLowerCase();
-    const filtered = companies.filter(company =>
-      company.name.toLowerCase().includes(lowercasedFilter)
-    );
-    setFilteredCompanies(filtered);
-  }, [searchTerm, companies]);
 
-  const handleAddCompanyClick = () => {
-    setIsAddDialogOpen(true);
+  const handleAddLocationClick = () => {
+    setEditingLocation(null);
+    setIsAddEditDialogOpen(true);
   };
 
-  const openDeleteConfirmation = (company: Company) => {
-    setCompanyToDelete(company);
+  const handleEditLocationClick = (location: LocationType) => {
+    setEditingLocation(location);
+    setIsAddEditDialogOpen(true);
+  };
+
+  const openDeleteConfirmation = (location: LocationType) => {
+    setLocationToDelete(location);
     setIsDeleteDialogOpen(true);
   };
 
-  const confirmDeleteCompany = async () => {
-    if (!companyToDelete) return;
-    setIsLoading(true);
+  const confirmDeleteLocation = async () => {
+    if (!locationToDelete) return;
+    setIsLoading(true); // Indicate loading during delete
     try {
-      const success = await deleteCompany(companyToDelete.id);
+      const success = await deleteLocation(locationToDelete.id);
       if (success) {
-        await fetchCompanies();
+        fetchCompanyAndLocations(); // Refresh list
         toast({
-          title: 'Company Deleted',
-          description: `Company "${companyToDelete.name}" and all associated locations/users have been deleted.`,
+          title: 'Location Deleted',
+          description: `Location "${locationToDelete.name}" has been successfully deleted.`,
         });
       } else {
         throw new Error('Delete operation returned false.');
       }
     } catch (error) {
-      console.error("Failed to delete company:", error);
-      toast({ title: 'Error Deleting Company', description: `Could not delete company "${companyToDelete.name}".`, variant: 'destructive' });
+      console.error("Failed to delete location:", error);
+      toast({ title: 'Error Deleting Location', description: `Could not delete location "${locationToDelete.name}".`, variant: 'destructive' });
     } finally {
       setIsLoading(false);
       setIsDeleteDialogOpen(false);
-      setCompanyToDelete(null);
+      setLocationToDelete(null);
     }
   };
 
-   const handleSaveNewCompany = async (companyData: CompanyFormData) => {
-       const added = await addCompany(companyData);
-       if (added) {
-          toast({ title: "Company Added", description: `"${added.name}" added successfully.` });
-          fetchCompanies();
-       } else {
-           toast({ title: "Error", description: "Failed to add company.", variant: "destructive" });
-       }
-     setIsAddDialogOpen(false);
-   };
+  const handleSaveLocation = async (locationData: { name: string }) => {
+    if (!companyId || !currentUser) return;
+    let savedLocation: LocationType | null = null;
+    try {
+      if (editingLocation) {
+        savedLocation = await updateLocation(editingLocation.id, { name: locationData.name });
+      } else {
+        const newLocationData = {
+          name: locationData.name,
+          companyId: companyId,
+          createdBy: currentUser.id, // Or however you track creator
+        };
+        savedLocation = await addLocation(newLocationData);
+      }
 
-   if (currentUser === null || currentUser?.role !== 'Super Admin') {
-     return <div className="container mx-auto py-12 text-center">Loading or Access Denied...</div>;
-   }
+      if (savedLocation) {
+        toast({ title: editingLocation ? "Location Updated" : "Location Added", description: `"${savedLocation.name}" saved successfully.` });
+        fetchCompanyAndLocations(); // Refresh list
+      } else {
+        throw new Error("Failed to save location.");
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to save location.", variant: "destructive" });
+    }
+    setIsAddEditDialogOpen(false);
+    setEditingLocation(null);
+  };
+
+  if (isLoading && !company) {
+    return (
+      <div className="container mx-auto py-12">
+        <Skeleton className="h-8 w-1/4 mb-6" />
+        <Skeleton className="h-10 w-1/2 mb-8" />
+        <Card><CardContent><Skeleton className="h-64 w-full" /></CardContent></Card>
+      </div>
+    );
+  }
+
+  if (!company) {
+    return <div className="container mx-auto py-12 text-center">Brand data not available.</div>;
+  }
 
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20">
+      <Button variant="outline" onClick={() => router.push('/admin/companies')} className="mb-6">
+        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Brands
+      </Button>
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Company Management</h1>
-        <Button onClick={handleAddCompanyClick} className="bg-accent text-accent-foreground hover:bg-accent/90">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add New Company
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-primary flex items-center gap-2">
+            <MapPin className="h-7 w-7" /> Manage Locations
+          </h1>
+          <p className="text-muted-foreground">For brand: <span className="font-semibold text-foreground">{company.name}</span></p>
+        </div>
+        <Button onClick={handleAddLocationClick} className="bg-accent text-accent-foreground hover:bg-accent/90">
+          <PlusCircle className="mr-2 h-4 w-4" /> Add New Location
         </Button>
       </div>
-      <div className="mb-6 flex items-center gap-2">
-        <Search className="h-5 w-5 text-muted-foreground" />
-        <Input type="text" placeholder="Search companies by name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="max-w-sm"/>
-      </div>
       <Card>
-        <CardHeader> <CardTitle>Company List</CardTitle> <CardDescription>Manage companies, locations, courses, and users.</CardDescription> </CardHeader>
+        <CardHeader>
+          <CardTitle>Location List for {company.name}</CardTitle>
+          <CardDescription>Manage physical or virtual locations for this brand.</CardDescription>
+        </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="space-y-4 py-4"> <Skeleton className="h-12 w-full" /> <Skeleton className="h-10 w-full" /> <Skeleton className="h-10 w-full" /> </div>
-          ) : filteredCompanies.length === 0 ? (
-            <div className="text-center text-muted-foreground py-8"> {searchTerm ? `No companies found matching "${searchTerm}".` : "No companies found. Add one to get started."} </div>
+          {isLoading && locations.length === 0 ? (
+            <div className="space-y-4 py-4"> <Skeleton className="h-12 w-full" /> <Skeleton className="h-10 w-full" /> </div>
+          ) : locations.length === 0 ? (
+            <div className="text-center text-muted-foreground py-8">No locations found for this brand. Add one to get started.</div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Company Name</TableHead>
-                  <TableHead className="text-center">Locations</TableHead>
-                  <TableHead className="text-center">Users (Active)</TableHead>
-                  <TableHead className="text-center">Max Users</TableHead>
-                  <TableHead className="text-center">Courses Assigned</TableHead>
-                  <TableHead className="text-center">Trial Status</TableHead> {}
+                  <TableHead>Location Name</TableHead>
+                  {/* Add more relevant columns if needed, e.g., User Count, Address (if stored) */}
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredCompanies.map((company) => {
-                    let trialStatusDisplay;
-                    if (company.isTrial) {
-                        const endsAt = company.trialEndsAt instanceof Timestamp ? company.trialEndsAt.toDate() : null;
-                        if (endsAt && endsAt < new Date()) {
-                            trialStatusDisplay = <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3" />Ended: {endsAt.toLocaleDateString()}</Badge>;
-                        } else if (endsAt) {
-                            trialStatusDisplay = <Badge variant="default" className="bg-green-100 text-green-700 flex items-center gap-1"><Gift className="h-3 w-3" />Active: Ends {endsAt.toLocaleDateString()}</Badge>;
-                        } else {
-                             trialStatusDisplay = <Badge variant="secondary">Trial (No End Date)</Badge>;
-                        }
-                    } else {
-                        trialStatusDisplay = <span className="text-xs text-muted-foreground">Not a Trial</span>;
-                    }
-
-                    return (
-                      <TableRow key={company.id}>
-                        <TableCell className="font-medium"> <div className="flex items-center gap-3"> <Avatar className="h-8 w-8 border"> <AvatarImage src={company.logoUrl || undefined} alt={`${company.name} logo`} className="object-contain" /> <AvatarFallback className="text-xs"> {company.name.substring(0, 2).toUpperCase()} </AvatarFallback> </Avatar> <span>{company.name}</span> </div> </TableCell>
-                        <TableCell className="text-center"> {isLoadingCounts ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : company.locationCount} </TableCell>
-                        <TableCell className="text-center"> {isLoadingCounts ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : company.userCount} </TableCell>
-                        <TableCell className="text-center"> {isLoadingCounts ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : company.maxUsers === null || company.maxUsers === undefined ? <Infinity className="h-4 w-4 mx-auto text-muted-foreground" title="Unlimited"/> : company.maxUsers} </TableCell>
-                        <TableCell className="text-center"> {isLoadingCounts ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : company.assignedCourseCount} </TableCell>
-                        <TableCell className="text-center">{trialStatusDisplay}</TableCell> {}
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                               <Button variant="ghost" className="h-8 w-8 p-0">
-                                <>
-                                  <span className="sr-only">Open menu for {company.name}</span>
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Manage</DropdownMenuLabel>
-                              <DropdownMenuItem asChild>
-                                <Link href={`/admin/companies/${company.id}/edit`}>
-                                  <span className="flex items-center gap-2">
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    <span>Edit Company &amp; Settings</span>
-                                  </span>
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem asChild>
-                                <Link href={`/admin/companies/${company.id}/locations`}>
-                                  <span className="flex items-center gap-2">
-                                    <MapPin className="mr-2 h-4 w-4" />
-                                    <span>Manage Locations</span>
-                                  </span>
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem asChild>
-                                <Link href={`/admin/users?companyId=${company.id}`}>
-                                  <span className="flex items-center gap-2">
-                                    <Users className="mr-2 h-4 w-4" />
-                                    <span>Manage Users</span>
-                                  </span>
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => openDeleteConfirmation(company)}>
-                                <>
-                                  <Trash2 className="mr-2 h-4 w-4" /> <span>Delete Company</span>
-                                </>
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    );
-                })}
+                {locations.map((location) => (
+                  <TableRow key={location.id}>
+                    <TableCell className="font-medium">{location.name}</TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span className="sr-only">Open menu for {location.name}</span>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => handleEditLocationClick(location)}>
+                            <Edit className="mr-2 h-4 w-4" /> Edit Location
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => openDeleteConfirmation(location)}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete Location
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
-      <AddEditCompanyDialog isOpen={isAddDialogOpen} setIsOpen={setIsAddDialogOpen} initialData={null} onSave={handleSaveNewCompany}/>
+
+      <AddEditLocationDialog
+        isOpen={isAddEditDialogOpen}
+        setIsOpen={setIsAddEditDialogOpen}
+        initialData={editingLocation}
+        onSave={handleSaveLocation}
+      />
+
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader> <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle> <AlertDialogDescription> This action cannot be undone. This will permanently delete the company "{companyToDelete?.name}", all its locations, and all associated user accounts. </AlertDialogDescription> </AlertDialogHeader>
-          <AlertDialogFooter> <AlertDialogCancel onClick={() => setCompanyToDelete(null)}>Cancel</AlertDialogCancel> <AlertDialogAction onClick={confirmDeleteCompany} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isLoading}> {isLoading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>) : 'Yes, delete company'} </AlertDialogAction> </AlertDialogFooter>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the location "{locationToDelete?.name}".
+              Users assigned only to this location may lose access if not reassigned.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setLocationToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteLocation} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isLoading}>
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Yes, delete location
+            </AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
   );
 }
+
+    
