@@ -1,23 +1,23 @@
 
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react'; // Added useCallback
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Skeleton } from '@/components/ui/skeleton'; // Import Skeleton for loading
-import { BookOpen, PlayCircle, Award, Eye } from 'lucide-react'; // Changed Award to Eye for viewing completed course
+import { Skeleton } from '@/components/ui/skeleton';
+import { BookOpen, PlayCircle, Award, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Course } from '@/types/course';
-import type { User, UserCourseProgressData } from '@/types/user'; // Import User type and progress data type
-import { getUserByEmail, getUserCourseProgress } from '@/lib/user-data'; // Use correct user data functions
-import { getCourseById } from '@/lib/firestore-data'; // Fetch course details
+import type { User, UserCourseProgressData } from '@/types/user';
+import { getUserByEmail, getUserCourseProgress } from '@/lib/user-data';
+import { getCourseById } from '@/lib/firestore-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { cn } from '@/lib/utils'; // Import cn
-import { Timestamp } from 'firebase/firestore'; // Import Timestamp
+import { cn } from '@/lib/utils';
+import { Timestamp } from 'firebase/firestore';
 
 // Type for course combined with progress data
 type CourseWithProgress = Course & {
@@ -30,13 +30,12 @@ type CourseWithProgress = Course & {
 
 export default function MyCoursesPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [assignedCoursesWithProgress, setAssignedCoursesWithProgress] = useState<CourseWithProgress[]>([]); // State for combined data
+  const [assignedCoursesWithProgress, setAssignedCoursesWithProgress] = useState<CourseWithProgress[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  // Effect 1: Handle Auth State Change and Set User
   useEffect(() => {
-    setIsLoading(true); // Start loading when checking auth
+    setIsLoading(true);
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
         try {
@@ -46,69 +45,55 @@ export default function MyCoursesPage() {
            console.error("Error fetching user details:", error);
            setCurrentUser(null);
            toast({ title: "Error", description: "Could not load your profile.", variant: "destructive" });
-           setIsLoading(false); // Stop loading on error
+           setIsLoading(false);
         }
       } else {
-        // No user logged in
         setCurrentUser(null);
-        setIsLoading(false); // Stop loading if no user
-        // Optionally redirect to login
-        // router.push('/login');
+        setIsLoading(false);
       }
     });
 
-    return () => unsubscribe(); // Cleanup subscription on unmount
-  }, [toast]); // Dependency: toast (stable)
+    return () => unsubscribe();
+  }, [toast]);
 
-  // Effect 2: Fetch Course Data when User ID is available
   const fetchCourseData = useCallback(async (userId: string) => {
-    setIsLoading(true); // Ensure loading is true when fetching starts
+    setIsLoading(true);
     try {
-        const userDetails = currentUser; // Use already fetched userDetails if available
+        const userDetails = currentUser;
 
         if (!userDetails) {
-            console.error("User details not available for fetching courses.");
-             setAssignedCoursesWithProgress([]);
-            setIsLoading(false);
-            return;
-        }
-
-        // Fetch assigned courses for the specific user
-        const assignedCourseIds = userDetails.assignedCourseIds || [];
-
-        if (assignedCourseIds.length === 0) {
-            console.log(`No courses assigned found for user ${userDetails.email}`);
             setAssignedCoursesWithProgress([]);
             setIsLoading(false);
             return;
         }
 
-        console.log(`Fetching details and progress for assigned course IDs: ${assignedCourseIds.join(', ')}`);
+        const assignedCourseIds = userDetails.assignedCourseIds || [];
 
-        // Fetch course details and progress in parallel
+        if (assignedCourseIds.length === 0) {
+            setAssignedCoursesWithProgress([]);
+            setIsLoading(false);
+            return;
+        }
+
         const courseProgressPromises = assignedCourseIds.map(async (courseId) => {
             const course = await getCourseById(courseId);
             if (!course) {
-                console.warn(`Assigned course ${courseId} could not be found.`);
-                return null; // Skip if course details are missing
+                return null;
             }
-             // Fetch progress for this specific course using the actual user ID and course ID
-             // Assume getUserCourseProgress returns the structure { progress: number; status: string; completedItems: string[]; lastUpdated?: Timestamp | Date }
              const progressData = await getUserCourseProgress(userId, courseId);
              return {
                  ...course,
                  progress: progressData.progress,
                  status: progressData.status,
                  completedItems: progressData.completedItems,
-                 lastUpdated: progressData.lastUpdated // Include lastUpdated if returned
+                 lastUpdated: progressData.lastUpdated
              };
         });
 
         const coursesWithProgressData = (await Promise.all(courseProgressPromises))
-                                    .filter(Boolean) as CourseWithProgress[]; // Filter out nulls
+                                    .filter(Boolean) as CourseWithProgress[];
 
         setAssignedCoursesWithProgress(coursesWithProgressData);
-        console.log("Assigned courses with progress:", coursesWithProgressData);
 
     } catch (error) {
         console.error("Error fetching assigned courses/progress:", error);
@@ -117,18 +102,16 @@ export default function MyCoursesPage() {
     } finally {
         setIsLoading(false);
     }
-  }, [currentUser, toast]); // Depend on currentUser state
+  }, [currentUser, toast]);
 
-   // Trigger data fetching when currentUser ID becomes available
    useEffect(() => {
         if (currentUser?.id) {
             fetchCourseData(currentUser.id);
         } else if (currentUser === null) {
-            // Handle case where user logs out or auth state is confirmed null
              setAssignedCoursesWithProgress([]);
-             setIsLoading(false); // Ensure loading stops if user becomes null after initial load
+             setIsLoading(false);
         }
-    }, [currentUser?.id, fetchCourseData]); // Depend on currentUser.id
+    }, [currentUser?.id, fetchCourseData]);
 
 
   return (
@@ -143,10 +126,9 @@ export default function MyCoursesPage() {
       </div>
 
       {isLoading ? (
-        // Loading State Skeleton - Use flex here too for consistency
         <div className="flex flex-wrap justify-center gap-6">
-          {[...Array(3)].map((_, i) => ( // Show 3 skeletons as an example
-            <Card key={i} className="overflow-hidden w-full sm:w-[calc(50%-1.5rem)] lg:w-[calc(33.333%-1.5rem)]"> {/* Adjust width based on desired column count */}
+          {[...Array(3)].map((_, i) => (
+            <Card key={i} className="overflow-hidden w-full sm:w-[calc(50%-1.5rem)] lg:w-[calc(33.333%-1.5rem)]">
               <Skeleton className="h-48 w-full" />
               <CardHeader>
                 <Skeleton className="h-6 w-3/4" />
@@ -163,38 +145,33 @@ export default function MyCoursesPage() {
           ))}
         </div>
       ) : assignedCoursesWithProgress.length === 0 ? (
-        // Empty State
         <div className="text-center py-16">
           <BookOpen className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
           <p className="text-xl font-semibold text-foreground">No Courses Assigned</p>
           <p className="text-muted-foreground mt-2">You currently have no courses assigned. Contact your manager or administrator.</p>
-          {/* Optional: Link to browse public courses if available */}
-          {/* <Button variant="link" asChild><Link href="/courses">Browse Catalog</Link></Button> */}
         </div>
       ) : (
-        // Display Assigned Courses - Use Flexbox for centering
         <div className="flex flex-wrap justify-center gap-6">
           {assignedCoursesWithProgress.map((course) => {
             const isCompleted = course.status === 'Completed';
             return (
-                <Card key={course.id} className="flex flex-col overflow-hidden shadow-md hover:shadow-lg transition-shadow w-full sm:w-[calc(50%-1.5rem)] lg:w-[calc(33.333%-1.5rem)]"> {/* Control width for responsiveness */}
+                <Card key={course.id} className="flex flex-col overflow-hidden shadow-md hover:shadow-lg transition-shadow w-full sm:w-[calc(50%-1.5rem)] lg:w-[calc(33.333%-1.5rem)]">
                   <CardHeader className="p-0">
                     <div className="relative aspect-video w-full">
                       <Image
                         src={course.featuredImageUrl || course.imageUrl || `https://picsum.photos/seed/${course.id}/600/350`}
                         alt={course.title}
                         fill
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" // Responsive sizes
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         style={{ objectFit: 'cover' }}
                         className="bg-muted"
                         data-ai-hint="course cover"
                          onError={(e) => {
                              const target = e.target as HTMLImageElement;
-                             target.onerror = null; // Prevent infinite loops
-                              // Try fallback to general imageUrl if featured fails
+                             target.onerror = null;
                               if (course.imageUrl && target.src !== course.imageUrl) {
                                  target.src = course.imageUrl;
-                             } else { // If general imageUrl also fails or is not set, use picsum
+                             } else {
                                  target.src = `https://picsum.photos/seed/${course.id}/600/350`;
                              }
                          }}
@@ -203,7 +180,7 @@ export default function MyCoursesPage() {
                   </CardHeader>
                   <CardContent className="flex flex-col flex-grow p-4 space-y-3">
                      <CardTitle className="text-lg font-semibold leading-tight">{course.title}</CardTitle>
-                     <CardDescription className="text-sm text-muted-foreground flex-grow line-clamp-3">{course.description}</CardDescription> {/* Limit description lines */}
+                     <CardDescription className="text-sm text-muted-foreground flex-grow line-clamp-3">{course.description}</CardDescription>
                     <div className="pt-2 space-y-1">
                         <div className="flex justify-between text-xs text-muted-foreground mb-1">
                            <span>Progress</span>
@@ -215,12 +192,11 @@ export default function MyCoursesPage() {
                   </CardContent>
                    <CardFooter className="p-4 pt-0">
                      <Button asChild className={cn("w-full", isCompleted ? "bg-secondary hover:bg-secondary/80 text-secondary-foreground" : "bg-primary hover:bg-primary/90")}>
-                       {/* Link to the learning page for this specific course */}
                         <Link href={`/learn/${course.id}`}>
                              {isCompleted ? (
                                 <span className='flex items-center gap-2'>
                                     <Eye className="h-4 w-4" />
-                                    View Course {/* Changed text */}
+                                    View Course
                                 </span>
                              ) : (
                                 <span className='flex items-center gap-2'>
