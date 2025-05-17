@@ -1,14 +1,14 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle, Lock, PlayCircle, FileText, HelpCircle, ChevronLeft, ChevronRight, Menu, Award, MousePointerClick } from 'lucide-react';
+import { CheckCircle, Lock, PlayCircle, FileText, HelpCircle, ChevronLeft, ChevronRight, Menu, Award, MousePointerClick, Video as VideoIcon } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { getCourseById, getLessonById, getQuizById } from '@/lib/firestore-data';
 import type { Course, Lesson, Quiz } from '@/types/course';
@@ -45,6 +45,8 @@ export default function LearnCoursePage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [completedItemIds, setCompletedItemIds] = useState<string[]>([]);
+    const [isVideoWatched, setIsVideoWatched] = useState(false); // New state for video completion
+    const videoRef = useRef<HTMLVideoElement>(null); // Ref for HTML5 video
 
     const isCourseCompleted = userProgressData?.status === "Completed";
 
@@ -77,7 +79,7 @@ export default function LearnCoursePage() {
 
     const loadCourseData = useCallback(async (userId: string) => {
         if (!courseId) return;
-        setIsLoading(true); // Ensure loading state is true at the start
+        setIsLoading(true);
         try {
             const fetchedCourse = await getCourseById(courseId);
             if (fetchedCourse) {
@@ -111,8 +113,7 @@ export default function LearnCoursePage() {
                         const firstUncompletedIndex = orderedItems.findIndex(item => !localCompletedIds.includes(item.id));
                         initialItemIndex = firstUncompletedIndex !== -1 ? firstUncompletedIndex : 0; 
                     } else {
-                        // If course is completed, can default to first item or last, for review
-                        initialItemIndex = 0; // Or orderedItems.length - 1;
+                        initialItemIndex = 0;
                     }
                     initialItem = orderedItems[initialItemIndex];
                 }
@@ -138,21 +139,33 @@ export default function LearnCoursePage() {
         }
      }, [currentUser?.id, loadCourseData]);
 
+    // Effect to reset video watched state when content item changes
+    useEffect(() => {
+        if (currentContentItem?.type === 'lesson' && (currentContentItem.data as Lesson).videoUrl) {
+            setIsVideoWatched(false); // Reset for new video lessons
+            // If the lesson is already completed, mark video as "watched" for UI purposes
+            if (completedItemIds.includes(currentContentItem.id)) {
+                setIsVideoWatched(true);
+            }
+        } else {
+            setIsVideoWatched(true); // No video or not a lesson, so "watched" is true by default for gating
+        }
+    }, [currentContentItem, completedItemIds]);
+
 
     const handleItemCompletion = useCallback(async (itemIdToComplete: string) => {
         if (isCourseCompleted || !currentUser?.id || !courseId || !itemIdToComplete || completedItemIds.includes(itemIdToComplete)) {
-            return false; // Return a boolean to indicate if completion was processed
+            return false;
         }
         const overallIndex = curriculumItems.findIndex(item => item.id === itemIdToComplete);
         if (overallIndex === -1) return false;
 
         try {
             await updateEmployeeProgress(currentUser.id, courseId, overallIndex);
-            // Re-fetch progress to ensure UI consistency and unlock next items
             const updatedProgressData = await getUserCourseProgress(currentUser.id, courseId);
             setUserProgressData(updatedProgressData);
             setCompletedItemIds(updatedProgressData.completedItems || []);
-            return true; // Indicate completion was processed
+            return true;
         } catch (error) {
             console.error("Failed to update progress:", error);
             toast({ title: "Error", description: "Could not update your progress.", variant: "destructive"});
@@ -162,10 +175,10 @@ export default function LearnCoursePage() {
 
 
     const isItemLocked = useCallback((itemIndex: number) => {
-        if (itemIndex === 0) return false; // First item is never locked
+        if (itemIndex === 0) return false;
         for (let i = 0; i < itemIndex; i++) {
             if (!completedItemIds.includes(curriculumItems[i].id)) {
-                return true; // A previous item is not complete
+                return true;
             }
         }
         return false;
@@ -188,14 +201,11 @@ export default function LearnCoursePage() {
                 setCurrentContentItem(curriculumItems[nextItemIndex]);
                 setCurrentIndex(nextItemIndex);
             } else {
-                 // This case should ideally not be hit if completion logic is correct
                 toast({ title: "Next Item Locked", description: "Complete current item to proceed.", variant: "default" });
             }
         } else {
-            // End of course, check if all items were indeed completed
-            // getUserCourseProgress would have updated the overall status
             const finalProgress = await getUserCourseProgress(currentUser!.id, courseId);
-            setUserProgressData(finalProgress); // Update overall course status
+            setUserProgressData(finalProgress);
             setCompletedItemIds(finalProgress.completedItems || []);
              if(finalProgress.status === "Completed") {
                 toast({ title: "Course Complete!", description: `Congratulations on finishing ${course?.title}!`, variant: "success" });
@@ -218,6 +228,14 @@ export default function LearnCoursePage() {
 
     const handleMarkLessonComplete = async () => {
        if (!currentContentItem || currentContentItem.type !== 'lesson' || isCourseCompleted) return;
+       
+       const lessonData = currentContentItem.data as Lesson;
+       // If already completed, just advance. Otherwise, check video.
+       if (!completedItemIds.includes(currentContentItem.id) && lessonData.videoUrl && !isVideoWatched) {
+           toast({ title: "Video Not Watched", description: "Please watch the entire video before marking complete.", variant: "default"});
+           return;
+       }
+
        const completionSuccessful = await handleItemCompletion(currentContentItem.id);
        if (completionSuccessful) {
            advanceToNextItem();
@@ -233,6 +251,13 @@ export default function LearnCoursePage() {
         }
     };
 
+    const handleVideoEnded = () => {
+        if (currentContentItem && !completedItemIds.includes(currentContentItem.id)) {
+            setIsVideoWatched(true);
+            toast({ title: "Video Watched", description: "You can now mark this lesson as complete.", variant: "success" });
+        }
+    };
+
     const renderContent = () => {
         if (isLoading || !currentUser) {
              return (
@@ -243,7 +268,7 @@ export default function LearnCoursePage() {
                  </div>
              );
         }
-        if (isCourseCompleted && !currentContentItem) { // Show completion if course done and no specific item forced
+        if (isCourseCompleted && !currentContentItem) {
             return (
                  <div className="p-6 text-center flex flex-col items-center justify-center h-full">
                     <Award className="h-16 w-16 text-green-500 mb-4" />
@@ -269,12 +294,25 @@ export default function LearnCoursePage() {
         }
 
 
-        const { type, data } = currentContentItem!; // We've handled null case above
+        const { type, data } = currentContentItem!;
         const isItemCompleted = completedItemIds.includes(currentContentItem!.id);
         const isLastItemInCourse = currentIndex === curriculumItems.length - 1;
 
         if (type === 'lesson') {
             const lesson = data as Lesson;
+            const hasVideo = !!lesson.videoUrl;
+            // Button is disabled if:
+            // 1. It's the last item AND the course is already marked completed OR the item itself is completed.
+            // 2. OR, it has a video, the video hasn't been watched, AND the item isn't already completed.
+            const isMarkCompleteButtonDisabled =
+                (isLastItemInCourse && (isCourseCompleted || isItemCompleted)) ||
+                (hasVideo && !isVideoWatched && !isItemCompleted);
+
+            let buttonText = "Mark Complete & Next";
+            if (isItemCompleted && !isLastItemInCourse) buttonText = "Next Item";
+            else if (isLastItemInCourse) buttonText = (isItemCompleted || isCourseCompleted) ? "Course Finished" : "Mark Complete & Finish Course";
+
+
             return (
                 <div className="p-4 md:p-6 lg:p-8 space-y-6">
                      {lesson.featuredImageUrl && (
@@ -289,7 +327,22 @@ export default function LearnCoursePage() {
                                 <iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${lesson.videoUrl.split('v=')[1]?.split('&')[0] || lesson.videoUrl.split('/').pop()}`} title="YouTube video player" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen></iframe>
                             ) : lesson.videoUrl.includes('vimeo.com') ? (
                                 <iframe src={`https://player.vimeo.com/video/${lesson.videoUrl.split('/').pop()}`} width="100%" height="100%" frameBorder="0" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen></iframe>
-                             ) : ( <video controls src={lesson.videoUrl} className="w-full h-full object-contain">Your browser does not support the video tag.</video> )}
+                             ) : ( 
+                                <video 
+                                    ref={videoRef}
+                                    controls 
+                                    src={lesson.videoUrl} 
+                                    onEnded={handleVideoEnded} 
+                                    className="w-full h-full object-contain"
+                                >
+                                    Your browser does not support the video tag.
+                                </video> 
+                            )}
+                        </div>
+                    )}
+                    {hasVideo && !isVideoWatched && !isItemCompleted && (
+                        <div className="p-3 bg-yellow-100 border border-yellow-300 text-yellow-700 rounded-md text-sm flex items-center gap-2">
+                           <VideoIcon className="h-5 w-5" /> Please watch the video to the end to enable completion.
                         </div>
                     )}
                     <div className="prose prose-lg max-w-none text-foreground dark:prose-invert" dangerouslySetInnerHTML={{ __html: lesson.content }} />
@@ -300,10 +353,11 @@ export default function LearnCoursePage() {
                          <Button variant="outline" onClick={handlePrevious} disabled={currentIndex === 0}><ChevronLeft className="mr-2 h-4 w-4" /> Previous</Button>
                          <Button
                             onClick={handleMarkLessonComplete}
-                            disabled={isCourseCompleted && isLastItemInCourse}
+                            disabled={isMarkCompleteButtonDisabled}
                             className={cn(isItemCompleted && !isLastItemInCourse ? "bg-secondary text-secondary-foreground hover:bg-secondary/80" : "bg-primary hover:bg-primary/90")}
+                            title={(hasVideo && !isVideoWatched && !isItemCompleted) ? "Watch video to enable" : ""}
                             >
-                                {isItemCompleted && !isLastItemInCourse ? 'Next Item' : isLastItemInCourse ? (isItemCompleted || isCourseCompleted ? 'Course Finished' : 'Mark Complete & Finish Course') : 'Mark Complete & Next'}
+                                {buttonText}
                                 {(!isLastItemInCourse || (isLastItemInCourse && !isItemCompleted && !isCourseCompleted)) && <ChevronRight className="ml-2 h-4 w-4" />}
                             </Button>
                     </div>
@@ -318,8 +372,13 @@ export default function LearnCoursePage() {
                      <QuizTaking quiz={quiz} onComplete={handleQuizComplete} isCompleted={isItemCompleted || isCourseCompleted} />
                      <div className="flex justify-between pt-6 border-t mt-8">
                          <Button variant="outline" onClick={handlePrevious} disabled={currentIndex === 0}><ChevronLeft className="mr-2 h-4 w-4" /> Previous</Button>
-                         <Button disabled={!isItemCompleted || isLastItemInCourse} onClick={advanceToNextItem}>
-                             Next Item <ChevronRight className="ml-2 h-4 w-4" />
+                         <Button 
+                            disabled={!isItemCompleted || (isLastItemInCourse && isCourseCompleted)}
+                            onClick={advanceToNextItem}
+                            className={cn((isCourseCompleted && isLastItemInCourse) && "bg-secondary text-secondary-foreground hover:bg-secondary/80")}
+                          >
+                             {(isCourseCompleted && isLastItemInCourse) ? 'Course Finished' : 'Next Item'} 
+                             {!(isCourseCompleted && isLastItemInCourse) && <ChevronRight className="ml-2 h-4 w-4" />}
                          </Button>
                      </div>
                  </div>
@@ -386,7 +445,7 @@ export default function LearnCoursePage() {
         </div>
     );
 
-    if (isLoading || !currentUser) { // Added !currentUser check for initial load
+    if (isLoading || !currentUser) { 
         return ( <div className="flex h-screen bg-secondary">
                 <aside className="hidden md:flex md:flex-col w-72 lg:w-80 border-r bg-background p-4 space-y-4"><Skeleton className="h-5 w-3/4" /> <Skeleton className="h-6 w-full" /><div className="space-y-1"><div className="flex justify-between"><Skeleton className="h-3 w-1/4" /><Skeleton className="h-3 w-1/4" /></div><Skeleton className="h-2 w-full" /></div><Skeleton className="h-10 w-full" /> <Skeleton className="h-10 w-full" /> <Skeleton className="h-10 w-full" /> </aside>
                 <main className="flex-1 flex flex-col overflow-hidden"><header className="flex items-center justify-between p-4 border-b bg-background md:justify-end"><Skeleton className="h-8 w-8 rounded md:hidden mr-4" /> <Skeleton className="h-6 w-1/3 md:hidden" /> <div className="flex items-center gap-4"><Skeleton className="h-6 w-24" /> </div></header><div className="flex-1 overflow-y-auto bg-background p-6 text-center"><Skeleton className="h-8 w-1/2 mx-auto mb-4" /><Skeleton className="aspect-video w-full my-6 rounded-lg" /><Skeleton className="h-4 w-full my-2" /><Skeleton className="h-4 w-full my-2" /><Skeleton className="h-4 w-5/6 my-2" /></div></main>
@@ -411,3 +470,4 @@ export default function LearnCoursePage() {
         </div>
     );
 }
+
