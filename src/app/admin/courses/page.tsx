@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -175,7 +176,7 @@ export default function AdminCoursesPage() {
                 <TableRow>
                   <TableHead>Title</TableHead>
                   <TableHead>Level</TableHead>
-                  <TableHead>Modules</TableHead>
+                  {/* <TableHead>Modules</TableHead> REMOVED */}
                    <TableHead>Curriculum Items</TableHead> 
                     <TableHead>Quizzes (In Curriculum)</TableHead> 
                   <TableHead>Price</TableHead>
@@ -189,7 +190,7 @@ export default function AdminCoursesPage() {
                     <TableCell>
                       <Badge variant="secondary">{course.level}</Badge>
                     </TableCell>
-                    <TableCell>{course.modules?.length || 0}</TableCell>
+                    {/* <TableCell>{course.modules?.length || 0}</TableCell> REMOVED */}
                      <TableCell>{course.curriculum?.length || 0}</TableCell> 
                       <TableCell>{course.curriculum?.filter(id => id.startsWith('quiz-')).length || 0}</TableCell>
                     <TableCell>{course.price}</TableCell>
@@ -278,3 +279,4 @@ export default function AdminCoursesPage() {
     </div>
   );
 }
+

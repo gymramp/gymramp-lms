@@ -5,28 +5,27 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+// import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion" // REMOVED
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // Keep Card for content display
 import { Button } from '@/components/ui/button';
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle, Lock, PlayCircle, FileText, HelpCircle, ChevronLeft, ChevronRight, Menu, GripVertical, Eye, EyeOff, BookOpen, MousePointerClick, Award } from 'lucide-react'; // Kept Award icon
+import { CheckCircle, Lock, PlayCircle, FileText, HelpCircle, ChevronLeft, ChevronRight, Menu, Award, MousePointerClick } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { getCourseById, getLessonById, getQuizById } from '@/lib/firestore-data'; // Updated imports
+import { getCourseById, getLessonById, getQuizById } from '@/lib/firestore-data'; 
 import type { Course, Lesson, Quiz } from '@/types/course';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton'; // For loading state
-import { auth } from '@/lib/firebase'; // Import Firebase auth
-import { onAuthStateChanged } from 'firebase/auth'; // Import auth state functions
-import { getUserByEmail, getUserCourseProgress, updateEmployeeProgress } from '@/lib/user-data'; // Import function to get user details and progress functions
-import type { User, UserCourseProgressData } from '@/types/user'; // Import User type
-import { QuizTaking } from '@/components/learn/QuizTaking'; // Import the new QuizTaking component
-// import { CourseCertificate } from '@/components/learn/CourseCertificate'; // Removed Certificate import from here
-import { cn } from '@/lib/utils'; // Import cn utility
-import { Timestamp } from 'firebase/firestore'; // Import Timestamp
+import { Skeleton } from '@/components/ui/skeleton'; 
+import { auth } from '@/lib/firebase'; 
+import { onAuthStateChanged } from 'firebase/auth'; 
+import { getUserByEmail, getUserCourseProgress, updateEmployeeProgress } from '@/lib/user-data'; 
+import type { User, UserCourseProgressData } from '@/types/user'; 
+import { QuizTaking } from '@/components/learn/QuizTaking'; 
+import { cn } from '@/lib/utils'; 
+import { Timestamp } from 'firebase/firestore'; 
+import { ScrollArea } from '@/components/ui/scroll-area'; // Import ScrollArea
 
-// Define a type for combined curriculum items
 type CurriculumItem = {
-    id: string; // Prefixed ID like 'lesson-abc' or 'quiz-xyz'
+    id: string; 
     type: 'lesson' | 'quiz';
     data: Lesson | Quiz;
 };
@@ -37,23 +36,19 @@ export default function LearnCoursePage() {
     const courseId = params.courseId as string;
 
     const [course, setCourse] = useState<Course | null>(null);
-    const [currentUser, setCurrentUser] = useState<User | null>(null); // Store current user details
-    const [curriculumItems, setCurriculumItems] = useState<CurriculumItem[]>([]);
-    const [moduleItemsMap, setModuleItemsMap] = useState<Record<string, CurriculumItem[]>>({}); // Map module title to its items
-    const [selectedModuleTitle, setSelectedModuleTitle] = useState<string | null>(null); // Track selected module
-    const [currentContentItem, setCurrentContentItem] = useState<CurriculumItem | null>(null); // Current item being viewed
-    const [currentIndexInModule, setCurrentIndexInModule] = useState(0); // Index within the *selected* module
-    const [userProgressData, setUserProgressData] = useState<UserCourseProgressData | null>(null); // Store full progress object
+    const [currentUser, setCurrentUser] = useState<User | null>(null); 
+    const [curriculumItems, setCurriculumItems] = useState<CurriculumItem[]>([]); // Single flat list
+    const [currentContentItem, setCurrentContentItem] = useState<CurriculumItem | null>(null); 
+    const [currentIndex, setCurrentIndex] = useState(0); // Index within the flat curriculumItems list
+    const [userProgressData, setUserProgressData] = useState<UserCourseProgressData | null>(null); 
     const [isLoading, setIsLoading] = useState(true);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [completedItemIds, setCompletedItemIds] = useState<string[]>([]); // Track completed item IDs locally
+    const [completedItemIds, setCompletedItemIds] = useState<string[]>([]); 
 
-    // Determine if course is completed based on fetched progress data
     const isCourseCompleted = userProgressData?.status === "Completed";
 
-    // Effect 1: Handle Auth State Change and Set User
     useEffect(() => {
-        setIsLoading(true); // Start loading when checking auth
+        setIsLoading(true); 
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser && firebaseUser.email) {
                 try {
@@ -61,32 +56,27 @@ export default function LearnCoursePage() {
                     if (userDetails && userDetails.id) {
                         setCurrentUser(userDetails);
                     } else {
-                        console.error("Could not find user details or ID for logged-in user:", firebaseUser.email);
                         setCurrentUser(null);
                         router.push('/login');
                         setIsLoading(false);
                     }
                 } catch (error) {
-                    console.error("Error fetching user details:", error);
                     setCurrentUser(null);
                     router.push('/login');
                     setIsLoading(false);
                 }
             } else {
-                // No user logged in, redirect
                 setCurrentUser(null);
                 router.push('/login');
                 setIsLoading(false);
             }
         });
-        return () => unsubscribe(); // Cleanup subscription
-    }, [router]); // Dependency: router (stable)
+        return () => unsubscribe(); 
+    }, [router]); 
 
 
-    // Effect 2: Load Course Data when User ID is available
     const loadCourseData = useCallback(async (userId: string) => {
         if (!courseId) return;
-        // Don't reset loading here, wait for fetch to complete
         try {
             const fetchedCourse = await getCourseById(courseId);
             if (fetchedCourse) {
@@ -95,284 +85,157 @@ export default function LearnCoursePage() {
                 const allItemsMap = new Map<string, CurriculumItem>();
                 const fetchedItemDetails: { [key: string]: Lesson | Quiz } = {};
 
-                // Fetch details for all items in the curriculum array
                 for (const prefixedId of (fetchedCourse.curriculum || [])) {
                     const [type, id] = prefixedId.split('-');
                     let itemData: Lesson | Quiz | null = fetchedItemDetails[prefixedId];
-
                     if (!itemData) {
-                        if (type === 'lesson') {
-                            itemData = await getLessonById(id);
-                        } else if (type === 'quiz') {
-                            itemData = await getQuizById(id);
-                        }
-                        if (itemData) {
-                            fetchedItemDetails[prefixedId] = itemData;
-                        }
+                        itemData = type === 'lesson' ? await getLessonById(id) : await getQuizById(id);
+                        if (itemData) fetchedItemDetails[prefixedId] = itemData;
                     }
-                    if (itemData) {
-                        allItemsMap.set(prefixedId, { id: prefixedId, type: type as 'lesson' | 'quiz', data: itemData });
-                    } else {
-                        console.warn(`Data for curriculum item ${prefixedId} not found.`);
-                    }
+                    if (itemData) allItemsMap.set(prefixedId, { id: prefixedId, type: type as 'lesson' | 'quiz', data: itemData });
                 }
 
-                // Order the items according to the curriculum array
                 const orderedItems = (fetchedCourse.curriculum || [])
                     .map(prefixedId => allItemsMap.get(prefixedId))
                     .filter(Boolean) as CurriculumItem[];
-                setCurriculumItems(orderedItems); // Store all items in order
+                setCurriculumItems(orderedItems); 
 
-                // Create a map of module title to its items
-                const newModuleItemsMap: Record<string, CurriculumItem[]> = {};
-                (fetchedCourse.modules || []).forEach(moduleTitle => {
-                    const itemIdsForModule = fetchedCourse.moduleAssignments?.[moduleTitle] || [];
-                    newModuleItemsMap[moduleTitle] = itemIdsForModule
-                        .map(itemId => allItemsMap.get(itemId))
-                        .filter(Boolean) as CurriculumItem[];
-                });
-                setModuleItemsMap(newModuleItemsMap);
-
-                // Fetch user progress for this course using the actual user ID
                 const progressData = await getUserCourseProgress(userId, courseId);
-                setUserProgressData(progressData); // Store the full progress object
+                setUserProgressData(progressData); 
                 setCompletedItemIds(progressData.completedItems || []);
 
-                // Set initial module/item selection (even if completed, allow viewing)
-                 let firstModule: string | null = null;
-                 let initialContentItem: CurriculumItem | null = null;
-                 let initialIndexInModule = 0;
+                let initialItem: CurriculumItem | null = null;
+                let initialItemIndex = 0;
 
-                if (fetchedCourse.modules && fetchedCourse.modules.length > 0) {
-                    firstModule = fetchedCourse.modules[0]; // Default to the first module
-                    const firstModuleItems = newModuleItemsMap[firstModule] || [];
-                    if (firstModuleItems.length > 0) {
-                        initialContentItem = firstModuleItems[0]; // Default to the first item in the first module
-                        initialIndexInModule = 0;
+                if (orderedItems.length > 0) {
+                    if (progressData.status !== 'Completed') {
+                        const firstUncompletedIndex = orderedItems.findIndex(item => !progressData.completedItems?.includes(item.id));
+                        initialItemIndex = firstUncompletedIndex !== -1 ? firstUncompletedIndex : 0; // Default to first if all somehow completed but status isn't
                     }
+                    initialItem = orderedItems[initialItemIndex];
                 }
-
-                // If not completed, try to find the first uncompleted item
-                 if (progressData.status !== 'Completed') {
-                    for (const moduleTitle of (fetchedCourse.modules || [])) {
-                        const itemsInModule = newModuleItemsMap[moduleTitle] || [];
-                        const firstUncompletedIndex = itemsInModule.findIndex(item => !progressData.completedItems?.includes(item.id));
-                        if (firstUncompletedIndex !== -1) {
-                            firstModule = moduleTitle;
-                            initialContentItem = itemsInModule[firstUncompletedIndex];
-                            initialIndexInModule = firstUncompletedIndex;
-                            break; // Found the starting point
-                        }
-                    }
-                 }
-
-                 setSelectedModuleTitle(firstModule);
-                 setCurrentContentItem(initialContentItem);
-                 setCurrentIndexInModule(initialIndexInModule);
+                
+                setCurrentContentItem(initialItem);
+                setCurrentIndex(initialItemIndex);
 
             } else {
-                router.push('/courses/my-courses'); // Redirect if course not found
+                router.push('/courses/my-courses'); 
             }
         } catch (error) {
             console.error("Error fetching course data:", error);
-            // Handle error (e.g., show toast)
         } finally {
-            setIsLoading(false); // Stop loading after fetch attempt completes
+            setIsLoading(false); 
         }
-    }, [courseId, router]); // Dependency on courseId and router
+    }, [courseId, router]); 
 
-    // Trigger data fetching when currentUser ID becomes available
     useEffect(() => {
         if (currentUser?.id) {
-            loadCourseData(currentUser.id); // Load course data once user is confirmed
+            loadCourseData(currentUser.id); 
         } else if (!currentUser && !isLoading) {
-             // Handle case where user is definitively null (logged out or failed fetch)
-             // and loading is already false
              setCurriculumItems([]);
-             setModuleItemsMap({});
              setUserProgressData(null);
              setCompletedItemIds([]);
-             setSelectedModuleTitle(null);
              setCurrentContentItem(null);
-             setCurrentIndexInModule(0);
+             setCurrentIndex(0);
         }
-     }, [currentUser?.id, isLoading, loadCourseData]); // Depend on user ID and isLoading flag
+     }, [currentUser?.id, isLoading, loadCourseData]); 
 
-    // Function to update progress locally and in Firestore
     const handleItemCompletion = useCallback(async (itemIdToComplete: string) => {
-        // **Add check: Don't update progress if course is already completed**
         if (isCourseCompleted || !currentUser?.id || !courseId || !itemIdToComplete || completedItemIds.includes(itemIdToComplete)) {
-            console.log("Skipping progress update: Course completed or invalid state", { isCourseCompleted, userId: currentUser?.id, courseId, itemIdToComplete });
             return;
         }
-
-        // Find the overall index of the item in the main curriculumItems array
         const overallIndex = curriculumItems.findIndex(item => item.id === itemIdToComplete);
-         if (overallIndex === -1) {
-             console.error(`Could not find item ${itemIdToComplete} in the main curriculum.`);
-             return;
-         }
+         if (overallIndex === -1) return;
 
         try {
-             // Call the function to update Firestore using the overall index
              await updateEmployeeProgress(currentUser.id, courseId, overallIndex);
-
-            // Update local state optimistically or after confirmation
             const newCompletedItems = [...completedItemIds, itemIdToComplete];
             setCompletedItemIds(newCompletedItems);
-
-             // Re-fetch progress data to get updated status and lastUpdated time
             const updatedProgressData = await getUserCourseProgress(currentUser.id, courseId);
             setUserProgressData(updatedProgressData);
-
         } catch (error) {
             console.error("Failed to update progress:", error);
-            // Optionally revert local state or show error toast
         }
+    }, [currentUser?.id, courseId, curriculumItems, completedItemIds, isCourseCompleted]); 
 
-    }, [currentUser?.id, courseId, curriculumItems, completedItemIds, isCourseCompleted]); // Added isCourseCompleted dependency
 
-
-    const handleModuleSelection = (moduleTitle: string) => {
-        // Allow selection even if course is completed
-        setSelectedModuleTitle(moduleTitle);
-        const itemsInModule = moduleItemsMap[moduleTitle] || [];
-
-        // Always select the first item in the clicked module for viewing
-        let firstItemIndexInModule = 0;
-        let firstItem: CurriculumItem | null = null;
-        if (itemsInModule.length > 0) {
-            firstItem = itemsInModule[0];
-        }
-
-        setCurrentContentItem(firstItem);
-        setCurrentIndexInModule(firstItemIndexInModule);
-        setIsSidebarOpen(false); // Close sidebar on mobile
-    };
-
-     const handleContentSelection = (item: CurriculumItem, moduleTitle: string) => {
-         // Allow selection even if course is completed
-         const itemsInSelectedModule = moduleItemsMap[moduleTitle] || [];
-         const itemIndexInModule = itemsInSelectedModule.findIndex(i => i.id === item.id);
-
-         // Always allow clicking items for viewing purposes
+    const handleContentSelection = (item: CurriculumItem, index: number) => { // Index is now overall index
          setCurrentContentItem(item);
-         setCurrentIndexInModule(itemIndexInModule); // Set index within the module
-         setIsSidebarOpen(false); // Close sidebar on mobile
+         setCurrentIndex(index);
+         setIsSidebarOpen(false); 
     };
 
 
-    // Function to advance to the next item *within the current module*
     const advanceToNextItem = useCallback(async () => {
-        if (!currentUser?.id || !currentContentItem || !selectedModuleTitle) return;
+        if (!currentUser?.id || !currentContentItem ) return;
 
-        // Mark the *current* item as complete before advancing (only if not already completed)
-        if (!isCourseCompleted) {
+        if (!isCourseCompleted && currentContentItem) {
              await handleItemCompletion(currentContentItem.id);
         }
 
-
-        const itemsInModule = moduleItemsMap[selectedModuleTitle] || [];
-        const nextIndex = currentIndexInModule + 1;
-
-        if (nextIndex < itemsInModule.length) {
-            const nextItem = itemsInModule[nextIndex];
-            setCurrentContentItem(nextItem);
-            setCurrentIndexInModule(nextIndex);
+        const nextItemIndex = currentIndex + 1;
+        if (nextItemIndex < curriculumItems.length) {
+            setCurrentContentItem(curriculumItems[nextItemIndex]);
+            setCurrentIndex(nextItemIndex);
         } else {
-            // Reached the end of the *current module*
-            console.log(`Finished module: ${selectedModuleTitle}`);
-             // Check if ALL items in the ENTIRE course are now complete (even if already marked completed)
+             console.log(`Finished course: ${course?.title}`);
              const allItemsCompleted = curriculumItems.every(item =>
-                 completedItemIds.includes(item.id) || item.id === currentContentItem.id // Include the one just processed
+                 completedItemIds.includes(item.id) || item.id === currentContentItem?.id 
              );
-
-             // If all items are complete and the course wasn't already marked as such, refresh progress
              if (allItemsCompleted && !isCourseCompleted) {
-                 console.log("Course should now be marked as complete!");
-                 // Re-fetch progress one last time to update the main status
                  const updatedProgressData = await getUserCourseProgress(currentUser.id, courseId);
                  setUserProgressData(updatedProgressData);
              }
-             // Set content to null to show the "Module Complete" or "Select Module" message
-             setCurrentContentItem(null);
-
+             // setCurrentContentItem(null); // Or show completion message
         }
-    }, [currentIndexInModule, currentContentItem, selectedModuleTitle, moduleItemsMap, handleItemCompletion, currentUser?.id, courseId, isCourseCompleted, curriculumItems, completedItemIds]); // Added curriculumItems and completedItemIds
+    }, [currentIndex, currentContentItem, curriculumItems, handleItemCompletion, currentUser?.id, courseId, isCourseCompleted, completedItemIds, course?.title]); 
 
 
-     // Updated handler for when the QuizTaking component reports completion
      const handleQuizComplete = (quizId: string, score: number, passed: boolean) => {
-        console.log(`Quiz ${quizId} completed with score: ${score}, Passed: ${passed}`);
-        // Advance only if the quiz was passed, even if course is completed (allow navigation)
         if (passed && currentContentItem?.id === `quiz-${quizId}`) {
             advanceToNextItem();
-        } else {
-            // Quiz failed - user needs to retry. Stay on the current item.
-            // (The QuizTaking component handles the retry UI)
         }
      };
 
     const handleMarkLessonComplete = () => {
-       advanceToNextItem(); // Treat completing the lesson as completing the current step within the module
+       advanceToNextItem(); 
     };
 
     const handlePrevious = () => {
-        if (!selectedModuleTitle) return; // Allow navigation even if completed
-        const itemsInModule = moduleItemsMap[selectedModuleTitle] || [];
-        const prevIndex = currentIndexInModule - 1;
-        if (prevIndex >= 0) {
-             const prevItem = itemsInModule[prevIndex];
-             setCurrentContentItem(prevItem);
-             setCurrentIndexInModule(prevIndex);
-             setIsSidebarOpen(false); // Close sidebar on mobile
+        const prevItemIndex = currentIndex - 1;
+        if (prevItemIndex >= 0) {
+             setCurrentContentItem(curriculumItems[prevItemIndex]);
+             setCurrentIndex(prevItemIndex);
+             setIsSidebarOpen(false); 
         }
     };
 
 
     const renderContent = () => {
-        // **Removed Certificate Display Logic from here**
-
-        // If not completed and no module is selected, show prompt
-        if (!selectedModuleTitle && !isLoading) { // Only show prompt if not loading
+        if (!currentContentItem && !isLoading && !isCourseCompleted) { 
             return (
                 <div className="p-6 text-muted-foreground text-center flex flex-col items-center justify-center h-full">
                     <MousePointerClick className="h-12 w-12 text-primary mb-4" />
-                    <h2 className="text-xl font-semibold mb-2">Select a Module</h2>
-                    <p>Please choose a module from the sidebar to start learning.</p>
+                    <h2 className="text-xl font-semibold mb-2">Select an Item</h2>
+                    <p>Please choose an item from the sidebar to start learning.</p>
                 </div>
             );
         }
-
-        // If module selected, but no current item (e.g., module finished or first load)
-        if (selectedModuleTitle && !currentContentItem && !isLoading) { // Check loading flag
-            const itemsInSelectedModule = moduleItemsMap[selectedModuleTitle] || [];
-             // Check if all items in the selected module are marked as complete in the *user's progress*
-             const allCompletedInModule = itemsInSelectedModule.length > 0 && itemsInSelectedModule.every(item => completedItemIds.includes(item.id));
-
-            if (allCompletedInModule) {
-                 return (
-                     <div className="p-6 text-center flex flex-col items-center justify-center h-full">
-                         <CheckCircle className="h-12 w-12 text-green-500 mb-4" />
-                         <h2 className="text-xl font-semibold mb-2">Module Complete!</h2>
-                         <p className="text-muted-foreground">You have completed all items in "{selectedModuleTitle}".</p>
-                          <p className="text-muted-foreground mt-2">Select another module from the sidebar to continue or review.</p>
-                     </div>
-                 );
-            }
-            // If no content item and not all completed, show default 'Select an Item' message
+        if (isCourseCompleted) {
             return (
-                <div className="p-6 text-muted-foreground text-center flex flex-col items-center justify-center h-full">
-                   <MousePointerClick className="h-12 w-12 text-primary mb-4" />
-                   <h2 className="text-xl font-semibold mb-2">Select an Item</h2>
-                   <p>Please choose an item from the selected module to start learning.</p>
-                </div>
+                 <div className="p-6 text-center flex flex-col items-center justify-center h-full">
+                    <Award className="h-16 w-16 text-green-500 mb-4" />
+                    <h2 className="text-2xl font-semibold mb-2">Course Complete!</h2>
+                    <p className="text-muted-foreground">Congratulations on completing "{course?.title}".</p>
+                    <Button asChild variant="link" className="mt-4">
+                        <Link href="/courses/my-courses">Back to My Learning</Link>
+                    </Button>
+                 </div>
             );
         }
 
-        // If still loading or no item, show nothing or a spinner
         if (isLoading || !currentContentItem) {
-             return ( // Example loading state within content area
+             return ( 
                  <div className="p-6 text-center">
                      <Skeleton className="h-8 w-1/2 mx-auto mb-4" />
                      <Skeleton className="aspect-video w-full my-6 rounded-lg" />
@@ -382,14 +245,10 @@ export default function LearnCoursePage() {
              );
         }
 
-
-        // Render the current lesson or quiz
         const { type, data } = currentContentItem;
-        const itemsInCurrentModule = moduleItemsMap[selectedModuleTitle || ''] || []; // Ensure selectedModuleTitle is not null
-        const isLastItemInModule = currentIndexInModule === itemsInCurrentModule.length - 1;
-         // Determine if the *specific item* being viewed is marked as completed in the user's progress
-         const isItemCompletedInUserProgress = completedItemIds.includes(currentContentItem.id);
-        const isNextItemInModuleAvailable = currentIndexInModule + 1 < itemsInCurrentModule.length;
+        const isLastItemInCourse = currentIndex === curriculumItems.length - 1;
+        const isItemCompletedInUserProgress = completedItemIds.includes(currentContentItem.id);
+        const isNextItemAvailable = currentIndex + 1 < curriculumItems.length;
 
 
         if (type === 'lesson') {
@@ -404,7 +263,7 @@ export default function LearnCoursePage() {
                                 fill
                                 style={{ objectFit: 'cover' }}
                                 className="rounded-lg shadow-md"
-                                priority // Prioritize loading the current lesson's image
+                                priority 
                             />
                         </div>
                     )}
@@ -440,10 +299,9 @@ export default function LearnCoursePage() {
                         </div>
                     )}
 
-                    {/* Render lesson content */}
                     <div
                         className="prose prose-lg max-w-none text-foreground dark:prose-invert"
-                        dangerouslySetInnerHTML={{ __html: lesson.content }} // SANITIZE THIS IF USER GENERATED
+                        dangerouslySetInnerHTML={{ __html: lesson.content }} 
                     />
 
                      {lesson.exerciseFilesInfo && (
@@ -476,24 +334,20 @@ export default function LearnCoursePage() {
                          </Card>
                      )}
 
-                    {/* Navigation Buttons */}
                     <div className="flex justify-between pt-6 border-t">
-                         <Button variant="outline" onClick={handlePrevious} disabled={currentIndexInModule === 0}>
+                         <Button variant="outline" onClick={handlePrevious} disabled={currentIndex === 0}>
                              <ChevronLeft className="mr-2 h-4 w-4" /> Previous
                          </Button>
-                         {/* Logic for the completion/next button */}
                          <Button
                             onClick={handleMarkLessonComplete}
-                            // Disable if it's the last item and already completed OR if course is complete and it's the last item
-                            disabled={(isLastItemInModule && isItemCompletedInUserProgress) || (isCourseCompleted && !isNextItemInModuleAvailable)}
-                            className={isItemCompletedInUserProgress && !isLastItemInModule ? "bg-secondary text-secondary-foreground hover:bg-secondary/80" : "bg-primary hover:bg-primary/90"}
+                            disabled={(isLastItemInCourse && isItemCompletedInUserProgress) || (isCourseCompleted && !isNextItemAvailable)}
+                            className={isItemCompletedInUserProgress && !isLastItemInCourse ? "bg-secondary text-secondary-foreground hover:bg-secondary/80" : "bg-primary hover:bg-primary/90"}
                             >
-                                {isLastItemInModule && isItemCompletedInUserProgress ? 'Module Complete' : // Shows if last item AND completed
-                                isItemCompletedInUserProgress ? 'Next (Already Completed)' : // Shows if completed but not last
-                                isLastItemInModule ? 'Mark Complete & Finish Module' : // Shows if last item, not yet complete
-                                'Mark Complete & Next'} {/* Default for non-last, non-complete items */}
-                                {/* Add icon only if there's a next item or it's the last to be completed */}
-                                {isNextItemInModuleAvailable || (isLastItemInModule && !isItemCompletedInUserProgress) ? <ChevronRight className="ml-2 h-4 w-4" /> : null}
+                                {isLastItemInCourse && isItemCompletedInUserProgress ? 'Course Complete' : 
+                                isItemCompletedInUserProgress ? 'Next (Already Completed)' : 
+                                isLastItemInCourse ? 'Mark Complete & Finish Course' : 
+                                'Mark Complete & Next'} 
+                                {isNextItemAvailable || (isLastItemInCourse && !isItemCompletedInUserProgress) ? <ChevronRight className="ml-2 h-4 w-4" /> : null}
                             </Button>
                     </div>
                 </div>
@@ -502,24 +356,20 @@ export default function LearnCoursePage() {
 
         if (type === 'quiz') {
             const quiz = data as Quiz;
-             // Render the QuizTaking component
              return (
                  <div className="p-4 md:p-6 lg:p-8">
-                      {/* Pass isCourseCompleted to prevent quiz submission if course is done */}
                      <QuizTaking quiz={quiz} onComplete={handleQuizComplete} isCompleted={isItemCompletedInUserProgress || isCourseCompleted} />
-                     {/* Navigation Buttons for Quiz (only Previous is relevant here) */}
                      <div className="flex justify-between pt-6 border-t mt-8">
-                         <Button variant="outline" onClick={handlePrevious} disabled={currentIndexInModule === 0}>
+                         <Button variant="outline" onClick={handlePrevious} disabled={currentIndex === 0}>
                              <ChevronLeft className="mr-2 h-4 w-4" /> Previous
                          </Button>
-                         {/* Next button is handled by the QuizTaking component's onComplete */}
                           <Button disabled>Complete Quiz Above</Button>
                      </div>
                  </div>
              );
         }
 
-        return null; // Should not happen if currentContentItem is set
+        return null; 
     };
 
     const sidebarContent = (
@@ -536,7 +386,6 @@ export default function LearnCoursePage() {
                  <Progress value={userProgressData?.progress || 0} aria-label={`${course?.title} overall progress ${userProgressData?.progress || 0}%`} className="h-2"/>
              </div>
 
-              {/* Add Award icon if course is completed */}
              {isCourseCompleted && (
                  <div className="flex items-center gap-2 text-green-600 border border-green-200 bg-green-50 rounded-md p-2 mt-2">
                     <Award className="h-5 w-5" />
@@ -544,78 +393,40 @@ export default function LearnCoursePage() {
                  </div>
              )}
 
+            <h4 className="text-md font-semibold pt-2 border-t mt-4">Curriculum</h4>
+             <ScrollArea className="h-[calc(100vh-250px)]"> {/* Adjust height as needed */}
+              <ul className="space-y-1 mt-2">
+                  {curriculumItems.map((item, index) => {
+                      const Icon = item.type === 'lesson' ? FileText : HelpCircle;
+                      const isCompleted = completedItemIds.includes(item.id);
+                      const isCurrent = currentContentItem?.id === item.id;
+                      const isClickable = true; // All items are clickable for viewing
 
-             <Accordion type="multiple" className="w-full space-y-2">
-                  {(course?.modules || []).map((moduleTitle, moduleIndex) => {
-                      const itemsInModule = moduleItemsMap[moduleTitle] || [];
-                      const completedInModule = itemsInModule.filter(item => completedItemIds.includes(item.id)).length;
-                      const totalInModule = itemsInModule.length;
-                      const moduleProgress = totalInModule > 0 ? Math.round((completedInModule / totalInModule) * 100) : 0;
-                       const isModuleSelected = selectedModuleTitle === moduleTitle;
-                       // Module is considered "locked" only in the sense of preventing progress updates if course is complete.
-                       // Navigation should still be allowed.
-
-
-                       return (
-                          <AccordionItem value={moduleTitle} key={moduleTitle} className="border rounded-lg overflow-hidden bg-card">
-                              <AccordionTrigger
+                      return (
+                           <li key={item.id}>
+                              <Button
+                                  variant={isCurrent ? "secondary" : "ghost"}
                                   className={cn(
-                                      "px-4 py-3 text-left hover:no-underline hover:bg-muted/50",
-                                       isModuleSelected && "bg-primary/10", // Highlight selected module
+                                      "w-full justify-start h-auto py-2 px-2 text-left",
+                                       isCompleted && 'text-muted-foreground',
+                                       isCurrent && 'font-semibold'
                                   )}
-                                   onClick={() => handleModuleSelection(moduleTitle)} // Select module on trigger click
-                                   // Trigger is always enabled for selection
-                                >
-                                   <div className="flex-1 text-left">
-                                        <span className="font-medium flex items-center gap-2">
-                                            <BookOpen className="h-4 w-4 text-muted-foreground"/>
-                                            {moduleTitle}
-                                        </span>
-                                        <span className="text-xs text-muted-foreground block mt-1">
-                                            {completedInModule} / {totalInModule} items completed ({moduleProgress}%)
-                                         </span>
-                                    </div>
-                              </AccordionTrigger>
-                               <AccordionContent className="pl-8 pr-4 pb-2 pt-0">
-                                  <ul className="space-y-1 mt-2">
-                                      {itemsInModule.map((item, itemIndex) => {
-                                          const Icon = item.type === 'lesson' ? FileText : HelpCircle;
-                                          const isCompleted = completedItemIds.includes(item.id);
-                                          const isCurrent = currentContentItem?.id === item.id && isModuleSelected;
-                                           // Items are always clickable for viewing
-                                          const isClickable = true;
-
-                                          return (
-                                               <li key={item.id}>
-                                                  <Button
-                                                      variant={isCurrent ? "secondary" : "ghost"}
-                                                      className={cn(
-                                                          "w-full justify-start h-auto py-2 px-2 text-left",
-                                                           // Style for completed items
-                                                           isCompleted && 'text-muted-foreground',
-                                                           // Style for current item
-                                                           isCurrent && 'font-semibold'
-                                                      )}
-                                                       onClick={() => handleContentSelection(item, moduleTitle)} // Handle selection within module
-                                                       disabled={!isClickable} // Button is always clickable now
-                                                       title={!isClickable ? "Complete previous items or select this module" : ""}
-                                                  >
-                                                       <div className="flex items-center w-full">
-                                                            {isCompleted ? <CheckCircle className="h-4 w-4 mr-2 flex-shrink-0 text-green-500" /> :
-                                                              <Icon className="h-4 w-4 mr-2 flex-shrink-0 text-muted-foreground" />
-                                                             }
-                                                          <span className="flex-1 text-sm truncate">{item.data.title}</span>
-                                                       </div>
-                                                  </Button>
-                                              </li>
-                                          );
-                                      })}
-                                  </ul>
-                               </AccordionContent>
-                          </AccordionItem>
-                       );
+                                   onClick={() => handleContentSelection(item, index)}
+                                   disabled={!isClickable} 
+                                   title={!isClickable ? "Complete previous items" : ""}
+                              >
+                                   <div className="flex items-center w-full">
+                                        {isCompleted ? <CheckCircle className="h-4 w-4 mr-2 flex-shrink-0 text-green-500" /> :
+                                          <Icon className="h-4 w-4 mr-2 flex-shrink-0 text-muted-foreground" />
+                                         }
+                                      <span className="flex-1 text-sm truncate">{item.data.title}</span>
+                                   </div>
+                              </Button>
+                          </li>
+                      );
                   })}
-             </Accordion>
+              </ul>
+            </ScrollArea>
         </div>
     );
 
@@ -623,7 +434,6 @@ export default function LearnCoursePage() {
     if (isLoading) {
         return (
             <div className="flex h-screen bg-secondary">
-                {/* Sidebar Skeleton */}
                 <aside className="hidden md:flex md:flex-col w-72 lg:w-80 border-r bg-background p-4 space-y-4">
                      <Skeleton className="h-5 w-3/4" />
                      <Skeleton className="h-6 w-full" />
@@ -635,7 +445,6 @@ export default function LearnCoursePage() {
                      <Skeleton className="h-10 w-full" />
                      <Skeleton className="h-10 w-full" />
                 </aside>
-                {/* Main Content Skeleton */}
                 <main className="flex-1 flex flex-col overflow-hidden">
                     <header className="flex items-center justify-between p-4 border-b bg-background md:justify-end">
                          <Skeleton className="h-8 w-8 rounded md:hidden mr-4" />
@@ -661,19 +470,13 @@ export default function LearnCoursePage() {
         return <div className="flex h-screen items-center justify-center">Course not found or user data unavailable.</div>;
     }
 
-     // Standard learning layout (handles both in-progress and completed states via renderContent)
     return (
         <div className="flex h-screen bg-secondary">
-            {/* Sidebar (Desktop) */}
             <aside className="hidden md:flex md:flex-col w-72 lg:w-80 border-r bg-background overflow-y-auto">
                 {sidebarContent}
             </aside>
-
-            {/* Main Content Area */}
              <main className="flex-1 flex flex-col overflow-hidden">
-                 {/* Header */}
                  <header className="flex items-center justify-between p-4 border-b bg-background md:justify-end">
-                     {/* Mobile Sidebar Toggle */}
                      <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
                        <SheetTrigger asChild>
                          <Button variant="outline" size="icon" className="md:hidden mr-4">
@@ -681,22 +484,15 @@ export default function LearnCoursePage() {
                            <span className="sr-only">Toggle Course Menu</span>
                          </Button>
                        </SheetTrigger>
-                        <SheetContent side="left" className="w-72 p-0">
+                        <SheetContent side="left" className="w-72 p-0 overflow-y-auto">
                            {sidebarContent}
                          </SheetContent>
                      </Sheet>
-
-                      {/* Course Title (Mobile) */}
                       <h1 className="text-lg font-semibold truncate md:hidden">{course.title}</h1>
-
-                     {/* Actions/User Info */}
                      <div className="flex items-center gap-4">
-                        {/* Placeholder for user avatar/menu */}
                         <span className="text-sm font-medium">Welcome, {currentUser.name}!</span>
                      </div>
                  </header>
-
-                 {/* Content Body */}
                  <div className="flex-1 overflow-y-auto bg-background">
                     {renderContent()}
                  </div>

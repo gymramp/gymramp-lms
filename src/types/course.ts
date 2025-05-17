@@ -44,21 +44,20 @@ export interface Course {
   longDescription: string; // Detailed description
   imageUrl: string; // General image URL (can be used as fallback or specific purpose)
   featuredImageUrl?: string | null; // Optional: Primary image for display (e.g., course card)
-  modules: string[]; // Simple list of module titles for now
   level: 'Beginner' | 'Intermediate' | 'Advanced';
   duration: string; // e.g., "Approx. 6 hours"
   price: string; // e.g., "$199"
   curriculum: string[]; // Array of prefixed lesson/quiz IDs in order (e.g., 'lesson-abc', 'quiz-xyz')
-  moduleAssignments?: Record<string, string[]>; // Optional: Maps module title to array of prefixed item IDs
+  // modules: string[]; // REMOVED
+  // moduleAssignments?: Record<string, string[]>; // REMOVED
   quizzes?: Quiz[]; // Keep quizzes array (might be used elsewhere or legacy)
   isDeleted?: boolean; // For soft deletes
   deletedAt?: Timestamp | null; // Timestamp of soft deletion
 }
 
 // Type for the form data when adding/editing a course metadata (global library)
-// Ensure featuredImageUrl is included
-export type CourseFormData = Omit<Course, 'id' | 'modules' | 'curriculum' | 'moduleAssignments' | 'quizzes' | 'isDeleted' | 'deletedAt'> & {
-    numberOfModules: number;
+export type CourseFormData = Omit<Course, 'id' | 'curriculum' | 'quizzes' | 'isDeleted' | 'deletedAt'> & {
+    // numberOfModules: number; // REMOVED
     // featuredImageUrl is now handled by the base Omit, ensure it's optional in Course type
 };
 
@@ -120,3 +119,4 @@ export interface Program {
 export type ProgramFormData = Omit<Program, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'courseIds'> & {
   // courseIds will be handled separately
 };
+
