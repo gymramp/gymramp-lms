@@ -125,7 +125,7 @@ function CheckoutSetupFormContent({
 
     // Prepare revenueSharePartners for URL, handling undefined or empty array
     const revenueShareParams = formData.revenueSharePartners && formData.revenueSharePartners.length > 0
-        ? { revenueSharePartners: JSON.stringify(formData.revenueSharePartners.map(p => ({ name: p.name, company: p.companyName || null, percentage: p.percentage }))) }
+        ? { revenueSharePartners: JSON.stringify(formData.revenueSharePartners.map(p => ({ name: p.name, companyName: p.companyName || null, percentage: p.percentage }))) }
         : {};
 
 
@@ -195,12 +195,12 @@ function CheckoutSetupFormContent({
         </div>
 
         <Card>
-          <CardHeader className="flex justify-between items-center">
+          <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5" /> Revenue Share (Optional)</CardTitle>
               <CardDescription>If applicable, enter details for revenue share partners.</CardDescription>
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => appendRevShare({ name: '', companyName: '', percentage: '' })}>
+            <Button type="button" variant="outline" size="sm" onClick={() => appendRevShare({ name: '', companyName: '', percentage: 0 })}>
               <PlusCircle className="mr-2 h-4 w-4" /> Add Partner
             </Button>
           </CardHeader>
@@ -245,7 +245,7 @@ function CheckoutSetupFormContent({
                   variant="ghost"
                   size="icon"
                   onClick={() => removeRevShare(index)}
-                  className="md:col-span-1 text-destructive hover:bg-destructive/10"
+                  className="md:col-span-1 text-destructive hover:bg-destructive/10 justify-self-end md:justify-self-start"
                   aria-label="Remove partner"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -260,6 +260,7 @@ function CheckoutSetupFormContent({
                     <div key={index} className="text-sm font-medium text-destructive">
                         {error.name && <p>Partner {index+1} Name: {error.name.message}</p>}
                         {error.percentage && <p>Partner {index+1} Percentage: {error.percentage.message}</p>}
+                         {/* Add companyName error if needed */}
                     </div>
                 )
             ))}
