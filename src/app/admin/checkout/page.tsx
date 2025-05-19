@@ -15,7 +15,7 @@ import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { getAllCourses } from '@/lib/firestore-data';
 import type { Course } from '@/types/course';
-import type { User, RevenueSharePartner } from '@/types/user'; // RevenueSharePartner is now a type not an interface
+import type { User, RevenueSharePartner } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -47,6 +47,7 @@ const checkoutSetupFormSchema = z.object({
   selectedCourseIds: z.array(z.string()).min(1, "Please select at least one course."),
   // TODO: This form needs redesign to select Programs instead of Courses for pricing.
   // The discount and total calculation logic below is based on Course prices and will be incorrect.
+  // This will be further impacted by the new multi-tiered Program subscription model.
 });
 type CheckoutSetupFormValues = z.infer<typeof checkoutSetupFormSchema>;
 
@@ -54,8 +55,6 @@ interface CheckoutSetupFormContentProps {
   allCourses: Course[];
   selectedCourseIds: string[];
   onSelectedCourseIdsChange: (ids: string[]) => void;
-  // REMOVED: subtotalAmount, discountPercentInput, onDiscountPercentInputChange, appliedDiscountAmount, finalTotalAmount
-  // These will need to be recalculated based on Program selection in a future update.
   maxUsers: number | null;
   setMaxUsers: React.Dispatch<React.SetStateAction<number | null>>;
 }
@@ -64,7 +63,6 @@ function CheckoutSetupFormContent({
   allCourses,
   selectedCourseIds,
   onSelectedCourseIdsChange,
-  // REMOVED: subtotalAmount, discountPercentInput, onDiscountPercentInputChange, appliedDiscountAmount, finalTotalAmount
   maxUsers,
   setMaxUsers,
 }: CheckoutSetupFormContentProps) {
@@ -72,12 +70,14 @@ function CheckoutSetupFormContent({
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Placeholder for pricing logic - this needs to be updated to use Program prices.
-  const subtotalAmount = 0; // Placeholder
-  const discountPercentInput = ''; // Placeholder
-  const appliedDiscountAmount = 0; // Placeholder
-  const finalTotalAmount = 0; // Placeholder
-  const onDiscountPercentInputChange = (value: string) => {}; // Placeholder
+  // TODO: This entire pricing logic (subtotal, discount, finalTotal) is based on old Course prices
+  // and needs complete overhaul to support Program selection and their new multi-tiered pricing (base, first sub, second sub).
+  // For now, it will pass $0 to the payment step.
+  const subtotalAmount = 0; 
+  const discountPercentInput = ''; 
+  const appliedDiscountAmount = 0; 
+  const finalTotalAmount = 0; 
+  const onDiscountPercentInputChange = (value: string) => {}; 
 
   const setupForm = useForm<CheckoutSetupFormValues>({
     resolver: zodResolver(checkoutSetupFormSchema),
@@ -123,10 +123,10 @@ function CheckoutSetupFormContent({
 
   const onProceedToPayment = async (formData: CheckoutSetupFormValues) => {
     setIsProcessing(true);
-    // TODO: Recalculate finalTotalAmountCents based on Program pricing.
-    // For now, passing 0 for amount, which might be problematic if payment is actually required.
-    // This checkout flow needs a redesign for Program-based sales.
-    const finalTotalAmountCents = 0; // Math.round(finalTotalAmount * 100); // Placeholder
+    // TODO: Recalculate finalTotalAmountCents based on Program pricing (base + first sub or ongoing sub).
+    // This checkout flow needs a complete redesign for Program-based sales and subscription handling.
+    // The payment step will receive $0 until this is updated.
+    const finalTotalAmountCents = 0; 
 
     const revenueShareParams = formData.revenueSharePartners && formData.revenueSharePartners.length > 0
         ? { revenueSharePartners: JSON.stringify(formData.revenueSharePartners.map(p => ({ name: p.name, companyName: p.companyName || null, percentage: p.percentage, shareBasis: p.shareBasis }))) }
@@ -142,12 +142,12 @@ function CheckoutSetupFormContent({
       ...(formData.zipCode && { zipCode: formData.zipCode }),
       ...(formData.country && { country: formData.country }),
       ...revenueShareParams,
-      selectedCourseIds: formData.selectedCourseIds.join(','), // This still passes course IDs, but pricing is separate
+      selectedCourseIds: formData.selectedCourseIds.join(','), 
       ...(maxUsers !== null && maxUsers !== undefined && { maxUsers: String(maxUsers) }),
-      finalTotalAmountCents: String(finalTotalAmountCents), // Will be 0 for now
-      subtotalAmount: String(subtotalAmount), // Will be 0
-      appliedDiscountPercent: String(parseFloat(discountPercentInput) || 0), // Will be 0
-      appliedDiscountAmount: String(appliedDiscountAmount), // Will be 0
+      finalTotalAmountCents: String(finalTotalAmountCents), 
+      subtotalAmount: String(subtotalAmount), 
+      appliedDiscountPercent: String(parseFloat(discountPercentInput) || 0), 
+      appliedDiscountAmount: String(appliedDiscountAmount), 
     });
 
     toast({ title: "Information Saved", description: "Proceeding to payment..." });
@@ -249,6 +249,12 @@ function CheckoutSetupFormContent({
                   render={({ field: formField }) => (
                     <FormItem className="md:col-span-4 pt-2">
                       <FormLabel className="text-sm font-medium">Share Basis</FormLabel>
+                       {/* TODO: The labels "One-Time Program Price" and "Program Subscription Price" are now potentially misleading
+                                   with multi-tiered subscriptions. This section needs to be clearer once the Program's 
+                                   base, first sub, and second sub prices are selectable/visible for revenue share.
+                                   For now, 'coursePrice' refers to the Program's one-time base price, and 
+                                   'subscriptionPrice' would conceptually refer to *a* subscription price tier.
+                       */}
                       <FormControl>
                         <RadioGroup
                           onValueChange={formField.onChange}
@@ -257,11 +263,11 @@ function CheckoutSetupFormContent({
                         >
                           <FormItem className="flex items-center space-x-2">
                             <FormControl><RadioGroupItem value="coursePrice" id={`shareBasis-${index}-course`} /></FormControl>
-                            <FormLabel htmlFor={`shareBasis-${index}-course`} className="font-normal text-sm">One-Time Program Price</FormLabel> {/* Updated Label */}
+                            <FormLabel htmlFor={`shareBasis-${index}-course`} className="font-normal text-sm">Program Base Price (One-Time)</FormLabel> 
                           </FormItem>
                           <FormItem className="flex items-center space-x-2">
                             <FormControl><RadioGroupItem value="subscriptionPrice" id={`shareBasis-${index}-sub`} /></FormControl>
-                            <FormLabel htmlFor={`shareBasis-${index}-sub`} className="font-normal text-sm">Monthly Program Subscription</FormLabel> {/* Updated Label */}
+                            <FormLabel htmlFor={`shareBasis-${index}-sub`} className="font-normal text-sm">Program Subscription (Monthly)</FormLabel> 
                           </FormItem>
                         </RadioGroup>
                       </FormControl>
@@ -300,11 +306,12 @@ function CheckoutSetupFormContent({
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> Assign Courses to Brand</CardTitle></CardHeader>
           <CardContent>
-            {/* TODO: This section needs to be redesigned to select Programs if pricing is at the program level.
-                        Currently, it assigns individual courses, but their prices are no longer used for checkout total. */}
+            {/* TODO: This section still assigns individual courses. It should ideally allow selection of Programs.
+                        The pricing (and thus revenue share calculation) will depend on Program selection.
+                        This section's utility is limited until Program selection is implemented for sales. */}
             <p className="text-sm text-muted-foreground mb-2 p-2 border border-dashed rounded-md">
-              Note: Pricing is now managed at the Program level. This section assigns individual courses to the brand.
-              The checkout total will be based on selected Programs (once that functionality is implemented).
+              Note: Pricing and revenue share calculations are now based on Programs. This section assigns individual courses to the brand for access,
+              but the actual sale amount will be determined by a Program (once Program selection is added to this checkout).
             </p>
             <FormField
               control={setupForm.control}
@@ -327,9 +334,7 @@ function CheckoutSetupFormContent({
                           <FormLabel htmlFor={`course-${course.id}`} className="flex justify-between items-center w-full cursor-pointer">
                             <div className="flex flex-col">
                                 <span>{course.title} <Badge variant="outline" className="ml-2">{course.level}</Badge></span>
-                                {/* Subscription Price removed from individual course display here as price has moved to Program */}
                             </div>
-                            {/* Price removed from individual course display here */}
                           </FormLabel>
                         </FormItem>
                       ))}
@@ -346,11 +351,12 @@ function CheckoutSetupFormContent({
           <Card className="lg:col-span-2">
             <CardHeader><CardTitle className="flex items-center gap-2"><Tag className="h-5 w-5" /> Account Order Summary</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              {/* TODO: This summary is based on old course pricing logic and needs to be updated for Program pricing. */}
+              {/* TODO: This summary is based on old course pricing logic and needs to be completely updated for Program pricing
+                          and the new multi-tiered subscription model. It will show $0 for now. */}
               <p className="text-sm text-destructive p-2 border border-destructive/50 rounded-md">
-                Note: The order summary below is based on previous course pricing.
-                This section needs to be updated to reflect Program-based pricing and selection.
-                The actual amount charged on the next page will be based on the new Program pricing model (once fully implemented).
+                Note: The order summary below is a placeholder. Pricing is now based on Programs.
+                This section needs to be updated to reflect Program selection and its associated pricing (one-time base, and potential first/second tier subscriptions).
+                The actual amount charged on the next page will be $0 until Program selection and its pricing are integrated here.
               </p>
               <div className="flex justify-between text-sm"><span>Subtotal (One-time):</span> <span className="font-medium">${subtotalAmount.toFixed(2)}</span></div>
               <FormItem>
@@ -408,7 +414,6 @@ export default function AdminCheckoutPage() {
   const { toast } = useToast();
 
   const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
-  // REMOVED: State for subtotal, discount, finalTotal based on old course pricing
   const [maxUsers, setMaxUsers] = useState<number | null>(5);
 
   useEffect(() => {
@@ -454,7 +459,6 @@ export default function AdminCheckoutPage() {
     }
   }, [currentUser, isCheckingAuth, toast]);
 
-  // REMOVED: useEffects for calculating subtotal, discount, finalTotal based on old course pricing
 
   if (isCheckingAuth || !currentUser) {
     return ( <div className="container mx-auto py-12 text-center"> <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /> <p className="mt-4 text-muted-foreground">Verifying access…</p> </div> );
@@ -466,18 +470,19 @@ export default function AdminCheckoutPage() {
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20">
       <h1 className="text-3xl font-bold tracking-tight text-primary mb-8">New Customer Checkout - Step 1: Setup</h1>
-      {/* TODO: Update this page to select Programs and calculate pricing based on Program prices. */}
+      {/* TODO: This page needs a complete redesign to allow selection of Programs and calculate pricing 
+                  based on Program prices (one-time base, and the new multi-tiered subscription model). 
+                  The current course selection and order summary are placeholders. */}
       <p className="text-lg text-destructive p-4 border border-destructive/50 rounded-md mb-6">
-        <strong>Attention:</strong> This checkout form currently selects individual courses, but pricing has moved to Programs.
-        The order summary and final amount calculation on this page are temporarily disabled and will show $0.
-        This page needs to be redesigned to allow selection of Programs and calculate totals based on Program prices.
-        The next step (payment) will also reflect $0 until this is updated.
+        <strong>Attention:</strong> This checkout form is under major reconstruction due to pricing model changes.
+        It currently selects individual courses, but pricing (and revenue share) is now based on Programs with multi-tiered subscriptions.
+        The order summary will show $0, and the payment step will reflect this.
+        This page requires significant updates to enable Program selection and accurate pricing for one-time and subscription models.
       </p>
       <CheckoutSetupFormContent
         allCourses={allCourses}
         selectedCourseIds={selectedCourseIds}
         onSelectedCourseIdsChange={setSelectedCourseIds}
-        // REMOVED: Props for subtotal, discount, finalTotal
         maxUsers={maxUsers}
         setMaxUsers={setMaxUsers}
       />

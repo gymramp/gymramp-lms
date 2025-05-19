@@ -30,12 +30,12 @@ import { useToast } from '@/hooks/use-toast';
 import { createProgram, updateProgram } from '@/lib/firestore-data';
 import { Loader2 } from 'lucide-react';
 
-// Updated Zod schema to include price and subscriptionPrice
 const programFormSchema = z.object({
   title: z.string().min(3, { message: 'Program title must be at least 3 characters.' }),
   description: z.string().min(10, { message: 'Description must be at least 10 characters.' }),
   price: z.string().regex(/^\$?\d+(\.\d{1,2})?$/, { message: 'Please enter a valid price (e.g., $199 or 199.99).' }),
-  subscriptionPrice: z.string().regex(/^\$?\d+(\.\d{1,2})?(\/(mo|month))?$/i, { message: 'Valid format: $29/mo or 29.99' }).optional().or(z.literal('')),
+  firstSubscriptionPrice: z.string().regex(/^\$?\d+(\.\d{1,2})?(\/(mo|month))?$/i, { message: 'Valid format: $29/mo or 29.99' }).optional().or(z.literal('')),
+  secondSubscriptionPrice: z.string().regex(/^\$?\d+(\.\d{1,2})?(\/(mo|month))?$/i, { message: 'Valid format: $19/mo or 19.99' }).optional().or(z.literal('')),
 });
 
 type ProgramFormValues = z.infer<typeof programFormSchema>;
@@ -58,7 +58,8 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
       title: '',
       description: '',
       price: '',
-      subscriptionPrice: '',
+      firstSubscriptionPrice: '',
+      secondSubscriptionPrice: '',
     },
   });
 
@@ -69,10 +70,11 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
           title: initialData.title,
           description: initialData.description,
           price: initialData.price,
-          subscriptionPrice: initialData.subscriptionPrice || '',
+          firstSubscriptionPrice: initialData.firstSubscriptionPrice || '',
+          secondSubscriptionPrice: initialData.secondSubscriptionPrice || '',
         });
       } else {
-        form.reset({ title: '', description: '', price: '', subscriptionPrice: '' });
+        form.reset({ title: '', description: '', price: '', firstSubscriptionPrice: '', secondSubscriptionPrice: '' });
       }
     }
   }, [initialData, form, isOpen]);
@@ -85,7 +87,8 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
         title: data.title,
         description: data.description,
         price: data.price,
-        subscriptionPrice: data.subscriptionPrice || null,
+        firstSubscriptionPrice: data.firstSubscriptionPrice || null,
+        secondSubscriptionPrice: data.secondSubscriptionPrice || null,
       };
 
       if (isEditing && initialData) {
@@ -161,7 +164,7 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
               name="price"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>One-time Price</FormLabel>
+                  <FormLabel>One-time Base Price</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g., $499 or 499.99" {...field} />
                   </FormControl>
@@ -171,12 +174,25 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
             />
             <FormField
               control={form.control}
-              name="subscriptionPrice"
+              name="firstSubscriptionPrice"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Subscription Price (Optional)</FormLabel>
+                  <FormLabel>First Subscription Price (Months 4-12, Optional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., $49/mo or 49.99" {...field} value={field.value ?? ''} />
+                    <Input placeholder="e.g., $29/mo or 29.99" {...field} value={field.value ?? ''} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="secondSubscriptionPrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Second Subscription Price (Month 13+ onwards, Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., $19/mo or 19.99" {...field} value={field.value ?? ''} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

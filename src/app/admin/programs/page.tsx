@@ -32,7 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { PlusCircle, MoreHorizontal, Trash2, Edit, BookOpen, Search, Layers, Loader2, DollarSign } from 'lucide-react'; // Added DollarSign
+import { PlusCircle, MoreHorizontal, Trash2, Edit, BookOpen, Search, Layers, Loader2, DollarSign } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Program } from '@/types/course';
 import type { User } from '@/types/user';
@@ -195,8 +195,9 @@ export default function AdminProgramsPage() {
                   <TableHead>Title</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead className="text-center">Courses</TableHead>
-                  <TableHead><DollarSign className="inline h-4 w-4 mr-1" />Price</TableHead>
-                  <TableHead><DollarSign className="inline h-4 w-4 mr-1" />Subscription Price</TableHead>
+                  <TableHead><DollarSign className="inline h-4 w-4 mr-1" />Base Price</TableHead>
+                  <TableHead><DollarSign className="inline h-4 w-4 mr-1" />Sub (M4-12)</TableHead>
+                  <TableHead><DollarSign className="inline h-4 w-4 mr-1" />Sub (M13+)</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -211,7 +212,8 @@ export default function AdminProgramsPage() {
                       <Badge variant="secondary">{program.courseIds?.length || 0}</Badge>
                     </TableCell>
                     <TableCell>{program.price}</TableCell>
-                    <TableCell>{program.subscriptionPrice || 'N/A'}</TableCell>
+                    <TableCell>{program.firstSubscriptionPrice || 'N/A'}</TableCell>
+                    <TableCell>{program.secondSubscriptionPrice || 'N/A'}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

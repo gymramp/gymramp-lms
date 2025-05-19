@@ -46,15 +46,13 @@ export interface Course {
   featuredImageUrl?: string | null;
   level: 'Beginner' | 'Intermediate' | 'Advanced';
   duration: string; // e.g., "Approx. 6 hours"
-  // REMOVED: price: string;
-  // REMOVED: subscriptionPrice?: string | null;
   curriculum: string[];
   isDeleted?: boolean;
   deletedAt?: Timestamp | null;
 }
 
 // Type for the form data when adding/editing a course metadata (global library)
-export type CourseFormData = Omit<Course, 'id' | 'isDeleted' | 'deletedAt'>;
+export type CourseFormData = Omit<Course, 'id' | 'isDeleted' | 'deletedAt' | 'curriculum'>;
 
 
 // Type for the form data when adding/editing a lesson
@@ -101,8 +99,9 @@ export interface Program {
   title: string;
   description: string;
   courseIds: string[];
-  price: string; // e.g., "$499"
-  subscriptionPrice?: string | null; // e.g., "$49/mo"
+  price: string; // e.g., "$499" (One-time base price)
+  firstSubscriptionPrice?: string | null; // e.g., "$29/mo" (for months 4-12)
+  secondSubscriptionPrice?: string | null; // e.g., "$19/mo" (for month 13+ onwards)
   isDeleted?: boolean;
   deletedAt?: Timestamp | null;
   createdAt?: Timestamp;
@@ -112,6 +111,7 @@ export interface Program {
 // Type for form data when adding/editing a Program
 export type ProgramFormData = Omit<Program, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'courseIds'> & {
   price: string;
-  subscriptionPrice?: string | null;
+  firstSubscriptionPrice?: string | null;
+  secondSubscriptionPrice?: string | null;
 };
 

@@ -82,10 +82,9 @@ export async function getCourseById(courseId: string): Promise<Course | null> {
 export async function addCourse(courseData: CourseFormData): Promise<Course | null> {
     return retryOperation(async () => {
         const coursesRef = collection(db, COURSES_COLLECTION);
-        const { ...restOfCourseData } = courseData; // Destructure to exclude price fields
+        const { ...restOfCourseData } = courseData; 
         const newCourseDoc = {
             ...restOfCourseData,
-            // price and subscriptionPrice are no longer part of CourseFormData for creation
             curriculum: [],
             isDeleted: false,
             deletedAt: null,
@@ -111,15 +110,12 @@ export async function updateCourseMetadata(courseId: string, courseData: CourseF
              throw new Error("Course not found or is soft-deleted for update.");
         }
         
-        const { ...restOfCourseData } = courseData; // Destructure to exclude price fields
+        const { ...restOfCourseData } = courseData; 
         const updatedDocData: Partial<Course> = {
             ...restOfCourseData,
-            // price and subscriptionPrice are no longer part of CourseFormData for update
             updatedAt: serverTimestamp(),
         };
         delete (updatedDocData as any).curriculum;
-        delete (updatedDocData as any).price; // Ensure old price fields are not accidentally passed
-        delete (updatedDocData as any).subscriptionPrice;
 
 
         await updateDoc(courseRef, updatedDocData);
@@ -328,7 +324,7 @@ export async function deleteQuiz(quizId: string): Promise<boolean> {
 
 // --- Question Management Functions (within a Quiz) ---
 
-export type QuestionPayload = { // Renamed from QuestionFormData to avoid conflict if used directly
+export type QuestionPayload = {
     type: QuestionType;
     text: string;
     options: string[];
@@ -351,7 +347,7 @@ export async function addQuestionToQuiz(quizId: string, questionData: QuestionPa
             id: questionId,
             type: questionData.type,
             text: questionData.text,
-            options: questionData.options, // Directly use the passed options array
+            options: questionData.options, 
             correctAnswer: questionData.correctAnswer,
         };
 
@@ -384,7 +380,7 @@ export async function updateQuestion(quizId: string, questionId: string, questio
                     ...q, 
                     type: questionData.type,
                     text: questionData.text,
-                    options: questionData.options, // Directly use the passed options array
+                    options: questionData.options, 
                     correctAnswer: questionData.correctAnswer,
                 };
                  return updatedQuestionData;
@@ -462,7 +458,8 @@ export async function createProgram(programData: ProgramFormData): Promise<Progr
             title: programData.title,
             description: programData.description,
             price: programData.price,
-            subscriptionPrice: programData.subscriptionPrice || null,
+            firstSubscriptionPrice: programData.firstSubscriptionPrice || null,
+            secondSubscriptionPrice: programData.secondSubscriptionPrice || null,
             courseIds: [], 
             isDeleted: false,
             deletedAt: null,
@@ -516,10 +513,17 @@ export async function updateProgram(programId: string, programData: Partial<Prog
         if (programData.title !== undefined) dataToUpdate.title = programData.title;
         if (programData.description !== undefined) dataToUpdate.description = programData.description;
         if (programData.price !== undefined) dataToUpdate.price = programData.price;
-        if (programData.subscriptionPrice !== undefined) dataToUpdate.subscriptionPrice = programData.subscriptionPrice || null;
+        if (programData.firstSubscriptionPrice !== undefined) dataToUpdate.firstSubscriptionPrice = programData.firstSubscriptionPrice || null;
+        if (programData.secondSubscriptionPrice !== undefined) dataToUpdate.secondSubscriptionPrice = programData.secondSubscriptionPrice || null;
 
 
-        if (Object.keys(dataToUpdate).length <= 1 && !dataToUpdate.title && !dataToUpdate.description && !dataToUpdate.price && dataToUpdate.subscriptionPrice === undefined) { 
+        if (Object.keys(dataToUpdate).length <= 1 && 
+            !dataToUpdate.title && 
+            !dataToUpdate.description && 
+            !dataToUpdate.price && 
+            dataToUpdate.firstSubscriptionPrice === undefined && 
+            dataToUpdate.secondSubscriptionPrice === undefined
+        ) { 
             const currentDoc = await getDoc(programRef);
             return currentDoc.exists() ? {id: currentDoc.id, ...currentDoc.data()} as Program : null;
         }
