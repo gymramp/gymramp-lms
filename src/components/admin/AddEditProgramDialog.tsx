@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -30,9 +30,12 @@ import { useToast } from '@/hooks/use-toast';
 import { createProgram, updateProgram } from '@/lib/firestore-data';
 import { Loader2 } from 'lucide-react';
 
+// Updated Zod schema to include price and subscriptionPrice
 const programFormSchema = z.object({
   title: z.string().min(3, { message: 'Program title must be at least 3 characters.' }),
   description: z.string().min(10, { message: 'Description must be at least 10 characters.' }),
+  price: z.string().regex(/^\$?\d+(\.\d{1,2})?$/, { message: 'Please enter a valid price (e.g., $199 or 199.99).' }),
+  subscriptionPrice: z.string().regex(/^\$?\d+(\.\d{1,2})?(\/(mo|month))?$/i, { message: 'Valid format: $29/mo or 29.99' }).optional().or(z.literal('')),
 });
 
 type ProgramFormValues = z.infer<typeof programFormSchema>;
@@ -54,6 +57,8 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
     defaultValues: {
       title: '',
       description: '',
+      price: '',
+      subscriptionPrice: '',
     },
   });
 
@@ -63,9 +68,11 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
         form.reset({
           title: initialData.title,
           description: initialData.description,
+          price: initialData.price,
+          subscriptionPrice: initialData.subscriptionPrice || '',
         });
       } else {
-        form.reset({ title: '', description: '' });
+        form.reset({ title: '', description: '', price: '', subscriptionPrice: '' });
       }
     }
   }, [initialData, form, isOpen]);
@@ -77,6 +84,8 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
       const programData: ProgramFormData = {
         title: data.title,
         description: data.description,
+        price: data.price,
+        subscriptionPrice: data.subscriptionPrice || null,
       };
 
       if (isEditing && initialData) {
@@ -142,6 +151,32 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
                   <FormLabel>Description</FormLabel>
                   <FormControl>
                     <Textarea rows={3} placeholder="A brief overview of the program..." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="price"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>One-time Price</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., $499 or 499.99" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="subscriptionPrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Subscription Price (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., $49/mo or 49.99" {...field} value={field.value ?? ''} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

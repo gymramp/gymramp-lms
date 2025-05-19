@@ -178,8 +178,8 @@ export default function AdminCoursesPage() {
                   <TableHead>Level</TableHead>
                   <TableHead>Curriculum Items</TableHead>
                   <TableHead>Quizzes (In Curriculum)</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Subscription Price</TableHead>
+                  {/* REMOVED: <TableHead>Price</TableHead> */}
+                  {/* REMOVED: <TableHead>Subscription Price</TableHead> */}
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -192,8 +192,8 @@ export default function AdminCoursesPage() {
                     </TableCell>
                     <TableCell>{course.curriculum?.length || 0}</TableCell>
                     <TableCell>{course.curriculum?.filter(id => id.startsWith('quiz-')).length || 0}</TableCell>
-                    <TableCell>{course.price}</TableCell>
-                    <TableCell>{course.subscriptionPrice || 'N/A'}</TableCell>
+                    {/* REMOVED: <TableCell>{course.price}</TableCell> */}
+                    {/* REMOVED: <TableCell>{course.subscriptionPrice || 'N/A'}</TableCell> */}
                     <TableCell className="text-right space-x-1">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

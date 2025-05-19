@@ -14,14 +14,14 @@ import {
     serverTimestamp,
     arrayUnion,
     arrayRemove,
-    Timestamp // Import Timestamp
+    Timestamp
 } from 'firebase/firestore';
 import type { Course, Lesson, Quiz, Question, CourseFormData, LessonFormData, QuizFormData, QuestionFormData, QuestionType, Program, ProgramFormData } from '@/types/course';
 
 const COURSES_COLLECTION = 'courses';
 const LESSONS_COLLECTION = 'lessons';
 const QUIZZES_COLLECTION = 'quizzes';
-const PROGRAMS_COLLECTION = 'programs'; // New collection for programs
+const PROGRAMS_COLLECTION = 'programs';
 
 // --- Retry Logic Helper ---
 const MAX_RETRIES = 5;
@@ -35,14 +35,14 @@ async function retryOperation<T>(operation: () => Promise<T>, maxRetries = MAX_R
         } catch (error: any) {
             if (attempt === maxRetries) {
                 console.error(`Max retries (${maxRetries}) reached. Operation failed: ${error.message}`);
-                throw error; // Re-throw the last error
+                throw error;
             }
             if (error.name === 'AbortError' || (error.code === 'unavailable' && error.message?.includes('IndexedDB'))) {
                 console.warn(`Firestore IndexedDB operation failed (attempt ${attempt}/${maxRetries}), likely due to tab conflict or browser issue. Not retrying immediately.`);
                 throw new Error(`Firestore persistence error: ${error.message}. Please close other tabs or check browser settings.`);
             }
 
-            const delay = Math.min(Math.pow(2, attempt) * baseDelay, 10000); // Exponential backoff, max 10 seconds
+            const delay = Math.min(Math.pow(2, attempt) * baseDelay, 10000);
             console.warn(`Operation failed (attempt ${attempt}/${maxRetries}): ${error.message}. Retrying in ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
             attempt++;
@@ -53,10 +53,6 @@ async function retryOperation<T>(operation: () => Promise<T>, maxRetries = MAX_R
 
 // --- Course Library Functions ---
 
-/**
- * Fetches all non-soft-deleted courses from the Firestore database.
- * @returns {Promise<Course[]>} A promise that resolves to an array of courses.
- */
 export async function getAllCourses(): Promise<Course[]> {
     return retryOperation(async () => {
         const coursesRef = collection(db, COURSES_COLLECTION);
@@ -70,11 +66,6 @@ export async function getAllCourses(): Promise<Course[]> {
     });
 }
 
-/**
- * Fetches a single non-soft-deleted course by its ID.
- * @param {string} courseId - The ID of the course to fetch.
- * @returns {Promise<Course | null>} A promise that resolves to the course or null if not found or soft-deleted.
- */
 export async function getCourseById(courseId: string): Promise<Course | null> {
      if (!courseId) return null;
     return retryOperation(async () => {
@@ -88,18 +79,14 @@ export async function getCourseById(courseId: string): Promise<Course | null> {
     });
 }
 
-/**
- * Adds a new course to the Firestore database.
- * @param {CourseFormData} courseData - The data for the new course.
- * @returns {Promise<Course | null>} A promise that resolves to the newly created course or null on failure.
- */
 export async function addCourse(courseData: CourseFormData): Promise<Course | null> {
     return retryOperation(async () => {
         const coursesRef = collection(db, COURSES_COLLECTION);
-        // Removed numberOfModules from destructuring and moduleTitles/moduleAssignments logic
+        const { ...restOfCourseData } = courseData; // Destructure to exclude price fields
         const newCourseDoc = {
-            ...courseData,
-            curriculum: [], // Initialize with an empty curriculum (flat list)
+            ...restOfCourseData,
+            // price and subscriptionPrice are no longer part of CourseFormData for creation
+            curriculum: [],
             isDeleted: false,
             deletedAt: null,
             createdAt: serverTimestamp(),
@@ -115,31 +102,24 @@ export async function addCourse(courseData: CourseFormData): Promise<Course | nu
     });
 }
 
-/**
- * Updates an existing course's metadata (excluding curriculum).
- * @param {string} courseId - The ID of the course to update.
- * @param {CourseFormData} courseData - The data to update.
- * @returns {Promise<Course | null>} A promise that resolves to the updated course or null on failure.
- */
 export async function updateCourseMetadata(courseId: string, courseData: CourseFormData): Promise<Course | null> {
      if (!courseId) return null;
     return retryOperation(async () => {
         const courseRef = doc(db, COURSES_COLLECTION, courseId);
-        // Removed numberOfModules from destructuring and moduleTitles logic
         const currentDocSnap = await getDoc(courseRef);
         if (!currentDocSnap.exists() || currentDocSnap.data().isDeleted === true) {
              throw new Error("Course not found or is soft-deleted for update.");
         }
-        const currentData = currentDocSnap.data() as Course;
         
-        const updatedDocData: Partial<Course> = { // Use Partial<Course> to allow partial updates
-            ...courseData, // Apply new metadata from courseData
+        const { ...restOfCourseData } = courseData; // Destructure to exclude price fields
+        const updatedDocData: Partial<Course> = {
+            ...restOfCourseData,
+            // price and subscriptionPrice are no longer part of CourseFormData for update
             updatedAt: serverTimestamp(),
         };
-        // Remove fields that should not be updated by this function if they exist in courseData by mistake
-        delete (updatedDocData as any).curriculum; 
-        // delete (updatedDocData as any).modules; // modules field is removed
-        // delete (updatedDocData as any).moduleAssignments; // moduleAssignments field is removed
+        delete (updatedDocData as any).curriculum;
+        delete (updatedDocData as any).price; // Ensure old price fields are not accidentally passed
+        delete (updatedDocData as any).subscriptionPrice;
 
 
         await updateDoc(courseRef, updatedDocData);
@@ -152,12 +132,6 @@ export async function updateCourseMetadata(courseId: string, courseData: CourseF
     });
 }
 
-/**
- * Updates the curriculum order for a non-soft-deleted course.
- * @param {string} courseId - The ID of the course to update.
- * @param {string[]} curriculum - The ordered array of prefixed lesson/quiz IDs.
- * @returns {Promise<boolean>} True if successful, false otherwise.
- */
 export const updateCourseCurriculum = async (courseId: string, curriculum: string[]): Promise<boolean> => {
     if (!courseId) return false;
     return retryOperation(async () => {
@@ -167,20 +141,12 @@ export const updateCourseCurriculum = async (courseId: string, curriculum: strin
 
         await updateDoc(courseRef, {
             curriculum: curriculum,
-            // moduleAssignments: moduleAssignments || {}, // REMOVED
             updatedAt: serverTimestamp(),
         });
         return true;
     });
 };
 
-// updateCourseModules function is removed as it's no longer needed.
-
-/**
- * Soft deletes a course from Firestore by setting isDeleted to true and deletedAt.
- * @param {string} courseId - The ID of the course to soft delete.
- * @returns {Promise<boolean>} True if successful, false otherwise.
- */
 export async function deleteCourse(courseId: string): Promise<boolean> {
      if (!courseId) return false;
     return retryOperation(async () => {
@@ -193,11 +159,6 @@ export async function deleteCourse(courseId: string): Promise<boolean> {
 
 // --- Lesson Library Functions ---
 
-/**
- * Creates a new standalone lesson in the Firestore database. Initializes with isDeleted: false and deletedAt: null.
- * @param {LessonFormData} lessonData - Data for the new lesson.
- * @returns {Promise<Lesson | null>} The created lesson object or null on failure.
- */
 export async function createLesson(lessonData: LessonFormData): Promise<Lesson | null> {
     return retryOperation(async () => {
         const lessonsRef = collection(db, LESSONS_COLLECTION);
@@ -223,10 +184,6 @@ export async function createLesson(lessonData: LessonFormData): Promise<Lesson |
     });
 }
 
-/**
- * Fetches all non-soft-deleted standalone lessons from the Firestore database.
- * @returns {Promise<Lesson[]>} An array of all lessons.
- */
 export async function getAllLessons(): Promise<Lesson[]> {
     return retryOperation(async () => {
         const lessonsRef = collection(db, LESSONS_COLLECTION);
@@ -240,11 +197,6 @@ export async function getAllLessons(): Promise<Lesson[]> {
     });
 }
 
-/**
- * Fetches a single non-soft-deleted standalone lesson by its ID.
- * @param {string} lessonId - The ID of the lesson to fetch.
- * @returns {Promise<Lesson | null>} The lesson object or null if not found or soft-deleted.
- */
 export async function getLessonById(lessonId: string): Promise<Lesson | null> {
      if (!lessonId) return null;
     return retryOperation(async () => {
@@ -258,12 +210,6 @@ export async function getLessonById(lessonId: string): Promise<Lesson | null> {
     });
 }
 
-/**
- * Updates an existing standalone lesson in Firestore.
- * @param {string} lessonId - The ID of the lesson to update.
- * @param {Partial<LessonFormData>} lessonData - The data to update.
- * @returns {Promise<Lesson | null>} The updated lesson object or null on failure.
- */
 export async function updateLesson(lessonId: string, lessonData: Partial<LessonFormData>): Promise<Lesson | null> {
      if (!lessonId) return null;
     return retryOperation(async () => {
@@ -295,11 +241,6 @@ export async function updateLesson(lessonId: string, lessonData: Partial<LessonF
     });
 }
 
-/**
- * Soft deletes a standalone lesson from Firestore by setting isDeleted to true and deletedAt.
- * @param {string} lessonId - The ID of the lesson to soft delete.
- * @returns {Promise<boolean>} True if soft deletion was successful, false otherwise.
- */
 export async function deleteLesson(lessonId: string): Promise<boolean> {
      if (!lessonId) return false;
     return retryOperation(async () => {
@@ -312,11 +253,6 @@ export async function deleteLesson(lessonId: string): Promise<boolean> {
 
 // --- Quiz Library Functions ---
 
-/**
- * Creates a new standalone quiz in the Firestore database.
- * @param {QuizFormData} quizData - Data for the new quiz.
- * @returns {Promise<Quiz | null>} The created quiz object or null on failure.
- */
 export async function createQuiz(quizData: QuizFormData): Promise<Quiz | null> {
     return retryOperation(async () => {
         const quizzesRef = collection(db, QUIZZES_COLLECTION);
@@ -338,10 +274,6 @@ export async function createQuiz(quizData: QuizFormData): Promise<Quiz | null> {
     });
 }
 
-/**
- * Fetches all non-soft-deleted standalone quizzes from the Firestore database.
- * @returns {Promise<Quiz[]>} An array of all quizzes.
- */
 export async function getAllQuizzes(): Promise<Quiz[]> {
     return retryOperation(async () => {
         const quizzesRef = collection(db, QUIZZES_COLLECTION);
@@ -355,11 +287,6 @@ export async function getAllQuizzes(): Promise<Quiz[]> {
     });
 }
 
-/**
- * Fetches a single non-soft-deleted standalone quiz by its ID.
- * @param {string} quizId - The ID of the quiz to fetch.
- * @returns {Promise<Quiz | null>} The quiz object or null if not found or soft-deleted.
- */
 export async function getQuizById(quizId: string): Promise<Quiz | null> {
      if (!quizId) return null;
     return retryOperation(async () => {
@@ -373,12 +300,6 @@ export async function getQuizById(quizId: string): Promise<Quiz | null> {
     });
 }
 
-/**
- * Updates an existing standalone quiz in Firestore.
- * @param {string} quizId - The ID of the quiz to update.
- * @param {Partial<QuizFormData>} quizData - The data to update.
- * @returns {Promise<Quiz | null>} The updated quiz object or null on failure.
- */
 export async function updateQuiz(quizId: string, quizData: Partial<QuizFormData>): Promise<Quiz | null> {
      if (!quizId) return null;
     return retryOperation(async () => {
@@ -396,11 +317,6 @@ export async function updateQuiz(quizId: string, quizData: Partial<QuizFormData>
     });
 }
 
-/**
- * Soft deletes a standalone quiz from Firestore by setting isDeleted to true and deletedAt.
- * @param {string} quizId - The ID of the quiz to soft delete.
- * @returns {Promise<boolean>} True if soft deletion was successful, false otherwise.
- */
 export async function deleteQuiz(quizId: string): Promise<boolean> {
      if (!quizId) return false;
     return retryOperation(async () => {
@@ -412,7 +328,7 @@ export async function deleteQuiz(quizId: string): Promise<boolean> {
 
 // --- Question Management Functions (within a Quiz) ---
 
-type QuestionPayload = {
+export type QuestionPayload = { // Renamed from QuestionFormData to avoid conflict if used directly
     type: QuestionType;
     text: string;
     options: string[];
@@ -420,12 +336,6 @@ type QuestionPayload = {
 };
 
 
-/**
- * Adds a new question to a specific non-soft-deleted quiz.
- * @param {string} quizId - The ID of the quiz to add the question to.
- * @param {QuestionPayload} questionData - The data for the new question, including the final 'options' array.
- * @returns {Promise<Question | null>} The newly created question object or null on failure.
- */
 export async function addQuestionToQuiz(quizId: string, questionData: QuestionPayload): Promise<Question | null> {
     if (!quizId) return null;
     return retryOperation(async () => {
@@ -441,7 +351,7 @@ export async function addQuestionToQuiz(quizId: string, questionData: QuestionPa
             id: questionId,
             type: questionData.type,
             text: questionData.text,
-            options: questionData.options,
+            options: questionData.options, // Directly use the passed options array
             correctAnswer: questionData.correctAnswer,
         };
 
@@ -457,13 +367,6 @@ export async function addQuestionToQuiz(quizId: string, questionData: QuestionPa
     });
 }
 
-/**
- * Updates an existing question within a specific non-soft-deleted quiz's questions array.
- * @param {string} quizId - The ID of the quiz containing the question.
- * @param {string} questionId - The ID of the question to update.
- * @param {QuestionPayload} questionData - The new data for the question, including the final 'options' array.
- * @returns {Promise<Question | null>} The updated question object or null on failure.
- */
 export async function updateQuestion(quizId: string, questionId: string, questionData: QuestionPayload): Promise<Question | null> {
      if (!quizId || !questionId) return null;
     return retryOperation(async () => {
@@ -481,7 +384,7 @@ export async function updateQuestion(quizId: string, questionId: string, questio
                     ...q, 
                     type: questionData.type,
                     text: questionData.text,
-                    options: questionData.options, 
+                    options: questionData.options, // Directly use the passed options array
                     correctAnswer: questionData.correctAnswer,
                 };
                  return updatedQuestionData;
@@ -497,13 +400,6 @@ export async function updateQuestion(quizId: string, questionId: string, questio
     });
 }
 
-
-/**
- * Deletes a question from a specific non-soft-deleted quiz's questions array.
- * @param {string} quizId - The ID of the quiz containing the question.
- * @param {string} questionId - The ID of the question to delete.
- * @returns {Promise<boolean>} True if deletion was successful, false otherwise.
- */
 export async function deleteQuestion(quizId: string, questionId: string): Promise<boolean> {
      if (!quizId || !questionId) return false;
     return retryOperation(async () => {
@@ -525,11 +421,6 @@ export async function deleteQuestion(quizId: string, questionId: string): Promis
     }, 3);
 }
 
-
-/**
- * Helper function to remove a lesson/quiz from all non-soft-deleted course curriculums.
- * @param {string} prefixedItemId - The prefixed ID (e.g., 'lesson-abc', 'quiz-xyz').
- */
 async function removeItemFromAllCurriculums(prefixedItemId: string): Promise<void> {
    return retryOperation(async () => {
        const coursesRef = collection(db, COURSES_COLLECTION);
@@ -539,23 +430,9 @@ async function removeItemFromAllCurriculums(prefixedItemId: string): Promise<voi
        if (snapshot.empty) return;
 
        const batch = writeBatch(db);
-       snapshot.forEach(courseDoc => { // Changed doc to courseDoc for clarity
+       snapshot.forEach(courseDoc => {
            const courseRef = courseDoc.ref;
            batch.update(courseRef, { curriculum: arrayRemove(prefixedItemId) });
-           // Since moduleAssignments is removed, this part is no longer needed
-           // const assignments = courseDoc.data().moduleAssignments as Record<string, string[]> || {};
-           // let assignmentsUpdated = false;
-           // const updatedAssignments: Record<string, string[]> = {};
-           // for (const moduleTitle in assignments) {
-           //     const originalItems = assignments[moduleTitle];
-           //     updatedAssignments[moduleTitle] = originalItems.filter(id => id !== prefixedItemId);
-           //     if (updatedAssignments[moduleTitle].length !== originalItems.length) {
-           //         assignmentsUpdated = true;
-           //     }
-           // }
-           // if (assignmentsUpdated) {
-           //     batch.update(courseRef, { moduleAssignments: updatedAssignments });
-           // }
        });
        await batch.commit();
        console.log(`Removed item ${prefixedItemId} from ${snapshot.size} course curriculums.`);
@@ -582,7 +459,10 @@ export async function createProgram(programData: ProgramFormData): Promise<Progr
     return retryOperation(async () => {
         const programsRef = collection(db, PROGRAMS_COLLECTION);
         const newProgramDoc = {
-            ...programData,
+            title: programData.title,
+            description: programData.description,
+            price: programData.price,
+            subscriptionPrice: programData.subscriptionPrice || null,
             courseIds: [], 
             isDeleted: false,
             deletedAt: null,
@@ -635,8 +515,11 @@ export async function updateProgram(programId: string, programData: Partial<Prog
         const dataToUpdate: Partial<ProgramFormData & {updatedAt: Timestamp}> = {updatedAt: serverTimestamp() as Timestamp};
         if (programData.title !== undefined) dataToUpdate.title = programData.title;
         if (programData.description !== undefined) dataToUpdate.description = programData.description;
+        if (programData.price !== undefined) dataToUpdate.price = programData.price;
+        if (programData.subscriptionPrice !== undefined) dataToUpdate.subscriptionPrice = programData.subscriptionPrice || null;
 
-        if (Object.keys(dataToUpdate).length <= 1 && !dataToUpdate.title && !dataToUpdate.description) { 
+
+        if (Object.keys(dataToUpdate).length <= 1 && !dataToUpdate.title && !dataToUpdate.description && !dataToUpdate.price && dataToUpdate.subscriptionPrice === undefined) { 
             const currentDoc = await getDoc(programRef);
             return currentDoc.exists() ? {id: currentDoc.id, ...currentDoc.data()} as Program : null;
         }

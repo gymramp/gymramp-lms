@@ -7,13 +7,13 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input'; // Added Input for discount
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { createTestPaymentIntent } from '@/actions/stripe';
 import { getAllCourses } from '@/lib/firestore-data';
 import type { Course } from '@/types/course';
-import { Loader2, CreditCard, AlertTriangle, BookOpen, Percent } from 'lucide-react'; // Added Percent icon
+import { Loader2, CreditCard, AlertTriangle, BookOpen, Percent } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
@@ -123,83 +123,31 @@ export default function TestCheckoutPage() {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoadingSecret, setIsLoadingSecret] = useState(false);
   const [errorSecret, setErrorSecret] = useState<string | null>(null);
-  const [allCourses, setAllCourses] = useState<Course[]>([]);
-  const [isLoadingCourses, setIsLoadingCourses] = useState(true);
-  const [selectedCourseId, setSelectedCourseId] = useState<string | undefined>(undefined);
+  // const [allCourses, setAllCourses] = useState<Course[]>([]); // REMOVED, courses no longer have prices
+  // const [isLoadingCourses, setIsLoadingCourses] = useState(true); // REMOVED
+  // const [selectedCourseId, setSelectedCourseId] = useState<string | undefined>(undefined); // REMOVED
   const { toast } = useToast();
 
-  const [discountPercentInput, setDiscountPercentInput] = useState('');
-  const [appliedDiscountAmount, setAppliedDiscountAmount] = useState(0);
-  const [finalTotalAmount, setFinalTotalAmount] = useState(0); // This is in dollars
+  const [testAmountInput, setTestAmountInput] = useState('1.00'); // Default to $1.00
+  const finalTotalAmount = parseFloat(testAmountInput) || 0;
 
-  useEffect(() => {
-    const fetchCourses = async () => {
-      setIsLoadingCourses(true);
-      try {
-        const coursesData = await getAllCourses();
-        setAllCourses(coursesData);
-      } catch (err) {
-        console.error("Error fetching courses:", err);
-        toast({ title: "Error", description: "Could not load courses.", variant: "destructive" });
-      } finally {
-        setIsLoadingCourses(false);
-      }
-    };
-    fetchCourses();
-  }, [toast]);
-
-  const selectedCourse = useMemo(() => {
-    return allCourses.find(course => course.id === selectedCourseId);
-  }, [allCourses, selectedCourseId]);
-
-  const subtotalInCents = useMemo(() => {
-    if (!selectedCourse || !selectedCourse.price) return 0;
-    const priceString = selectedCourse.price.replace(/[$,]/g, '');
-    const priceAmount = parseFloat(priceString);
-    return isNaN(priceAmount) ? 0 : Math.round(priceAmount * 100);
-  }, [selectedCourse]);
-
-  const subtotalInDollars = subtotalInCents / 100;
-
-  useEffect(() => {
-    const discount = parseFloat(discountPercentInput);
-    let discountAmountValue = 0;
-    if (!isNaN(discount) && discount >= 0 && discount <= 100) { // Allow 0% discount
-      discountAmountValue = (subtotalInDollars * discount) / 100;
-    } else if (discountPercentInput !== '' && (isNaN(discount) || discount < 0 || discount > 100)) {
-        // Optionally provide feedback for invalid discount input
-        // toast({ title: "Invalid Discount", description: "Discount must be between 0 and 100.", variant: "destructive" });
-    }
-    setAppliedDiscountAmount(discountAmountValue);
-    const finalAmountValue = Math.max(0, subtotalInDollars - discountAmountValue);
-    setFinalTotalAmount(finalAmountValue);
-  }, [subtotalInDollars, discountPercentInput]);
-
+  // REMOVED: useEffect to fetch courses
+  // REMOVED: selectedCourse useMemo
+  // REMOVED: subtotalInCents useMemo
+  // REMOVED: useEffect for discount and finalTotalAmount based on course price
 
   const fetchClientSecret = useCallback(async (cents: number) => {
-    if (cents === 0 && selectedCourseId) {
-        setErrorSecret('Selected course has an invalid price or discount makes it free. Cannot initialize payment for $0.00.');
+    if (cents <= 0) {
+        setErrorSecret('Amount must be positive. Cannot initialize payment for $0.00 or less.');
         setClientSecret(null);
         setIsLoadingSecret(false);
         return;
     }
-    // createTestPaymentIntent has its own minimum check (e.g. 50 cents)
-    // if (cents < 50 && cents > 0) {
-    //     setErrorSecret('Amount must be at least $0.50.');
-    //     setClientSecret(null);
-    //     setIsLoadingSecret(false);
-    //     return;
-    // }
-     if (cents <= 0 && !selectedCourseId) {
-        setClientSecret(null);
-        setErrorSecret(null);
-        setIsLoadingSecret(false);
-        return;
-     }
+     // createTestPaymentIntent has its own minimum check (e.g. 50 cents)
 
     setIsLoadingSecret(true);
     setErrorSecret(null);
-    setClientSecret(null); // Clear previous secret
+    setClientSecret(null);
     try {
       const result = await createTestPaymentIntent(cents);
       if (result.clientSecret) {
@@ -222,25 +170,18 @@ export default function TestCheckoutPage() {
     } finally {
       setIsLoadingSecret(false);
     }
-  }, [toast, selectedCourseId]);
+  }, [toast]);
 
   useEffect(() => {
     const finalAmountInCentsValue = Math.round(finalTotalAmount * 100);
-    if (selectedCourseId) { // Only attempt fetch if a course is selected
-        if (finalAmountInCentsValue > 0) {
-            fetchClientSecret(finalAmountInCentsValue);
-        } else {
-            // If final amount is 0 or less due to discount, but a course is selected
-            setErrorSecret('Final amount after discount is $0.00 or less. No payment needed.');
-            setClientSecret(null); // Clear client secret as no payment is needed
-            setIsLoadingSecret(false);
-        }
+    if (finalAmountInCentsValue > 0) {
+        fetchClientSecret(finalAmountInCentsValue);
     } else {
+        setErrorSecret('Please enter a valid amount greater than $0.00.');
         setClientSecret(null);
-        setErrorSecret(null);
         setIsLoadingSecret(false);
     }
-  }, [finalTotalAmount, selectedCourseId, fetchClientSecret]);
+  }, [finalTotalAmount, fetchClientSecret]);
 
 
   const options: StripeElementsOptions | undefined = clientSecret ? { clientSecret, appearance: { theme: 'stripe' } } : undefined;
@@ -250,77 +191,36 @@ export default function TestCheckoutPage() {
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-primary">Stripe Test Checkout</CardTitle>
-          <CardDescription>Select a course, apply an optional discount, and test the Stripe Payment Element.</CardDescription>
+          <CardDescription>Enter an amount and test the Stripe Payment Element.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4 mb-6">
-            <Label htmlFor="course-select" className="flex items-center gap-1 text-sm font-medium">
-              <BookOpen className="h-4 w-4 text-muted-foreground" />
-              Select Course
+          {/* REMOVED: Course selection UI */}
+           <div className="space-y-4 mb-6 border-b pb-4">
+            <h3 className="text-md font-semibold text-primary">Test Payment Amount</h3>
+            <Label htmlFor="test-amount" className="flex items-center gap-1 text-sm font-medium">
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                Amount (USD)
             </Label>
-            {isLoadingCourses ? (
-              <div className="flex items-center justify-center h-10">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              </div>
-            ) : (
-              <Select value={selectedCourseId} onValueChange={setSelectedCourseId}>
-                <SelectTrigger id="course-select">
-                  <SelectValue placeholder="Choose a course..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {allCourses.length > 0 ? (
-                    allCourses.map(course => (
-                      <SelectItem key={course.id} value={course.id}>
-                        {course.title} ({course.price})
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <div className="px-2 py-1.5 text-sm text-muted-foreground">No courses found.</div>
-                  )}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-
-          {selectedCourse && (
-            <div className="space-y-4 mb-6 border-t pt-4">
-                <h3 className="text-md font-semibold text-primary">Order Summary</h3>
-                <div className="flex justify-between text-sm">
-                    <span>Subtotal (Course: {selectedCourse.title}):</span>
-                    <span className="font-medium">${subtotalInDollars.toFixed(2)}</span>
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="discount-percent" className="flex items-center gap-1 text-sm font-medium">
-                        <Percent className="h-4 w-4 text-muted-foreground" />
-                        Discount Percentage
-                    </Label>
-                    <Input
-                        id="discount-percent"
-                        type="number"
-                        placeholder="e.g., 10 for 10%"
-                        value={discountPercentInput}
-                        onChange={(e) => setDiscountPercentInput(e.target.value)}
-                        min="0"
-                        max="100"
-                        className="h-9"
-                    />
-                </div>
-                {appliedDiscountAmount > 0 && (
-                    <div className="flex justify-between text-sm text-green-600">
-                        <span>Discount Applied:</span>
-                        <span className="font-medium">-${appliedDiscountAmount.toFixed(2)}</span>
-                    </div>
-                )}
-                <hr/>
-                <div className="flex justify-between text-lg font-bold text-primary">
+            <Input
+                id="test-amount"
+                type="number"
+                placeholder="e.g., 1.00"
+                value={testAmountInput}
+                onChange={(e) => setTestAmountInput(e.target.value)}
+                min="0.50" // Stripe minimum
+                step="0.01"
+                className="h-9"
+            />
+            {finalTotalAmount > 0 && (
+                <div className="flex justify-between text-lg font-bold text-primary mt-2">
                     <span>Total:</span>
                     <span>${finalTotalAmount.toFixed(2)}</span>
                 </div>
-            </div>
-          )}
+            )}
+          </div>
 
 
-          {isLoadingSecret && selectedCourseId && (
+          {isLoadingSecret && (
             <div className="flex flex-col items-center justify-center h-40">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="mt-2 text-muted-foreground">Initializing Payment Form...</p>
@@ -333,18 +233,14 @@ export default function TestCheckoutPage() {
               <p className="text-sm">{errorSecret}</p>
             </div>
           )}
-          {/* Render Elements only if clientSecret is available and no error and finalTotal is > 0 */}
           {!isLoadingSecret && clientSecret && options && finalTotalAmount > 0 && (
-            <Elements stripe={stripePromise} options={options}>
+            <Elements stripe={stripePromise} options={options} key={clientSecret}>
               <CheckoutForm amountInDollars={finalTotalAmount} />
             </Elements>
           )}
-           {!isLoadingSecret && !clientSecret && !errorSecret && (!selectedCourseId || finalTotalAmount <= 0) && (
+           {!isLoadingSecret && !clientSecret && !errorSecret && (finalTotalAmount <= 0) && (
              <div className="text-center text-muted-foreground p-4 border border-dashed rounded-md">
-                {selectedCourseId && finalTotalAmount <= 0 && subtotalInDollars > 0 ? "Final amount is $0.00 or less. No payment required." :
-                 !selectedCourseId ? "Please select a course to load payment form." :
-                 subtotalInDollars === 0 ? "Selected course has a price of $0.00. No payment required." :
-                 "Please select a course or adjust discount."}
+                Please enter a test amount (min $0.50).
              </div>
            )}
         </CardContent>

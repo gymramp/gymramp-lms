@@ -8,14 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Tag, Users, ShoppingCart, Percent, Briefcase, User as UserIconLucide, ArrowRight, PlusCircle, Trash2, RadioTower, Radio } from 'lucide-react';
+import { Loader2, Tag, Users, ShoppingCart, Percent, Briefcase, User as UserIconLucide, ArrowRight, PlusCircle, Trash2, RadioTower, Radio, DollarSign } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { getAllCourses } from '@/lib/firestore-data';
 import type { Course } from '@/types/course';
-import type { User, RevenueSharePartner } from '@/types/user';
+import type { User, RevenueSharePartner } from '@/types/user'; // RevenueSharePartner is now a type not an interface
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -45,6 +45,8 @@ const checkoutSetupFormSchema = z.object({
     })
   ).optional(),
   selectedCourseIds: z.array(z.string()).min(1, "Please select at least one course."),
+  // TODO: This form needs redesign to select Programs instead of Courses for pricing.
+  // The discount and total calculation logic below is based on Course prices and will be incorrect.
 });
 type CheckoutSetupFormValues = z.infer<typeof checkoutSetupFormSchema>;
 
@@ -52,11 +54,8 @@ interface CheckoutSetupFormContentProps {
   allCourses: Course[];
   selectedCourseIds: string[];
   onSelectedCourseIdsChange: (ids: string[]) => void;
-  subtotalAmount: number;
-  discountPercentInput: string;
-  onDiscountPercentInputChange: (value: string) => void;
-  appliedDiscountAmount: number;
-  finalTotalAmount: number;
+  // REMOVED: subtotalAmount, discountPercentInput, onDiscountPercentInputChange, appliedDiscountAmount, finalTotalAmount
+  // These will need to be recalculated based on Program selection in a future update.
   maxUsers: number | null;
   setMaxUsers: React.Dispatch<React.SetStateAction<number | null>>;
 }
@@ -65,17 +64,20 @@ function CheckoutSetupFormContent({
   allCourses,
   selectedCourseIds,
   onSelectedCourseIdsChange,
-  subtotalAmount,
-  discountPercentInput,
-  onDiscountPercentInputChange,
-  appliedDiscountAmount,
-  finalTotalAmount,
+  // REMOVED: subtotalAmount, discountPercentInput, onDiscountPercentInputChange, appliedDiscountAmount, finalTotalAmount
   maxUsers,
   setMaxUsers,
 }: CheckoutSetupFormContentProps) {
   const { toast } = useToast();
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Placeholder for pricing logic - this needs to be updated to use Program prices.
+  const subtotalAmount = 0; // Placeholder
+  const discountPercentInput = ''; // Placeholder
+  const appliedDiscountAmount = 0; // Placeholder
+  const finalTotalAmount = 0; // Placeholder
+  const onDiscountPercentInputChange = (value: string) => {}; // Placeholder
 
   const setupForm = useForm<CheckoutSetupFormValues>({
     resolver: zodResolver(checkoutSetupFormSchema),
@@ -121,7 +123,10 @@ function CheckoutSetupFormContent({
 
   const onProceedToPayment = async (formData: CheckoutSetupFormValues) => {
     setIsProcessing(true);
-    const finalTotalAmountCents = Math.round(finalTotalAmount * 100);
+    // TODO: Recalculate finalTotalAmountCents based on Program pricing.
+    // For now, passing 0 for amount, which might be problematic if payment is actually required.
+    // This checkout flow needs a redesign for Program-based sales.
+    const finalTotalAmountCents = 0; // Math.round(finalTotalAmount * 100); // Placeholder
 
     const revenueShareParams = formData.revenueSharePartners && formData.revenueSharePartners.length > 0
         ? { revenueSharePartners: JSON.stringify(formData.revenueSharePartners.map(p => ({ name: p.name, companyName: p.companyName || null, percentage: p.percentage, shareBasis: p.shareBasis }))) }
@@ -137,12 +142,12 @@ function CheckoutSetupFormContent({
       ...(formData.zipCode && { zipCode: formData.zipCode }),
       ...(formData.country && { country: formData.country }),
       ...revenueShareParams,
-      selectedCourseIds: formData.selectedCourseIds.join(','),
+      selectedCourseIds: formData.selectedCourseIds.join(','), // This still passes course IDs, but pricing is separate
       ...(maxUsers !== null && maxUsers !== undefined && { maxUsers: String(maxUsers) }),
-      finalTotalAmountCents: String(finalTotalAmountCents),
-      subtotalAmount: String(subtotalAmount),
-      appliedDiscountPercent: String(parseFloat(discountPercentInput) || 0),
-      appliedDiscountAmount: String(appliedDiscountAmount),
+      finalTotalAmountCents: String(finalTotalAmountCents), // Will be 0 for now
+      subtotalAmount: String(subtotalAmount), // Will be 0
+      appliedDiscountPercent: String(parseFloat(discountPercentInput) || 0), // Will be 0
+      appliedDiscountAmount: String(appliedDiscountAmount), // Will be 0
     });
 
     toast({ title: "Information Saved", description: "Proceeding to payment..." });
@@ -242,7 +247,7 @@ function CheckoutSetupFormContent({
                   control={setupForm.control}
                   name={`revenueSharePartners.${index}.shareBasis`}
                   render={({ field: formField }) => (
-                    <FormItem className="md:col-span-4 pt-2"> {/* Spans full width below other fields */}
+                    <FormItem className="md:col-span-4 pt-2">
                       <FormLabel className="text-sm font-medium">Share Basis</FormLabel>
                       <FormControl>
                         <RadioGroup
@@ -252,11 +257,11 @@ function CheckoutSetupFormContent({
                         >
                           <FormItem className="flex items-center space-x-2">
                             <FormControl><RadioGroupItem value="coursePrice" id={`shareBasis-${index}-course`} /></FormControl>
-                            <FormLabel htmlFor={`shareBasis-${index}-course`} className="font-normal text-sm">One-Time Course Price</FormLabel>
+                            <FormLabel htmlFor={`shareBasis-${index}-course`} className="font-normal text-sm">One-Time Program Price</FormLabel> {/* Updated Label */}
                           </FormItem>
                           <FormItem className="flex items-center space-x-2">
                             <FormControl><RadioGroupItem value="subscriptionPrice" id={`shareBasis-${index}-sub`} /></FormControl>
-                            <FormLabel htmlFor={`shareBasis-${index}-sub`} className="font-normal text-sm">Monthly Subscription Price</FormLabel>
+                            <FormLabel htmlFor={`shareBasis-${index}-sub`} className="font-normal text-sm">Monthly Program Subscription</FormLabel> {/* Updated Label */}
                           </FormItem>
                         </RadioGroup>
                       </FormControl>
@@ -293,8 +298,14 @@ function CheckoutSetupFormContent({
 
 
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> Select Courses</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> Assign Courses to Brand</CardTitle></CardHeader>
           <CardContent>
+            {/* TODO: This section needs to be redesigned to select Programs if pricing is at the program level.
+                        Currently, it assigns individual courses, but their prices are no longer used for checkout total. */}
+            <p className="text-sm text-muted-foreground mb-2 p-2 border border-dashed rounded-md">
+              Note: Pricing is now managed at the Program level. This section assigns individual courses to the brand.
+              The checkout total will be based on selected Programs (once that functionality is implemented).
+            </p>
             <FormField
               control={setupForm.control}
               name="selectedCourseIds"
@@ -316,11 +327,9 @@ function CheckoutSetupFormContent({
                           <FormLabel htmlFor={`course-${course.id}`} className="flex justify-between items-center w-full cursor-pointer">
                             <div className="flex flex-col">
                                 <span>{course.title} <Badge variant="outline" className="ml-2">{course.level}</Badge></span>
-                                {course.subscriptionPrice && (
-                                    <span className="text-xs text-muted-foreground mt-0.5">Sub: {course.subscriptionPrice}</span>
-                                )}
+                                {/* Subscription Price removed from individual course display here as price has moved to Program */}
                             </div>
-                            <span className="text-sm font-semibold text-primary text-right">{course.price}</span>
+                            {/* Price removed from individual course display here */}
                           </FormLabel>
                         </FormItem>
                       ))}
@@ -337,6 +346,12 @@ function CheckoutSetupFormContent({
           <Card className="lg:col-span-2">
             <CardHeader><CardTitle className="flex items-center gap-2"><Tag className="h-5 w-5" /> Account Order Summary</CardTitle></CardHeader>
             <CardContent className="space-y-3">
+              {/* TODO: This summary is based on old course pricing logic and needs to be updated for Program pricing. */}
+              <p className="text-sm text-destructive p-2 border border-destructive/50 rounded-md">
+                Note: The order summary below is based on previous course pricing.
+                This section needs to be updated to reflect Program-based pricing and selection.
+                The actual amount charged on the next page will be based on the new Program pricing model (once fully implemented).
+              </p>
               <div className="flex justify-between text-sm"><span>Subtotal (One-time):</span> <span className="font-medium">${subtotalAmount.toFixed(2)}</span></div>
               <FormItem>
                 <FormLabel htmlFor="discountPercent" className="text-sm">Discount (% on One-time Subtotal):</FormLabel>
@@ -350,6 +365,7 @@ function CheckoutSetupFormContent({
                     onChange={(e) => onDiscountPercentInputChange(e.target.value)}
                     placeholder="e.g., 10"
                     className="h-9"
+                    disabled // Disabled until Program pricing is implemented
                   />
                 </FormControl>
               </FormItem>
@@ -392,10 +408,7 @@ export default function AdminCheckoutPage() {
   const { toast } = useToast();
 
   const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
-  const [subtotalAmount, setSubtotalAmount] = useState(0);
-  const [discountPercentInput, setDiscountPercentInput] = useState('');
-  const [appliedDiscountAmount, setAppliedDiscountAmount] = useState(0);
-  const [finalTotalAmount, setFinalTotalAmount] = useState(0);
+  // REMOVED: State for subtotal, discount, finalTotal based on old course pricing
   const [maxUsers, setMaxUsers] = useState<number | null>(5);
 
   useEffect(() => {
@@ -441,30 +454,7 @@ export default function AdminCheckoutPage() {
     }
   }, [currentUser, isCheckingAuth, toast]);
 
-  useEffect(() => {
-    let total = 0;
-    selectedCourseIds.forEach((id) => {
-      const course = allCourses.find((c) => c.id === id);
-      if (course && course.price) {
-        const priceNumber = parseFloat(course.price.replace(/[^0-9.-]+/g, ""));
-        if (!isNaN(priceNumber)) {
-          total += priceNumber;
-        }
-      }
-    });
-    setSubtotalAmount(total);
-  }, [selectedCourseIds, allCourses]);
-
-  useEffect(() => {
-    const discountPercent = parseFloat(discountPercentInput);
-    let discountAmount = 0;
-    if (!isNaN(discountPercent) && discountPercent > 0 && discountPercent <= 100) {
-      discountAmount = (subtotalAmount * discountPercent) / 100;
-    }
-    setAppliedDiscountAmount(discountAmount);
-    const finalAmount = subtotalAmount - discountAmount;
-    setFinalTotalAmount(Math.max(0, finalAmount));
-  }, [subtotalAmount, discountPercentInput]);
+  // REMOVED: useEffects for calculating subtotal, discount, finalTotal based on old course pricing
 
   if (isCheckingAuth || !currentUser) {
     return ( <div className="container mx-auto py-12 text-center"> <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /> <p className="mt-4 text-muted-foreground">Verifying access…</p> </div> );
@@ -476,21 +466,22 @@ export default function AdminCheckoutPage() {
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20">
       <h1 className="text-3xl font-bold tracking-tight text-primary mb-8">New Customer Checkout - Step 1: Setup</h1>
+      {/* TODO: Update this page to select Programs and calculate pricing based on Program prices. */}
+      <p className="text-lg text-destructive p-4 border border-destructive/50 rounded-md mb-6">
+        <strong>Attention:</strong> This checkout form currently selects individual courses, but pricing has moved to Programs.
+        The order summary and final amount calculation on this page are temporarily disabled and will show $0.
+        This page needs to be redesigned to allow selection of Programs and calculate totals based on Program prices.
+        The next step (payment) will also reflect $0 until this is updated.
+      </p>
       <CheckoutSetupFormContent
         allCourses={allCourses}
         selectedCourseIds={selectedCourseIds}
         onSelectedCourseIdsChange={setSelectedCourseIds}
-        subtotalAmount={subtotalAmount}
-        discountPercentInput={discountPercentInput}
-        onDiscountPercentInputChange={setDiscountPercentInput}
-        appliedDiscountAmount={appliedDiscountAmount}
-        finalTotalAmount={finalTotalAmount}
+        // REMOVED: Props for subtotal, discount, finalTotal
         maxUsers={maxUsers}
         setMaxUsers={setMaxUsers}
       />
     </div>
   );
 }
-    
-
     

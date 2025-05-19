@@ -3,10 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
-import { CheckCircle, Clock, BarChart, BookOpen, FileText, HelpCircle } from "lucide-react"; // Added FileText, HelpCircle
+import { CheckCircle, Clock, BarChart, BookOpen, FileText, HelpCircle } from "lucide-react";
 import Link from "next/link";
 import { getCourseById, getLessonById, getQuizById } from '@/lib/firestore-data'; 
-import type { Lesson, Quiz } from '@/types/course'; // Import Lesson and Quiz types
+import type { Lesson, Quiz } from '@/types/course';
 
 export default async function CourseDetailPage({ params }: { params: { courseId: string } }) {
   const course = await getCourseById(params.courseId); 
@@ -15,7 +15,6 @@ export default async function CourseDetailPage({ params }: { params: { courseId:
     return <div className="container mx-auto py-12 text-center">Course not found.</div>;
   }
 
-  // Fetch details of curriculum items
   const curriculumItemDetails = await Promise.all(
     (course.curriculum || []).map(async (itemId) => {
       const [type, id] = itemId.split('-');
@@ -37,7 +36,7 @@ export default async function CourseDetailPage({ params }: { params: { courseId:
        <div className="grid md:grid-cols-3 gap-8 lg:gap-12">
         <div className="md:col-span-1 space-y-6">
            <Image
-            src={course.featuredImageUrl || course.imageUrl} // Prefer featuredImageUrl
+            src={course.featuredImageUrl || course.imageUrl}
             alt={`Image for ${course.title}`}
             width={800}
             height={450}
@@ -46,7 +45,7 @@ export default async function CourseDetailPage({ params }: { params: { courseId:
              onError={(e) => {
                  const target = e.target as HTMLImageElement;
                  target.onerror = null; 
-                 target.src = course.imageUrl || `https://picsum.photos/seed/${course.id}/800/450`; 
+                 target.src = course.imageUrl || `https://placehold.co/800x450.png`; 
              }}
           />
            <Card>
@@ -66,6 +65,7 @@ export default async function CourseDetailPage({ params }: { params: { courseId:
                     <BookOpen className="h-5 w-5 text-primary" /> 
                     <span>Items: {course.curriculum?.length || 0}</span>
                 </div>
+                {/* REMOVED Price Display
                 <div className="pt-4">
                     <span className="text-3xl font-bold text-primary">{course.price}</span>
                     <p className="text-xs text-muted-foreground">One-time purchase per team license</p>
@@ -73,6 +73,8 @@ export default async function CourseDetailPage({ params }: { params: { courseId:
                  <Button size="lg" className="w-full mt-4 bg-accent text-accent-foreground hover:bg-accent/90">
                     Enroll Team Now
                  </Button>
+                */}
+                 <p className="text-xs text-muted-foreground pt-4">Pricing and enrollment are managed at the Program level.</p>
              </CardContent>
            </Card>
         </div>
@@ -91,7 +93,7 @@ export default async function CourseDetailPage({ params }: { params: { courseId:
                     <h2 className="text-2xl font-semibold text-primary mb-4 border-b pb-2">What You'll Learn (Key Topics)</h2>
                     <ul className="space-y-3">
                     {validCurriculumItems.map((item, index) => {
-                        const Icon = (item as Lesson).content ? FileText : HelpCircle; // Differentiate by checking for 'content' property
+                        const Icon = (item as Lesson).content ? FileText : HelpCircle;
                         return (
                         <li key={item.id || index} className="flex items-start gap-3">
                             <Icon className="h-5 w-5 text-green-500 mt-1 flex-shrink-0" />
@@ -103,11 +105,9 @@ export default async function CourseDetailPage({ params }: { params: { courseId:
                 </div>
             )}
              <div className="pt-6">
-                 <Button size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90 mr-4">
-                    Enroll Team Now
-                 </Button>
-                 <Button size="lg" variant="outline" asChild>
-                    <Link href="/contact">Contact Sales (Enterprise)</Link>
+                 <p className="text-muted-foreground">This course is typically included as part of a Program. Check available Programs for enrollment options.</p>
+                 <Button size="lg" variant="outline" asChild className="mt-2">
+                    <Link href="/#programs">View Programs</Link> {/* TODO: Update link if programs page is different */}
                  </Button>
              </div>
         </div>
@@ -115,4 +115,3 @@ export default async function CourseDetailPage({ params }: { params: { courseId:
     </div>
   );
 }
-

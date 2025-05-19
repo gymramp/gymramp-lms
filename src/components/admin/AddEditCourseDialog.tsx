@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Image from 'next/image'; // Import Image component
+import Image from 'next/image';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -42,6 +42,7 @@ import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { ScrollArea } from '../ui/scroll-area';
 import { Loader2, Upload, ImageIcon, Trash2 } from 'lucide-react';
 
+// Zod schema updated to remove price and subscriptionPrice
 const courseFormSchema = z.object({
   title: z.string().min(3, { message: 'Title must be at least 3 characters.' }),
   description: z.string().min(10, { message: 'Short description must be at least 10 characters.' }),
@@ -50,8 +51,8 @@ const courseFormSchema = z.object({
   featuredImageUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')),
   level: z.enum(['Beginner', 'Intermediate', 'Advanced'], { required_error: 'Please select a difficulty level.' }),
   duration: z.string().min(3, { message: 'Please enter an approximate duration.' }),
-  price: z.string().regex(/^\$?\d+(\.\d{1,2})?$/, { message: 'Please enter a valid price (e.g., $199 or 199.99).' }),
-  subscriptionPrice: z.string().regex(/^\$?\d+(\.\d{1,2})?(\/(mo|month))?$/i, { message: 'Valid format: $29/mo or 29.99' }).optional().or(z.literal('')),
+  // REMOVED: price field
+  // REMOVED: subscriptionPrice field
 });
 
 
@@ -82,8 +83,8 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
       featuredImageUrl: '',
       level: undefined,
       duration: '',
-      price: '',
-      subscriptionPrice: '',
+      // REMOVED: price: '',
+      // REMOVED: subscriptionPrice: '',
     },
   });
 
@@ -100,8 +101,8 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
             featuredImageUrl: initialData.featuredImageUrl || '',
             level: initialData.level,
             duration: initialData.duration,
-            price: initialData.price,
-            subscriptionPrice: initialData.subscriptionPrice || '',
+            // REMOVED: price: initialData.price,
+            // REMOVED: subscriptionPrice: initialData.subscriptionPrice || '',
           });
         } else {
           form.reset({
@@ -112,8 +113,8 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
             featuredImageUrl: '',
             level: undefined,
             duration: '',
-            price: '',
-            subscriptionPrice: '',
+            // REMOVED: price: '',
+            // REMOVED: subscriptionPrice: '',
           });
         }
          setIsUploading(false);
@@ -161,18 +162,17 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
   const onSubmit = async (data: CourseFormValues) => {
      setIsSaving(true);
      const finalFeaturedImageUrl = data.featuredImageUrl?.trim() === '' ? null : data.featuredImageUrl;
-     const finalSubscriptionPrice = data.subscriptionPrice?.trim() === '' ? null : data.subscriptionPrice;
+     // REMOVED: finalSubscriptionPrice
 
      const formData: CourseFormData = {
          title: data.title,
          description: data.description,
          longDescription: data.longDescription,
-         imageUrl: data.imageUrl || `https://picsum.photos/seed/${encodeURIComponent(data.title)}/600/350`,
+         imageUrl: data.imageUrl || `https://placehold.co/600x350.png?text=${encodeURIComponent(data.title)}`, // Updated placeholder
          featuredImageUrl: finalFeaturedImageUrl,
          level: data.level,
          duration: data.duration,
-         price: data.price,
-         subscriptionPrice: finalSubscriptionPrice,
+         // REMOVED: price: data.price, (price and subscriptionPrice are no longer part of CourseFormData)
      };
 
 
@@ -279,6 +279,7 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
                           fill
                           style={{ objectFit: 'cover' }}
                           className="rounded-md"
+                          data-ai-hint="course image"
                           onError={() => {
                             form.setValue('featuredImageUrl', '');
                             toast({ title: "Image Load Error", variant: "destructive" });
@@ -370,35 +371,7 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
               )}
             />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                control={form.control}
-                name="price"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>One-time Price</FormLabel>
-                    <FormControl>
-                        <Input placeholder="e.g., $199.99" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
-                <FormField
-                control={form.control}
-                name="subscriptionPrice"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>Subscription Price (Optional)</FormLabel>
-                    <FormControl>
-                        <Input placeholder="e.g., $29/mo or $29" {...field} value={field.value ?? ''} />
-                    </FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
-            </div>
-
+            {/* REMOVED Price and Subscription Price Fields */}
 
              <DialogFooter>
                 <DialogClose asChild>

@@ -5,35 +5,35 @@ import type { Timestamp } from 'firebase/firestore'; // Import Timestamp
 
 // Represents a single question within a quiz
 export interface Question {
-    id: string; // Added ID for managing individual questions
+    id: string;
     text: string;
-    type: QuestionType; // Type of question
-    options: string[]; // Array of possible answers (e.g., ["True", "False"] for true-false)
-    correctAnswer: string; // The correct answer from the options
+    type: QuestionType;
+    options: string[];
+    correctAnswer: string;
 }
 
 // Represents a standalone quiz in the library
 export interface Quiz {
     id: string;
     title: string;
-    questions: Question[]; // Ensure questions array exists (fetched separately)
-    questionCount?: number; // Optional: Added for displaying count easily
-    isDeleted?: boolean; // For soft deletes
-    deletedAt?: Timestamp | null; // Timestamp of soft deletion
+    questions: Question[];
+    questionCount?: number;
+    isDeleted?: boolean;
+    deletedAt?: Timestamp | null;
 }
 
 // Represents a single standalone lesson in the library
 export interface Lesson {
     id: string;
     title: string;
-    content: string; // Text content of the lesson (could be Markdown or HTML from WYSIWYG)
-    videoUrl?: string | null; // Optional video URL, allow null
-    featuredImageUrl?: string | null; // Optional image URL, allow null
-    exerciseFilesInfo?: string | null; // Optional field, allow null
-    isPreviewAvailable?: boolean; // Whether the lesson can be previewed without enrollment
-    playbackTime?: string | null; // Optional playback time, allow null
-    isDeleted?: boolean; // For soft deletes
-    deletedAt?: Timestamp | null; // Timestamp of soft deletion
+    content: string;
+    videoUrl?: string | null;
+    featuredImageUrl?: string | null;
+    exerciseFilesInfo?: string | null;
+    isPreviewAvailable?: boolean;
+    playbackTime?: string | null;
+    isDeleted?: boolean;
+    deletedAt?: Timestamp | null;
 }
 
 // Represents a course in the global library
@@ -42,24 +42,19 @@ export interface Course {
   title: string;
   description: string; // Short description
   longDescription: string; // Detailed description
-  imageUrl: string; // General image URL (can be used as fallback or specific purpose)
-  featuredImageUrl?: string | null; // Optional: Primary image for display (e.g., course card)
+  imageUrl: string;
+  featuredImageUrl?: string | null;
   level: 'Beginner' | 'Intermediate' | 'Advanced';
   duration: string; // e.g., "Approx. 6 hours"
-  price: string; // e.g., "$199"
-  curriculum: string[]; // Array of prefixed lesson/quiz IDs in order (e.g., 'lesson-abc', 'quiz-xyz')
-  // modules: string[]; // REMOVED
-  // moduleAssignments?: Record<string, string[]>; // REMOVED
-  quizzes?: Quiz[]; // Keep quizzes array (might be used elsewhere or legacy)
-  isDeleted?: boolean; // For soft deletes
-  deletedAt?: Timestamp | null; // Timestamp of soft deletion
+  // REMOVED: price: string;
+  // REMOVED: subscriptionPrice?: string | null;
+  curriculum: string[];
+  isDeleted?: boolean;
+  deletedAt?: Timestamp | null;
 }
 
 // Type for the form data when adding/editing a course metadata (global library)
-export type CourseFormData = Omit<Course, 'id' | 'curriculum' | 'quizzes' | 'isDeleted' | 'deletedAt'> & {
-    // numberOfModules: number; // REMOVED
-    // featuredImageUrl is now handled by the base Omit, ensure it's optional in Course type
-};
+export type CourseFormData = Omit<Course, 'id' | 'isDeleted' | 'deletedAt'>;
 
 
 // Type for the form data when adding/editing a lesson
@@ -67,10 +62,10 @@ export interface LessonFormData {
     title: string;
     content: string;
     videoUrl?: string | null;
-    featuredImageUrl?: string | null; // Optional image URL
-    exerciseFilesInfo?: string | null; // Optional text for exercise files
-    isPreviewAvailable?: boolean; // Add preview flag
-    playbackTime?: string | null; // Optional playback time
+    featuredImageUrl?: string | null;
+    exerciseFilesInfo?: string | null;
+    isPreviewAvailable?: boolean;
+    playbackTime?: string | null;
 }
 
 // Type for the form data when adding/editing a quiz (basic for now)
@@ -82,11 +77,8 @@ export interface QuizFormData {
 export interface QuestionFormData {
     type: QuestionType;
     text: string;
-    option1?: string; // Optional for true-false
-    option2?: string; // Optional for true-false
-    option3?: string; // Optional for true-false
-    option4?: string; // Optional for true-false
-    correctAnswer: string; // Store the text/value of the correct answer
+    options: string[]; // Already correctly an array of strings
+    correctAnswer: string;
 }
 
 // Represents user's progress on a specific course
@@ -95,7 +87,7 @@ export interface UserCourseProgress {
     courseId: string;
     progress: number; // Percentage
     status: "Not Started" | "Started" | "In Progress" | "Completed";
-    lastAccessed?: Date; // Optional: timestamp
+    lastAccessed?: Date;
 }
 
 // Type for assigning a course to an employee (Now User)
@@ -108,7 +100,9 @@ export interface Program {
   id: string;
   title: string;
   description: string;
-  courseIds: string[]; // Array of Course IDs
+  courseIds: string[];
+  price: string; // e.g., "$499"
+  subscriptionPrice?: string | null; // e.g., "$49/mo"
   isDeleted?: boolean;
   deletedAt?: Timestamp | null;
   createdAt?: Timestamp;
@@ -117,6 +111,7 @@ export interface Program {
 
 // Type for form data when adding/editing a Program
 export type ProgramFormData = Omit<Program, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'courseIds'> & {
-  // courseIds will be handled separately
+  price: string;
+  subscriptionPrice?: string | null;
 };
 
