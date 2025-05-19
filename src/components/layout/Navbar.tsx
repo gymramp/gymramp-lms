@@ -19,7 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     Menu, LogOut, User as UserIcon, LayoutDashboard, Settings, Users, BookOpen, FileText,
     ListChecks, Building, ShoppingCart, Award, MapPin, BarChartBig, Gift,
-    TestTube2, ChevronDown, UserPlus, Percent, HelpCircle, Layers
+    TestTube2, ChevronDown, UserPlus, Percent, HelpCircle, Layers, CreditCard
 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -93,8 +93,8 @@ export function Navbar() {
       roleSpecificItems.push(
         { href: '/admin/dashboard', label: 'Dashboard', icon: BarChartBig },
         { href: '/admin/companies', label: 'Brands', icon: Building },
-        // { href: '/admin/users', label: 'Users', icon: Users }, // Removed from main nav for Super Admin
         { href: '/admin/programs', label: 'Programs', icon: Layers },
+        { href: '/admin/customers', label: 'Customers', icon: CreditCard }, // New Customers link
         {
           label: 'Course Admin',
           isDropdown: true,
@@ -150,8 +150,9 @@ export function Navbar() {
       ? [
           { href: '/admin/dashboard', label: 'Super Admin Dashboard', icon: BarChartBig },
           { href: '/admin/companies', label: 'Brands', icon: Building },
-          { href: '/admin/users', label: 'Users', icon: Users }, // Still available in dropdown
+          { href: '/admin/users', label: 'Users', icon: Users },
           { href: '/admin/programs', label: 'Programs', icon: Layers },
+          { href: '/admin/customers', label: 'Customers', icon: CreditCard }, // New Customers link for dropdown
           { href: '/admin/settings', label: 'Settings', icon: Settings },
         ]
       : []),
@@ -238,7 +239,7 @@ export function Navbar() {
                                     onClick={() => setIsMobileMenuOpen(false)}
                                     className="flex items-center gap-3 pl-4 pr-2 py-2 text-base text-foreground/60 hover:text-foreground/80 hover:bg-muted rounded-md w-full"
                                 >
-                                    <item.icon className="h-5 w-5" />
+                                   {item.icon && <item.icon className="h-5 w-5" />}
                                     <span>{item.label}</span>
                                 </Link>
                             ))}
@@ -333,8 +334,8 @@ export function Navbar() {
                             <DropdownMenuSeparator />
                             {userMenuItems.map((item) => (
                                 <DropdownMenuItem key={item.label} asChild className="cursor-pointer">
-                                    <Link href={item.href}>
-                                        <item.icon className="mr-2 h-4 w-4" />
+                                    <Link href={item.href} className="flex items-center gap-2">
+                                        {item.icon && <item.icon className="mr-2 h-4 w-4" />}
                                         <span>{item.label}</span>
                                     </Link>
                                 </DropdownMenuItem>
