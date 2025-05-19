@@ -8,21 +8,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Tag, Users, ShoppingCart, Percent, Briefcase, User as UserIconLucide, ArrowRight, PlusCircle, Trash2, RadioTower, Radio, DollarSign } from 'lucide-react';
+import { Loader2, Tag, Users, ShoppingCart, Percent, Briefcase, User as UserIconLucide, ArrowRight, PlusCircle, Trash2, RadioTower, Radio, DollarSign, Layers, BookOpen } from 'lucide-react'; // Added Layers, BookOpen
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { getAllCourses } from '@/lib/firestore-data';
-import type { Course } from '@/types/course';
+import { getAllPrograms, getCourseById } from '@/lib/firestore-data'; // Fetch programs
+import type { Program, Course } from '@/types/course'; // Import Program type
 import type { User, RevenueSharePartner } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription as ShadFormDescription } from "@/components/ui/form"; // Added FormDescription
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Import Select
 
 const checkoutSetupFormSchema = z.object({
   customerName: z.string().min(2, { message: 'Customer name is required.' }),
@@ -44,40 +45,31 @@ const checkoutSetupFormSchema = z.object({
       shareBasis: z.enum(['coursePrice', 'subscriptionPrice'], { required_error: "Please select a share basis." }),
     })
   ).optional(),
-  selectedCourseIds: z.array(z.string()).min(1, "Please select at least one course."),
-  // TODO: This form needs redesign to select Programs instead of Courses for pricing.
-  // The discount and total calculation logic below is based on Course prices and will be incorrect.
-  // This will be further impacted by the new multi-tiered Program subscription model.
+  selectedProgramId: z.string().min(1, "Please select a Program to purchase."),
 });
 type CheckoutSetupFormValues = z.infer<typeof checkoutSetupFormSchema>;
 
 interface CheckoutSetupFormContentProps {
-  allCourses: Course[];
-  selectedCourseIds: string[];
-  onSelectedCourseIdsChange: (ids: string[]) => void;
+  allPrograms: Program[]; // Changed from allCourses to allPrograms
   maxUsers: number | null;
   setMaxUsers: React.Dispatch<React.SetStateAction<number | null>>;
+  selectedProgramId: string | null; // Added selectedProgramId state
+  setSelectedProgramId: React.Dispatch<React.SetStateAction<string | null>>; // Added setter
+  coursesInSelectedProgram: Course[]; // State for courses in the selected program
 }
 
 function CheckoutSetupFormContent({
-  allCourses,
-  selectedCourseIds,
-  onSelectedCourseIdsChange,
+  allPrograms,
   maxUsers,
   setMaxUsers,
+  selectedProgramId,
+  setSelectedProgramId,
+  coursesInSelectedProgram,
 }: CheckoutSetupFormContentProps) {
   const { toast } = useToast();
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
-
-  // TODO: This entire pricing logic (subtotal, discount, finalTotal) is based on old Course prices
-  // and needs complete overhaul to support Program selection and their new multi-tiered pricing (base, first sub, second sub).
-  // For now, it will pass $0 to the payment step.
-  const subtotalAmount = 0; 
-  const discountPercentInput = ''; 
-  const appliedDiscountAmount = 0; 
-  const finalTotalAmount = 0; 
-  const onDiscountPercentInputChange = (value: string) => {}; 
+  const [discountPercentInput, setDiscountPercentInput] = useState('');
 
   const setupForm = useForm<CheckoutSetupFormValues>({
     resolver: zodResolver(checkoutSetupFormSchema),
@@ -91,7 +83,7 @@ function CheckoutSetupFormContent({
       zipCode: '',
       country: '',
       revenueSharePartners: [],
-      selectedCourseIds: [],
+      selectedProgramId: '',
     },
   });
 
@@ -99,34 +91,23 @@ function CheckoutSetupFormContent({
     control: setupForm.control,
     name: "revenueSharePartners"
   });
+  
+  const selectedProgram = allPrograms.find(p => p.id === selectedProgramId);
 
-  useEffect(() => {
-    const currentFormIds = JSON.stringify(setupForm.getValues('selectedCourseIds') || []);
-    const propIds = JSON.stringify(selectedCourseIds || []);
-    if (currentFormIds !== propIds) {
-      setupForm.setValue('selectedCourseIds', selectedCourseIds, { shouldValidate: true });
-    }
-  }, [selectedCourseIds, setupForm]);
-
-
-  const handleCourseCheckboxChange = (checked: boolean | string, courseId: string) => {
-    const currentSelectedIds = selectedCourseIds || [];
-    let nextSelectedIds: string[];
-    if (checked) {
-      nextSelectedIds = [...currentSelectedIds, courseId];
-    } else {
-      nextSelectedIds = currentSelectedIds.filter((id) => id !== courseId);
-    }
-    onSelectedCourseIdsChange(nextSelectedIds);
-    setupForm.setValue('selectedCourseIds', nextSelectedIds, { shouldValidate: true });
-  };
+  const subtotalAmount = selectedProgram ? parseFloat(selectedProgram.price.replace(/[$,/mo]/gi, '')) : 0;
+  const discountAmount = (subtotalAmount * (parseFloat(discountPercentInput) || 0)) / 100;
+  const finalTotalAmount = subtotalAmount - discountAmount;
 
   const onProceedToPayment = async (formData: CheckoutSetupFormValues) => {
     setIsProcessing(true);
-    // TODO: Recalculate finalTotalAmountCents based on Program pricing (base + first sub or ongoing sub).
-    // This checkout flow needs a complete redesign for Program-based sales and subscription handling.
-    // The payment step will receive $0 until this is updated.
-    const finalTotalAmountCents = 0; 
+    
+    if (!selectedProgram) {
+      toast({ title: "Error", description: "Please select a Program before proceeding.", variant: "destructive" });
+      setIsProcessing(false);
+      return;
+    }
+
+    const finalTotalAmountCents = Math.round(finalTotalAmount * 100);
 
     const revenueShareParams = formData.revenueSharePartners && formData.revenueSharePartners.length > 0
         ? { revenueSharePartners: JSON.stringify(formData.revenueSharePartners.map(p => ({ name: p.name, companyName: p.companyName || null, percentage: p.percentage, shareBasis: p.shareBasis }))) }
@@ -142,17 +123,29 @@ function CheckoutSetupFormContent({
       ...(formData.zipCode && { zipCode: formData.zipCode }),
       ...(formData.country && { country: formData.country }),
       ...revenueShareParams,
-      selectedCourseIds: formData.selectedCourseIds.join(','), 
+      selectedProgramId: formData.selectedProgramId,
       ...(maxUsers !== null && maxUsers !== undefined && { maxUsers: String(maxUsers) }),
-      finalTotalAmountCents: String(finalTotalAmountCents), 
-      subtotalAmount: String(subtotalAmount), 
-      appliedDiscountPercent: String(parseFloat(discountPercentInput) || 0), 
-      appliedDiscountAmount: String(appliedDiscountAmount), 
+      finalTotalAmountCents: String(finalTotalAmountCents),
+      subtotalAmount: String(subtotalAmount),
+      appliedDiscountPercent: String(parseFloat(discountPercentInput) || 0),
+      appliedDiscountAmount: String(discountAmount),
     });
 
     toast({ title: "Information Saved", description: "Proceeding to payment..." });
     router.push(`/admin/checkout/payment?${queryParams.toString()}`);
+    setIsProcessing(false); // Reset processing state
   };
+
+  useEffect(() => {
+    // Pre-select program if only one exists, or if a value is passed in
+    if (selectedProgramId) {
+      setupForm.setValue('selectedProgramId', selectedProgramId, { shouldValidate: true });
+    } else if (allPrograms.length === 1) {
+        setSelectedProgramId(allPrograms[0].id);
+        setupForm.setValue('selectedProgramId', allPrograms[0].id, { shouldValidate: true });
+    }
+  }, [selectedProgramId, allPrograms, setupForm, setSelectedProgramId]);
+
 
   return (
     <Form {...setupForm}>
@@ -249,12 +242,6 @@ function CheckoutSetupFormContent({
                   render={({ field: formField }) => (
                     <FormItem className="md:col-span-4 pt-2">
                       <FormLabel className="text-sm font-medium">Share Basis</FormLabel>
-                       {/* TODO: The labels "One-Time Program Price" and "Program Subscription Price" are now potentially misleading
-                                   with multi-tiered subscriptions. This section needs to be clearer once the Program's 
-                                   base, first sub, and second sub prices are selectable/visible for revenue share.
-                                   For now, 'coursePrice' refers to the Program's one-time base price, and 
-                                   'subscriptionPrice' would conceptually refer to *a* subscription price tier.
-                       */}
                       <FormControl>
                         <RadioGroup
                           onValueChange={formField.onChange}
@@ -263,14 +250,15 @@ function CheckoutSetupFormContent({
                         >
                           <FormItem className="flex items-center space-x-2">
                             <FormControl><RadioGroupItem value="coursePrice" id={`shareBasis-${index}-course`} /></FormControl>
-                            <FormLabel htmlFor={`shareBasis-${index}-course`} className="font-normal text-sm">Program Base Price (One-Time)</FormLabel> 
+                            <FormLabel htmlFor={`shareBasis-${index}-course`} className="font-normal text-sm">Program Base Price (One-Time)</FormLabel>
                           </FormItem>
                           <FormItem className="flex items-center space-x-2">
                             <FormControl><RadioGroupItem value="subscriptionPrice" id={`shareBasis-${index}-sub`} /></FormControl>
-                            <FormLabel htmlFor={`shareBasis-${index}-sub`} className="font-normal text-sm">Program Subscription (Monthly)</FormLabel> 
+                            <FormLabel htmlFor={`shareBasis-${index}-sub`} className="font-normal text-sm">Program Subscription (Monthly)</FormLabel>
                           </FormItem>
                         </RadioGroup>
                       </FormControl>
+                      <ShadFormDescription className="text-xs">Determines if share is on the one-time program price or its recurring subscription price.</ShadFormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -302,44 +290,41 @@ function CheckoutSetupFormContent({
           </CardContent>
         </Card>
 
-
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> Assign Courses to Brand</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Layers className="h-5 w-5" /> Select Program for Purchase</CardTitle>
+            <CardDescription>Choose the Program this customer is purchasing. The Brand will gain access to all courses within this Program.</CardDescription>
+          </CardHeader>
           <CardContent>
-            {/* TODO: This section still assigns individual courses. It should ideally allow selection of Programs.
-                        The pricing (and thus revenue share calculation) will depend on Program selection.
-                        This section's utility is limited until Program selection is implemented for sales. */}
-            <p className="text-sm text-muted-foreground mb-2 p-2 border border-dashed rounded-md">
-              Note: Pricing and revenue share calculations are now based on Programs. This section assigns individual courses to the brand for access,
-              but the actual sale amount will be determined by a Program (once Program selection is added to this checkout).
-            </p>
             <FormField
               control={setupForm.control}
-              name="selectedCourseIds"
-              render={() => (
+              name="selectedProgramId"
+              render={({ field }) => (
                 <FormItem>
-                  <ScrollArea className="h-48 w-full rounded-md border p-4">
-                    <div className="space-y-2">
-                      {allCourses.length === 0 ? (
-                        <p className="text-muted-foreground italic">No courses available in the library.</p>
-                      ) : allCourses.map(course => (
-                        <FormItem key={course.id} className="flex items-center space-x-3 p-2 hover:bg-muted/50 rounded-md transition-colors">
-                          <FormControl>
-                            <Checkbox
-                              checked={selectedCourseIds.includes(course.id)}
-                              onCheckedChange={checked => handleCourseCheckboxChange(checked, course.id)}
-                              id={`course-${course.id}`}
-                            />
-                          </FormControl>
-                          <FormLabel htmlFor={`course-${course.id}`} className="flex justify-between items-center w-full cursor-pointer">
-                            <div className="flex flex-col">
-                                <span>{course.title} <Badge variant="outline" className="ml-2">{course.level}</Badge></span>
-                            </div>
-                          </FormLabel>
-                        </FormItem>
-                      ))}
-                    </div>
-                  </ScrollArea>
+                  <FormLabel>Select Program</FormLabel>
+                  <Select onValueChange={(value) => {
+                    field.onChange(value);
+                    setSelectedProgramId(value); // Update parent state for dynamic pricing
+                  }} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose a Program..." />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {allPrograms.length === 0 ? (
+                        <SelectItem value="none" disabled>No programs available.</SelectItem>
+                      ) : (
+                        allPrograms.map(program => (
+                          <SelectItem key={program.id} value={program.id}>
+                            {program.title} ({program.price})
+                            {program.firstSubscriptionPrice && ` / ${program.firstSubscriptionPrice} (Sub M4-12)`}
+                            {program.secondSubscriptionPrice && ` / ${program.secondSubscriptionPrice} (Sub M13+)`}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
@@ -347,37 +332,57 @@ function CheckoutSetupFormContent({
           </CardContent>
         </Card>
 
+        {selectedProgramId && coursesInSelectedProgram.length > 0 && (
+            <Card>
+                 <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5" /> Courses Included in Program</CardTitle>
+                    <CardDescription>The following courses will be assigned to the Brand upon purchase of "{selectedProgram?.title}".</CardDescription>
+                 </CardHeader>
+                 <CardContent>
+                    <ScrollArea className="h-48 w-full rounded-md border p-4">
+                        <div className="space-y-2">
+                            {coursesInSelectedProgram.map(course => (
+                                <div key={course.id} className="flex items-center space-x-3 p-2 bg-muted/30 rounded-md">
+                                    <BookOpen className="h-4 w-4 text-muted-foreground" />
+                                    <span className="flex-1">{course.title} <Badge variant="outline" className="ml-2">{course.level}</Badge></span>
+                                </div>
+                            ))}
+                        </div>
+                    </ScrollArea>
+                 </CardContent>
+            </Card>
+        )}
+
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2">
             <CardHeader><CardTitle className="flex items-center gap-2"><Tag className="h-5 w-5" /> Account Order Summary</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              {/* TODO: This summary is based on old course pricing logic and needs to be completely updated for Program pricing
-                          and the new multi-tiered subscription model. It will show $0 for now. */}
-              <p className="text-sm text-destructive p-2 border border-destructive/50 rounded-md">
-                Note: The order summary below is a placeholder. Pricing is now based on Programs.
-                This section needs to be updated to reflect Program selection and its associated pricing (one-time base, and potential first/second tier subscriptions).
-                The actual amount charged on the next page will be $0 until Program selection and its pricing are integrated here.
-              </p>
-              <div className="flex justify-between text-sm"><span>Subtotal (One-time):</span> <span className="font-medium">${subtotalAmount.toFixed(2)}</span></div>
-              <FormItem>
-                <FormLabel htmlFor="discountPercent" className="text-sm">Discount (% on One-time Subtotal):</FormLabel>
-                <FormControl>
-                  <Input
-                    id="discountPercent"
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={discountPercentInput}
-                    onChange={(e) => onDiscountPercentInputChange(e.target.value)}
-                    placeholder="e.g., 10"
-                    className="h-9"
-                    disabled // Disabled until Program pricing is implemented
-                  />
-                </FormControl>
-              </FormItem>
-              {appliedDiscountAmount > 0 && <div className="flex justify-between text-sm text-green-600"><span>Discount Applied:</span> <span className="font-medium">-${appliedDiscountAmount.toFixed(2)}</span></div>}
-              <hr />
-              <div className="flex justify-between text-lg font-bold text-primary"><span>Total Account Value (One-time):</span> <span>${finalTotalAmount.toFixed(2)}</span></div>
+              {selectedProgram ? (
+                <>
+                  <div className="flex justify-between text-sm"><span>Program Base Price (One-time):</span> <span className="font-medium">${subtotalAmount.toFixed(2)}</span></div>
+                  <FormItem>
+                    <FormLabel htmlFor="discountPercent" className="text-sm">Discount (% on Program Base Price):</FormLabel>
+                    <FormControl>
+                      <Input
+                        id="discountPercent"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={discountPercentInput}
+                        onChange={(e) => setDiscountPercentInput(e.target.value)}
+                        placeholder="e.g., 10"
+                        className="h-9"
+                      />
+                    </FormControl>
+                  </FormItem>
+                  {discountAmount > 0 && <div className="flex justify-between text-sm text-green-600"><span>Discount Applied:</span> <span className="font-medium">-${discountAmount.toFixed(2)}</span></div>}
+                  <hr />
+                  <div className="flex justify-between text-lg font-bold text-primary"><span>Total Account Value (One-time):</span> <span>${finalTotalAmount.toFixed(2)}</span></div>
+                </>
+              ) : (
+                <p className="text-muted-foreground italic">Select a Program to see the order summary.</p>
+              )}
             </CardContent>
           </Card>
 
@@ -391,7 +396,7 @@ function CheckoutSetupFormContent({
                 <Button
                   type="submit"
                   className="w-full bg-primary hover:bg-primary/90"
-                  disabled={isProcessing || selectedCourseIds.length === 0}
+                  disabled={isProcessing || !selectedProgramId}
                 >
                   {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
                   {isProcessing ? 'Processing...' : 'Proceed to Payment & Finalize'}
@@ -406,15 +411,17 @@ function CheckoutSetupFormContent({
 }
 
 export default function AdminCheckoutPage() {
-  const [allCourses, setAllCourses] = useState<Course[]>([]);
-  const [isLoadingCourses, setIsLoadingCourses] = useState(true);
+  const [allPrograms, setAllPrograms] = useState<Program[]>([]);
+  const [allCourses, setAllCourses] = useState<Course[]>([]); // Still need all courses for lookup
+  const [isLoadingData, setIsLoadingData] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const router = useRouter();
   const { toast } = useToast();
 
-  const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
+  const [selectedProgramId, setSelectedProgramId] = useState<string | null>(null);
   const [maxUsers, setMaxUsers] = useState<number | null>(5);
+  const [coursesInSelectedProgram, setCoursesInSelectedProgram] = useState<Course[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -444,49 +451,63 @@ export default function AdminCheckoutPage() {
   useEffect(() => {
     if (currentUser && !isCheckingAuth) {
       (async () => {
-        setIsLoadingCourses(true);
+        setIsLoadingData(true);
         try {
-          const coursesData = await getAllCourses();
+          const [programsData, coursesData] = await Promise.all([
+            getAllPrograms(),
+            getAllCourses()
+          ]);
+          setAllPrograms(programsData);
           setAllCourses(coursesData);
+          if (programsData.length === 1 && !selectedProgramId) { // Auto-select if only one program
+             setSelectedProgramId(programsData[0].id);
+          }
         } catch (error) {
-          console.error("Error fetching courses:", error);
-          toast({ title: "Error", description: "Could not load courses.", variant: "destructive" });
+          console.error("Error fetching programs/courses:", error);
+          toast({ title: "Error", description: "Could not load programs or courses.", variant: "destructive" });
+          setAllPrograms([]);
           setAllCourses([]);
         } finally {
-          setIsLoadingCourses(false);
+          setIsLoadingData(false);
         }
       })();
     }
-  }, [currentUser, isCheckingAuth, toast]);
+  }, [currentUser, isCheckingAuth, toast, selectedProgramId]);
+
+  // Effect to update coursesInSelectedProgram when selectedProgramId or allCourses changes
+  useEffect(() => {
+    if (selectedProgramId && allPrograms.length > 0 && allCourses.length > 0) {
+      const program = allPrograms.find(p => p.id === selectedProgramId);
+      if (program && program.courseIds) {
+        const courses = program.courseIds.map(id => allCourses.find(c => c.id === id)).filter(Boolean) as Course[];
+        setCoursesInSelectedProgram(courses);
+      } else {
+        setCoursesInSelectedProgram([]);
+      }
+    } else {
+      setCoursesInSelectedProgram([]);
+    }
+  }, [selectedProgramId, allPrograms, allCourses]);
 
 
   if (isCheckingAuth || !currentUser) {
     return ( <div className="container mx-auto py-12 text-center"> <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /> <p className="mt-4 text-muted-foreground">Verifying access…</p> </div> );
   }
-  if (isLoadingCourses) {
-    return ( <div className="container mx-auto py-12 text-center"> <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /> <p className="mt-4 text-muted-foreground">Loading courses…</p> </div> );
+  if (isLoadingData) {
+    return ( <div className="container mx-auto py-12 text-center"> <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /> <p className="mt-4 text-muted-foreground">Loading programs & courses…</p> </div> );
   }
 
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20">
       <h1 className="text-3xl font-bold tracking-tight text-primary mb-8">New Customer Checkout - Step 1: Setup</h1>
-      {/* TODO: This page needs a complete redesign to allow selection of Programs and calculate pricing 
-                  based on Program prices (one-time base, and the new multi-tiered subscription model). 
-                  The current course selection and order summary are placeholders. */}
-      <p className="text-lg text-destructive p-4 border border-destructive/50 rounded-md mb-6">
-        <strong>Attention:</strong> This checkout form is under major reconstruction due to pricing model changes.
-        It currently selects individual courses, but pricing (and revenue share) is now based on Programs with multi-tiered subscriptions.
-        The order summary will show $0, and the payment step will reflect this.
-        This page requires significant updates to enable Program selection and accurate pricing for one-time and subscription models.
-      </p>
       <CheckoutSetupFormContent
-        allCourses={allCourses}
-        selectedCourseIds={selectedCourseIds}
-        onSelectedCourseIdsChange={setSelectedCourseIds}
+        allPrograms={allPrograms}
         maxUsers={maxUsers}
         setMaxUsers={setMaxUsers}
+        selectedProgramId={selectedProgramId}
+        setSelectedProgramId={setSelectedProgramId}
+        coursesInSelectedProgram={coursesInSelectedProgram}
       />
     </div>
   );
 }
-    

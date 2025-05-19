@@ -10,15 +10,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, CreditCard, User as UserIconLucide, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Loader2, CreditCard, User as UserIconLucide, ShieldCheck, AlertCircle, Layers } from 'lucide-react'; // Added Layers
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { processCheckout } from '@/actions/checkout';
+import { processCheckout } from '@/app/actions/checkout'; // Corrected import
 import { createPaymentIntent } from '@/actions/stripe';
-import type { CheckoutFormData } from '@/types/user';
+import type { CheckoutFormData, RevenueSharePartner } from '@/types/user'; // Import RevenueSharePartner
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { getProgramById } from '@/lib/firestore-data'; // To fetch program title
+import type { Program } from '@/types/course';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
@@ -36,10 +38,8 @@ interface OrderDetails {
   state?: string;
   zipCode?: string;
   country?: string;
-  revSharePartnerName?: string;
-  revSharePartnerCompany?: string;
-  revSharePartnerPercentage?: number | null;
-  selectedCourseIds: string[];
+  revenueSharePartners?: RevenueSharePartner[]; // Updated
+  selectedProgramId: string; // Changed from selectedCourseIds
   maxUsers?: number | null;
   finalTotalAmountCents: number;
   subtotalAmount: number;
@@ -47,7 +47,7 @@ interface OrderDetails {
   appliedDiscountAmount: number;
 }
 
-function PaymentFormElements({ orderDetails }: { orderDetails: OrderDetails }) {
+function PaymentFormElements({ orderDetails, programTitle }: { orderDetails: OrderDetails, programTitle?: string }) {
   const stripe = useStripe();
   const elements = useElements();
   const { toast } = useToast();
@@ -76,7 +76,7 @@ function PaymentFormElements({ orderDetails }: { orderDetails: OrderDetails }) {
       const { error: submitError, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: `${window.location.origin}/admin/checkout/success`,
+          return_url: `${window.location.origin}/admin/checkout/success`, // Keep or adjust as needed
         },
         redirect: 'if_required',
       });
@@ -106,11 +106,22 @@ function PaymentFormElements({ orderDetails }: { orderDetails: OrderDetails }) {
       }
     } else {
       toast({ title: "No Payment Required", description: "Order total is $0.00." });
+      paymentIntentId = 'pi_0_free_checkout'; // Placeholder for $0 checkouts
     }
 
     try {
       const checkoutData: CheckoutFormData = {
-        ...orderDetails,
+        customerName: orderDetails.customerName,
+        companyName: orderDetails.companyName,
+        adminEmail: orderDetails.adminEmail,
+        streetAddress: orderDetails.streetAddress,
+        city: orderDetails.city,
+        state: orderDetails.state,
+        zipCode: orderDetails.zipCode,
+        country: orderDetails.country,
+        revenueSharePartners: orderDetails.revenueSharePartners,
+        selectedProgramId: orderDetails.selectedProgramId,
+        maxUsers: orderDetails.maxUsers,
         password: formData.adminPassword,
         paymentIntentId: paymentIntentId,
         subtotalAmount: orderDetails.subtotalAmount,
@@ -145,7 +156,7 @@ function PaymentFormElements({ orderDetails }: { orderDetails: OrderDetails }) {
               <h3 className="font-semibold">Order Summary:</h3>
               <p className="text-sm">Brand: {orderDetails.companyName}</p>
               <p className="text-sm">Admin Email: {orderDetails.adminEmail}</p>
-              <p className="text-sm">Courses: {orderDetails.selectedCourseIds.length}</p>
+              {programTitle && <p className="text-sm flex items-center gap-1"><Layers className="h-4 w-4 text-muted-foreground" /> Program: {programTitle}</p>}
               <p className="text-lg font-bold mt-2">Total Due: ${(orderDetails.finalTotalAmountCents / 100).toFixed(2)}</p>
             </div>
             <hr/>
@@ -186,6 +197,7 @@ function PaymentPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [orderDetails, setOrderDetails] = useState<OrderDetails | null>(null);
+  const [programTitle, setProgramTitle] = useState<string | undefined>(undefined);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -199,11 +211,22 @@ function PaymentPageContent() {
         const customerName = searchParams.get('customerName');
         const companyName = searchParams.get('companyName');
         const adminEmail = searchParams.get('adminEmail');
-        const selectedCourseIdsString = searchParams.get('selectedCourseIds');
+        const selectedProgramId = searchParams.get('selectedProgramId');
         const finalTotalAmountCentsString = searchParams.get('finalTotalAmountCents');
+        const revSharePartnersString = searchParams.get('revenueSharePartners');
 
-        if (!customerName || !companyName || !adminEmail || !selectedCourseIdsString || !finalTotalAmountCentsString) {
+        if (!customerName || !companyName || !adminEmail || !selectedProgramId || !finalTotalAmountCentsString) {
           throw new Error("Required checkout information is missing from URL.");
+        }
+        
+        let parsedRevSharePartners: RevenueSharePartner[] | undefined = undefined;
+        if (revSharePartnersString) {
+            try {
+                parsedRevSharePartners = JSON.parse(revSharePartnersString);
+            } catch (parseError) {
+                console.error("Error parsing revenue share partners from URL:", parseError);
+                // Decide if this is a critical error or if you can proceed without it
+            }
         }
 
         const parsedDetails: OrderDetails = {
@@ -215,10 +238,8 @@ function PaymentPageContent() {
           state: searchParams.get('state') || undefined,
           zipCode: searchParams.get('zipCode') || undefined,
           country: searchParams.get('country') || undefined,
-          revSharePartnerName: searchParams.get('revSharePartnerName') || undefined,
-          revSharePartnerCompany: searchParams.get('revSharePartnerCompany') || undefined,
-          revSharePartnerPercentage: searchParams.has('revSharePartnerPercentage') ? parseFloat(searchParams.get('revSharePartnerPercentage')!) : null,
-          selectedCourseIds: selectedCourseIdsString.split(','),
+          revenueSharePartners: parsedRevSharePartners,
+          selectedProgramId,
           maxUsers: searchParams.has('maxUsers') ? parseInt(searchParams.get('maxUsers')!) : null,
           finalTotalAmountCents: parseInt(finalTotalAmountCentsString),
           subtotalAmount: parseFloat(searchParams.get('subtotalAmount') || '0'),
@@ -226,6 +247,10 @@ function PaymentPageContent() {
           appliedDiscountAmount: parseFloat(searchParams.get('appliedDiscountAmount') || '0'),
         };
         setOrderDetails(parsedDetails);
+
+        // Fetch program title
+        const program = await getProgramById(selectedProgramId);
+        setProgramTitle(program?.title);
 
         if (parsedDetails.finalTotalAmountCents > 0) {
           const paymentIntentResult = await createPaymentIntent(parsedDetails.finalTotalAmountCents);
@@ -235,7 +260,8 @@ function PaymentPageContent() {
             throw new Error(paymentIntentResult.error || "Failed to initialize payment.");
           }
         } else {
-          setClientSecret(null);
+           // Handle $0 amount - no payment intent needed, or use a placeholder
+          setClientSecret('pi_0_free_checkout'); // Use the placeholder for $0 checkouts
         }
       } catch (e: any) {
         console.error("Error loading payment page:", e);
@@ -273,23 +299,24 @@ function PaymentPageContent() {
   }
 
   const stripeElementsOptions: StripeElementsOptions | undefined =
-    orderDetails.finalTotalAmountCents > 0 && clientSecret
+    orderDetails.finalTotalAmountCents > 0 && clientSecret && clientSecret !== 'pi_0_free_checkout'
       ? { clientSecret, appearance: { theme: 'stripe' } }
       : undefined;
 
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20 flex justify-center">
-      {orderDetails.finalTotalAmountCents > 0 && clientSecret && stripeElementsOptions ? (
+      {/* Conditionally render Elements only if a payment is required and clientSecret is valid */}
+      {orderDetails.finalTotalAmountCents > 0 && clientSecret && clientSecret !== 'pi_0_free_checkout' && stripeElementsOptions ? (
         <Elements stripe={stripePromise} options={stripeElementsOptions} key={clientSecret}>
-          <PaymentFormElements orderDetails={orderDetails} />
+          <PaymentFormElements orderDetails={orderDetails} programTitle={programTitle} />
         </Elements>
-      ) : orderDetails.finalTotalAmountCents <= 0 ? (
-        <PaymentFormElements orderDetails={orderDetails} />
-      ) : (
+      ) : orderDetails.finalTotalAmountCents <= 0 ? ( // If amount is $0, render form without Elements
+        <PaymentFormElements orderDetails={orderDetails} programTitle={programTitle} />
+      ) : ( // If there's an issue with clientSecret for a positive amount
         <Alert variant="destructive" className="max-w-md mx-auto">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Payment Initialization Error</AlertTitle>
-          <AlertDescription>Could not initialize payment form. Please try again or contact support.</AlertDescription>
+          <AlertDescription>Could not initialize payment form for a non-zero amount. Please try again or contact support.</AlertDescription>
         </Alert>
       )}
     </div>

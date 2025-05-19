@@ -5,7 +5,7 @@ import type { CheckoutFormData } from '@/types/user';
 import { addCompany, createDefaultLocation } from '@/lib/company-data';
 import { addUser } from '@/lib/user-data';
 import { addCustomerPurchaseRecord } from '@/lib/customer-data';
-import { getCourseById } from '@/lib/firestore-data';
+import { getProgramById, getCourseById } from '@/lib/firestore-data'; // Added getProgramById
 import { db } from '@/lib/firebase';
 
 import { initializeApp, deleteApp, getApps } from 'firebase/app';
@@ -55,47 +55,49 @@ export async function processCheckout(data: CheckoutFormData): Promise<
     console.warn("[Server Action] No Payment Intent ID received. Assuming pre-verified payment or simulation.");
   }
 
-  // TODO: The 'finalTotalAmount' in 'data' is currently based on old Course pricing.
-  // This server action needs to be updated once Program-based pricing is implemented
-  // in the checkout flow. The 'saleAmount' saved to the Brand will be incorrect until then.
-
   const localAuthAppName = `checkoutAuthApp-${Date.now()}`;
   let localAuthInstance;
 
   try {
+    const selectedProgram = await getProgramById(data.selectedProgramId);
+    if (!selectedProgram) {
+        throw new Error(`Selected Program (ID: ${data.selectedProgramId}) not found.`);
+    }
+    const coursesToAssignToBrand = selectedProgram.courseIds || [];
+
     const newCompanyData = {
         name: data.companyName,
-        assignedCourseIds: data.selectedCourseIds || [], // Courses are still assigned, pricing is separate
+        assignedCourseIds: coursesToAssignToBrand,
         maxUsers: data.maxUsers ?? null,
         isTrial: false,
         trialEndsAt: null,
-        saleAmount: data.finalTotalAmount ?? 0, // This amount is currently incorrect due to pricing model change
+        saleAmount: data.finalTotalAmount ?? 0, // This is now the Program's base price
         revenueSharePartners: data.revenueSharePartners || null,
         whiteLabelEnabled: false,
         primaryColor: null,
         secondaryColor: null,
         logoUrl: null,
         shortDescription: null,
-        createdAt: Timestamp.now(), // Explicitly set createdAt
+        createdAt: Timestamp.now(),
     };
     const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
       throw new Error("Failed to create the brand in the database.");
     }
-    console.log(`[Server Action] Brand "${newCompany.name}" (Paid) created with ID: ${newCompany.id}`);
+    console.log(`[Server Action] Brand "${newCompany.name}" (Paid Program) created with ID: ${newCompany.id}`);
 
     const defaultLocation = await createDefaultLocation(newCompany.id);
     const defaultLocationId = defaultLocation ? [defaultLocation.id] : [];
 
-    const tempPassword = data.password || "password";
+    const tempPassword = data.password || "password"; // Ensure this is handled securely in production
     let authUserUid: string;
     try {
         localAuthInstance = getFirebaseAuthInstance(localAuthAppName);
         const userCredential = await createUserWithEmailAndPassword(localAuthInstance, data.adminEmail, tempPassword);
         authUserUid = userCredential.user.uid;
-        console.log(`[Server Action] Admin user created in Firebase Auth with UID: ${authUserUid} for email ${data.adminEmail} (Paid) using local auth instance`);
+        console.log(`[Server Action] Admin user created in Firebase Auth with UID: ${authUserUid} for email ${data.adminEmail} (Paid Program) using local auth instance`);
     } catch (authError: any) {
-        console.error("[Server Action] Failed to create admin user in Firebase Auth (Paid):", authError);
+        console.error("[Server Action] Failed to create admin user in Firebase Auth (Paid Program):", authError);
         throw new Error(`AuthCreationError: ${authError.code || 'UnknownCode'} - ${authError.message || 'Failed to create user in authentication service.'}`);
     }
 
@@ -109,18 +111,19 @@ export async function processCheckout(data: CheckoutFormData): Promise<
     const newAdminUser = await addUser(newAdminUserData);
     if (!newAdminUser) {
       console.warn(`[Server Action] Firestore user creation failed for Auth UID ${authUserUid}. Manual Auth user cleanup might be needed.`);
-      throw new Error("Failed to create the admin user account in Firestore (Paid).");
+      throw new Error("Failed to create the admin user account in Firestore (Paid Program).");
     }
-    console.log(`[Server Action] Admin user "${newAdminUser.name}" (Paid) created in Firestore with ID: ${newAdminUser.id}`);
+    console.log(`[Server Action] Admin user "${newAdminUser.name}" (Paid Program) created in Firestore with ID: ${newAdminUser.id}`);
 
-    const selectedCourseTitles = [];
-    if (data.selectedCourseIds && data.selectedCourseIds.length > 0) {
-        for (const courseId of data.selectedCourseIds) {
+    // Get titles of courses within the program for the customer purchase record
+    const programCourseTitles = [];
+    if (coursesToAssignToBrand.length > 0) {
+        for (const courseId of coursesToAssignToBrand) {
             const course = await getCourseById(courseId);
             if (course) {
-                selectedCourseTitles.push(course.title);
+                programCourseTitles.push(course.title);
             } else {
-                selectedCourseTitles.push(`Unknown Course (ID: ${courseId})`);
+                programCourseTitles.push(`Unknown Course (ID: ${courseId})`);
             }
         }
     }
@@ -130,10 +133,12 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         brandName: newCompany.name,
         adminUserId: newAdminUser.id,
         adminUserEmail: newAdminUser.email,
-        totalAmountPaid: data.finalTotalAmount ?? 0, // This amount is currently incorrect
+        totalAmountPaid: data.finalTotalAmount ?? 0, // Program base price
         paymentIntentId: data.paymentIntentId || null,
-        selectedCourseIds: data.selectedCourseIds || [],
-        selectedCourseTitles: selectedCourseTitles,
+        selectedProgramId: data.selectedProgramId,
+        selectedProgramTitle: selectedProgram.title,
+        selectedCourseIds: coursesToAssignToBrand, // Courses from the program
+        selectedCourseTitles: programCourseTitles,
         revenueSharePartners: data.revenueSharePartners || null,
         maxUsersConfigured: data.maxUsers ?? null,
     };
@@ -148,7 +153,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
     return { success: true, companyId: newCompany.id, adminUserId: newAdminUser.id, customerPurchaseId: customerPurchaseRecord?.id };
 
   } catch (error: any) {
-    console.error("[Server Action] Error during paid checkout processing:", error);
+    console.error("[Server Action] Error during paid checkout processing (Program):", error);
     await cleanupFirebaseApp(localAuthAppName);
     return { success: false, error: error.message || "An unexpected error occurred during paid checkout." };
   }
@@ -165,6 +170,14 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
   let localAuthInstance;
 
   try {
+    // For free trials, we still need to know which program's courses to assign
+    const selectedProgram = await getProgramById(data.selectedProgramId);
+    if (!selectedProgram) {
+        throw new Error(`Selected Program (ID: ${data.selectedProgramId}) not found for free trial.`);
+    }
+    const coursesToAssignToBrand = selectedProgram.courseIds || [];
+
+
     const trialDurationDays = data.trialDurationDays || 7;
     const trialEndsDate = new Date();
     trialEndsDate.setDate(trialEndsDate.getDate() + trialDurationDays);
@@ -172,18 +185,18 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
 
     const newCompanyData = {
         name: data.companyName,
-        assignedCourseIds: data.selectedCourseIds || [],
+        assignedCourseIds: coursesToAssignToBrand, // Assign courses from the selected program
         maxUsers: data.maxUsers ?? null,
         isTrial: true,
         trialEndsAt: trialEndsAtTimestamp,
         saleAmount: 0,
-        revenueSharePartners: null,
+        revenueSharePartners: null, // No revenue share for trials
         whiteLabelEnabled: false,
         primaryColor: null,
         secondaryColor: null,
         logoUrl: null,
         shortDescription: null,
-        createdAt: Timestamp.now(), // Explicitly set createdAt
+        createdAt: Timestamp.now(),
     };
     const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
@@ -194,7 +207,7 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
     const defaultLocation = await createDefaultLocation(newCompany.id);
     const defaultLocationId = defaultLocation ? [defaultLocation.id] : [];
 
-    const tempPassword = "password";
+    const tempPassword = data.password || "password"; // Ensure this is handled securely
     let authUserUid: string;
     try {
         localAuthInstance = getFirebaseAuthInstance(localAuthAppName);
@@ -219,6 +232,9 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
       throw new Error("Failed to create the trial admin user account in Firestore.");
     }
     console.log(`[Server Action] Trial Admin user "${newAdminUser.name}" created in Firestore`);
+
+    // TODO: Optionally create a $0 CustomerPurchaseRecord for trials if tracking is desired.
+    // For now, trials don't create a purchase record.
 
     await cleanupFirebaseApp(localAuthAppName);
     return { success: true, companyId: newCompany.id, adminUserId: newAdminUser.id };

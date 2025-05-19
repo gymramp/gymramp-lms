@@ -10,16 +10,14 @@ export interface CustomerPurchaseRecord {
   adminUserId: string;
   adminUserEmail: string;
   purchaseDate: Timestamp;
-  totalAmountPaid: number;
+  totalAmountPaid: number; // This will be the Program's base price
   paymentIntentId: string | null; // Can be null if amount was $0
-  selectedCourseIds: string[];
-  selectedCourseTitles?: string[]; // For easier display
+  selectedProgramId: string; // ID of the Program purchased
+  selectedProgramTitle?: string; // Title of the Program purchased
+  selectedCourseIds: string[]; // Courses included in the purchased Program
+  selectedCourseTitles?: string[]; // For easier display, titles of courses in Program
   revenueSharePartners?: RevenueSharePartner[] | null;
   maxUsersConfigured?: number | null;
-  // For future use, e.g., linking to Stripe Customer ID or Subscription ID
-  // stripeCustomerId?: string | null;
-  // stripeSubscriptionId?: string | null;
-  // subscriptionStatus?: 'active' | 'inactive' | 'cancelled' | 'past_due' | 'trialing';
 }
 
 export type CustomerPurchaseRecordFormData = Omit<CustomerPurchaseRecord, 'id' | 'purchaseDate'> & {

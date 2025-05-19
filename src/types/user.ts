@@ -36,7 +36,7 @@ export interface UserCourseProgressData {
 }
 
 
-// Represents a company in the system
+// Represents a company (now Brand) in the system
 export interface Company {
   id: string; // Firestore document ID
   name: string;
@@ -46,14 +46,11 @@ export interface Company {
   maxUsers?: number | null; // Maximum number of users allowed, null for unlimited
   isTrial?: boolean; // Indicates if the company is on a trial
   trialEndsAt?: Timestamp | null; // Timestamp when the trial period ends
-  saleAmount?: number | null; // Amount of the sale if it was a paid checkout
+  saleAmount?: number | null; // Amount of the sale if it was a paid checkout (e.g., Program base price)
   isDeleted?: boolean; // For soft deletes
   deletedAt?: Timestamp | null; // Timestamp of soft deletion
   createdAt?: Timestamp | Date; // Timestamp of company creation
-  // Revenue Share Fields
-  revSharePartnerName?: string | null;
-  revSharePartnerCompany?: string | null;
-  revSharePartnerPercentage?: number | null;
+  revenueSharePartners?: RevenueSharePartner[] | null; // Updated to an array
   // White-labeling fields
   whiteLabelEnabled: boolean;
   // logoUrl: string | null; // Already present
@@ -61,8 +58,18 @@ export interface Company {
   secondaryColor: string | null;
 }
 
-// Type for the form data when adding/editing a company
-export type CompanyFormData = Omit<Company, 'id' | 'isDeleted' | 'deletedAt'>;
+// Type for the form data when adding/editing a company (now Brand)
+export type CompanyFormData = Omit<Company, 'id' | 'isDeleted' | 'deletedAt'> & {
+  revenueSharePartners?: RevenueSharePartner[]; // Ensure this is included
+};
+
+// Represents a single revenue share partner
+export interface RevenueSharePartner {
+  name: string;
+  companyName?: string | null; // Optional partner company
+  percentage: number;
+  shareBasis: 'coursePrice' | 'subscriptionPrice'; // Basis for the share
+}
 
 
 // Represents a physical location or branch of a company
@@ -103,7 +110,7 @@ export interface CheckoutFormData extends Omit<UserFormData, 'role' | 'isActive'
   country?: string;
   adminEmail: string; // Email for the new admin user
   password?: string; // Password for the new admin user
-  selectedCourseIds?: string[]; // Courses to be assigned to the new company
+  selectedProgramId: string; // Program to be purchased
   maxUsers?: number | null; // Max users for the new company
   // Payment related fields
   paymentIntentId?: string | null; // Store Stripe PaymentIntent ID after successful payment
@@ -114,9 +121,5 @@ export interface CheckoutFormData extends Omit<UserFormData, 'role' | 'isActive'
   // Trial related fields
   isTrial?: boolean;
   trialDurationDays?: number; // Optional: duration in days if it's a trial
-  // Revenue Share Fields
-  revSharePartnerName?: string;
-  revSharePartnerCompany?: string;
-  revSharePartnerPercentage?: number;
+  revenueSharePartners?: RevenueSharePartner[]; // Array of partners
 }
-

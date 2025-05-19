@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Loader2, ArrowLeft, Percent, FileText, Search, CalendarDays, DollarSign } from 'lucide-react';
+import { Loader2, ArrowLeft, Percent, FileText, Search, CalendarDays, DollarSign, Layers, AlertTriangle, Info } from 'lucide-react'; // Added Layers, AlertTriangle, Info
 import { useToast } from '@/hooks/use-toast';
 import type { Company, User, RevenueSharePartner } from '@/types/user';
 import { getAllCompanies } from '@/lib/company-data';
@@ -26,33 +26,32 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
 import { Timestamp } from 'firebase/firestore';
-import { getAllPrograms, getAllCourses, getCourseById } from '@/lib/firestore-data'; // Import course/program getters
+import { getAllPrograms, getCourseById, getProgramById } from '@/lib/firestore-data';
 import type { Program, Course } from '@/types/course';
+import type { CustomerPurchaseRecord } from '@/types/customer'; // Import CustomerPurchaseRecord
+import { getAllCustomerPurchaseRecords } from '@/lib/customer-data'; // Import function to get records
 
-interface RevenueShareEntry {
+
+interface RevenueShareReportEntry {
+  purchaseRecordId: string;
   brandId: string;
   brandName: string;
   brandCreatedAt?: Timestamp | Date | null;
+  programSoldTitle?: string | null;
   partnerName: string;
   partnerCompany?: string | null;
   partnerPercentage: number;
-  shareBasis: 'coursePrice' | 'subscriptionPrice'; 
-  // TODO: This needs to be completely rethought.
-  // 'saleAmountForShareCalculation' needs to derive from the selected Program's one-time price
-  // OR the relevant subscription tier price. This is very complex with multi-tiered subscriptions.
-  saleAmountForShareCalculation: number; 
+  shareBasis: 'coursePrice' | 'subscriptionPrice';
+  saleAmountForShareCalculation: number; // The base amount used for this partner's share
   calculatedRevShareAmount: number;
-  // For future reference, we might need to store which Program was sold:
-  // programIdSold?: string;
-  // programTitleSold?: string;
+  basisNote?: string; // Optional note about how basis was determined
 }
 
 export default function RevenueShareReportPage() {
-  const [allCompaniesWithRevShare, setAllCompaniesWithRevShare] = useState<Company[]>([]);
+  const [allPurchaseRecords, setAllPurchaseRecords] = useState<CustomerPurchaseRecord[]>([]);
   const [allProgramsMap, setAllProgramsMap] = useState<Map<string, Program>>(new Map());
-  const [allCoursesMap, setAllCoursesMap] = useState<Map<string, Course>>(new Map());
-  const [reportData, setReportData] = useState<RevenueShareEntry[]>([]);
-  const [filteredReportData, setFilteredReportData] = useState<RevenueShareEntry[]>([]);
+  const [reportData, setReportData] = useState<RevenueShareReportEntry[]>([]);
+  const [filteredReportData, setFilteredReportData] = useState<RevenueShareReportEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -81,24 +80,15 @@ export default function RevenueShareReportPage() {
   const fetchReportData = async () => {
     setIsLoading(true);
     try {
-      const [companies, programsData, coursesData] = await Promise.all([
-        getAllCompanies(),
+      const [purchaseRecordsData, programsData] = await Promise.all([
+        getAllCustomerPurchaseRecords(),
         getAllPrograms(),
-        getAllCourses(),
       ]);
       
       const programsMap = new Map(programsData.map(p => [p.id, p]));
       setAllProgramsMap(programsMap);
+      setAllPurchaseRecords(purchaseRecordsData);
 
-      const coursesMap = new Map(coursesData.map(c => [c.id, c]));
-      setAllCoursesMap(coursesMap);
-
-      const relevantCompanies = companies.filter(company =>
-        !company.isTrial &&
-        company.saleAmount && company.saleAmount > 0 && // Still using company.saleAmount from old checkout
-        Array.isArray(company.revenueSharePartners) && company.revenueSharePartners.length > 0
-      );
-      setAllCompaniesWithRevShare(relevantCompanies);
     } catch (error) {
       console.error("Failed to fetch revenue share report data:", error);
       toast({ title: "Error", description: "Could not load report data.", variant: "destructive" });
@@ -115,56 +105,49 @@ export default function RevenueShareReportPage() {
 
 
   useEffect(() => {
-    // TODO: MAJOR REWORK REQUIRED HERE FOR REVENUE SHARE CALCULATION
-    // The current `company.saleAmount` is based on the old Course-based checkout and is likely $0.
-    // This report needs to:
-    // 1. Identify which Program was sold (this info isn't currently stored on the Company/Brand document from checkout).
-    // 2. Based on `partner.shareBasis`:
-    //    - If 'coursePrice' (now Program one-time price): Use the sold Program's `price`.
-    //    - If 'subscriptionPrice': Determine which subscription tier applies (firstSubscriptionPrice or secondSubscriptionPrice)
-    //      and use that Program's specific subscription price. This requires knowing how far into the subscription the sale is,
-    //      which isn't tracked yet. This is very complex.
-    //
-    // For now, this will use `company.saleAmount` as a placeholder, which is incorrect.
-    // The report will show misleading data until checkout is redesigned for Program sales.
+    const flatData = allPurchaseRecords.flatMap(record => {
+      if (!record.revenueSharePartners || record.revenueSharePartners.length === 0) {
+        return [];
+      }
+      const programDetails = record.selectedProgramId ? allProgramsMap.get(record.selectedProgramId) : null;
 
-    const flatData = allCompaniesWithRevShare.flatMap(company =>
-      (company.revenueSharePartners || []).map(partner => {
-        let saleBaseForShare = company.saleAmount || 0; // THIS IS THE PLACEHOLDER
+      return (record.revenueSharePartners).map(partner => {
+        let saleBaseForShare = 0;
         let basisNote = "";
 
-        // Attempt to derive a Program price if a Program was involved (hypothetical for now)
-        // This requires knowing which program was sold. We don't have this on the company doc yet.
-        // We also don't know if it was a one-time or subscription sale directly from company.saleAmount.
-        // This is highly speculative until checkout is updated.
-        if (partner.shareBasis === 'coursePrice') {
-            // Placeholder: Assume company.saleAmount is the one-time price of whatever was sold.
-            saleBaseForShare = company.saleAmount || 0;
-            basisNote = " (based on Brand's recorded one-time sale value)";
+        if (partner.shareBasis === 'coursePrice') { // Now means Program Base Price
+            saleBaseForShare = record.totalAmountPaid; // This is the Program's base price
+            basisNote = "Program Base Price";
         } else if (partner.shareBasis === 'subscriptionPrice') {
-            // Placeholder: Assume company.saleAmount is the relevant subscription price for the first period.
-            // This is highly inaccurate for multi-tiered subscriptions.
-            saleBaseForShare = company.saleAmount || 0; 
-            basisNote = " (based on Brand's recorded sale value, assumed subscription)";
-            console.warn(`Revenue share on subscription for Brand ${company.name}, Partner ${partner.name} is using a placeholder value. Actual subscription pricing (first/second tier) needs to be determined based on the Program sold and subscription lifecycle, which is not yet implemented in checkout or this report.`);
+            if (programDetails && programDetails.firstSubscriptionPrice) {
+                const subPrice = parseFloat(programDetails.firstSubscriptionPrice.replace(/[$,/mo]/gi, ''));
+                saleBaseForShare = isNaN(subPrice) ? 0 : subPrice;
+                basisNote = "Program 1st Sub Price (Hypothetical)";
+            } else {
+                saleBaseForShare = 0; // Or handle as error / N/A
+                basisNote = "Subscription Price N/A for Program";
+            }
+            // Critical: This calculation is still hypothetical until actual subscription charges are tracked.
         }
 
         return {
-          brandId: company.id,
-          brandName: company.name,
-          brandCreatedAt: company.createdAt,
+          purchaseRecordId: record.id,
+          brandId: record.brandId,
+          brandName: record.brandName,
+          brandCreatedAt: record.purchaseDate, // Use purchaseDate of the record
+          programSoldTitle: record.selectedProgramTitle || programDetails?.title || 'Unknown Program',
           partnerName: partner.name,
-          partnerCompany: partner.companyName, // Note: schema uses companyName for partner
+          partnerCompany: partner.companyName,
           partnerPercentage: partner.percentage,
           shareBasis: partner.shareBasis,
           saleAmountForShareCalculation: saleBaseForShare,
           calculatedRevShareAmount: (saleBaseForShare * partner.percentage) / 100,
-          basisNote: basisNote, // For clarity in report
+          basisNote: basisNote,
         };
       })
-    );
+    });
     setReportData(flatData);
-  }, [allCompaniesWithRevShare, allProgramsMap, allCoursesMap]);
+  }, [allPurchaseRecords, allProgramsMap]);
 
 
   useEffect(() => {
@@ -174,7 +157,8 @@ export default function RevenueShareReportPage() {
       filtered = filtered.filter(entry =>
         entry.brandName.toLowerCase().includes(lowercasedFilter) ||
         (entry.partnerName && entry.partnerName.toLowerCase().includes(lowercasedFilter)) ||
-        (entry.partnerCompany && entry.partnerCompany.toLowerCase().includes(lowercasedFilter))
+        (entry.partnerCompany && entry.partnerCompany.toLowerCase().includes(lowercasedFilter)) ||
+        (entry.programSoldTitle && entry.programSoldTitle.toLowerCase().includes(lowercasedFilter))
       );
     }
     if (startDate) {
@@ -200,12 +184,18 @@ export default function RevenueShareReportPage() {
     return filteredReportData.reduce((sum, entry) => sum + entry.calculatedRevShareAmount, 0);
   }, [filteredReportData]);
   
-  const totalSaleAmountSumForDisplayedEntries = useMemo(() => {
-    // Summing the saleAmountForShareCalculation for displayed entries.
-    // This sum might be misleading if different partners for the same brand sale have different share bases.
-    // A true "total sales from these brands" would require summing unique brand.saleAmount.
-    return filteredReportData.reduce((sum, entry) => sum + entry.saleAmountForShareCalculation, 0);
-  }, [filteredReportData]);
+  // Sum of unique sale amounts for the brands in the filtered report
+  const totalSaleAmountSumForDisplayedBrands = useMemo(() => {
+    const uniqueBrandSaleAmounts = new Map<string, number>();
+    filteredReportData.forEach(entry => {
+      // We need the original totalAmountPaid from the purchase record to sum unique brand sales
+      const originalPurchaseRecord = allPurchaseRecords.find(pr => pr.id === entry.purchaseRecordId);
+      if (originalPurchaseRecord && !uniqueBrandSaleAmounts.has(originalPurchaseRecord.brandId)) {
+        uniqueBrandSaleAmounts.set(originalPurchaseRecord.brandId, originalPurchaseRecord.totalAmountPaid);
+      }
+    });
+    return Array.from(uniqueBrandSaleAmounts.values()).reduce((sum, amount) => sum + amount, 0);
+  }, [filteredReportData, allPurchaseRecords]);
 
   const formatDate = (dateInput: Timestamp | Date | undefined | null): string => {
     if (!dateInput) return 'N/A';
@@ -232,13 +222,12 @@ export default function RevenueShareReportPage() {
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-primary">Revenue Share Report</h1>
       </div>
-      {/* TODO: This warning needs to be more prominent. */}
-      <div className="mb-6 p-4 border border-destructive/50 bg-destructive/5 rounded-md">
-          <h3 className="text-destructive font-semibold">Report Under Development - Data Accuracy Warning!</h3>
-          <p className="text-sm text-destructive/90">
-              This report needs a major overhaul to align with Program-based sales and the new multi-tiered subscription pricing.
-              The "Sale Base for Share" and "Rev Share Amount" columns are currently using placeholder logic based on the old `Brand.saleAmount` (which itself is based on outdated Course pricing from initial checkout) and may not be accurate.
-              This report will provide misleading data until the checkout process is fully updated to handle Program sales and their complex pricing, and this report is updated to consume that new sales data.
+      <div className="mb-6 p-4 border border-amber-500 bg-amber-50 rounded-md">
+          <h3 className="text-amber-700 font-semibold flex items-center gap-2"><AlertTriangle className="h-5 w-5" />Report Calculation Notice</h3>
+          <p className="text-sm text-amber-600">
+              This report reflects revenue share based on the **one-time Program base price** at checkout.
+              For partners with "Program Subscription Price" as their share basis, the calculation uses the Program's **first subscription price tier** as a *hypothetical* base.
+              Actual recurring subscription charges and revenue share based on them are **not yet implemented or tracked**. This part of the report is for estimation purposes only.
           </p>
       </div>
       <div className="mb-6 flex flex-wrap items-end gap-4">
@@ -249,7 +238,7 @@ export default function RevenueShareReportPage() {
           <Input
             id="search-report"
             type="text"
-            placeholder="Brand or Partner Name..."
+            placeholder="Brand, Partner, or Program..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="max-w-sm h-10"
@@ -271,9 +260,9 @@ export default function RevenueShareReportPage() {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5" /> Checkout Revenue Share Details</CardTitle>
+          <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5" /> Program Checkout Revenue Share Details</CardTitle>
           <CardDescription>
-            List of paid Brand checkouts with revenue share agreements. <strong>Warning: Calculations are based on outdated pricing.</strong>
+            List of paid Brand checkouts (Program-based) with revenue share agreements.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -290,8 +279,9 @@ export default function RevenueShareReportPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
+                    <TableHead>Checkout Date</TableHead>
                     <TableHead>Customer Brand</TableHead>
+                    <TableHead>Program Sold</TableHead>
                     <TableHead>Partner Name</TableHead>
                     <TableHead>Partner Brand</TableHead>
                     <TableHead className="text-center">Share %</TableHead>
@@ -302,9 +292,10 @@ export default function RevenueShareReportPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredReportData.map((entry, index) => (
-                    <TableRow key={`${entry.brandId}-${entry.partnerName}-${index}`}>
+                    <TableRow key={`${entry.purchaseRecordId}-${entry.partnerName}-${index}`}>
                       <TableCell>{formatDate(entry.brandCreatedAt)}</TableCell>
                       <TableCell className="font-medium">{entry.brandName}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{entry.programSoldTitle}</TableCell>
                       <TableCell>{entry.partnerName}</TableCell>
                       <TableCell>{entry.partnerCompany || 'N/A'}</TableCell>
                       <TableCell className="text-center">
@@ -313,8 +304,8 @@ export default function RevenueShareReportPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant={entry.shareBasis === 'coursePrice' ? 'outline' : 'default'}>
-                           {entry.shareBasis === 'coursePrice' ? 'Program Price' : 'Program Subscription'}
+                        <Badge variant={entry.shareBasis === 'coursePrice' ? 'outline' : 'default'} title={entry.basisNote}>
+                           {entry.shareBasis === 'coursePrice' ? 'Program Base Price' : 'Program Subscription*'}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">${entry.saleAmountForShareCalculation?.toFixed(2)}</TableCell>
@@ -327,14 +318,15 @@ export default function RevenueShareReportPage() {
               </Table>
               <div className="mt-6 pt-4 border-t flex justify-end space-x-8">
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Sale Base (Filtered - Placeholder)</p>
-                  <p className="text-lg font-bold">${totalSaleAmountSumForDisplayedEntries.toFixed(2)}</p>
+                  <p className="text-sm text-muted-foreground">Total Brand Sales (Filtered, Program Base)</p>
+                  <p className="text-lg font-bold">${totalSaleAmountSumForDisplayedBrands.toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Rev Share (Filtered - Placeholder)</p>
+                  <p className="text-sm text-muted-foreground">Total Rev Share (Filtered)</p>
                   <p className="text-lg font-bold text-primary">${totalRevShareSum.toFixed(2)}</p>
                 </div>
               </div>
+               <p className="text-xs text-muted-foreground mt-4">* Share basis on "Program Subscription" is a hypothetical calculation based on the program's first subscription tier price. Actual recurring subscription revenue share is not yet implemented.</p>
             </>
           )}
         </CardContent>
@@ -342,4 +334,3 @@ export default function RevenueShareReportPage() {
     </div>
   );
 }
-
