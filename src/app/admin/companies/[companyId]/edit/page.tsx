@@ -31,7 +31,7 @@ import { getCompanyById, updateCompany, updateCompanyCourseAssignments } from '@
 import { getAllCourses } from '@/lib/firestore-data';
 import type { Company, CompanyFormData, User } from '@/types/user';
 import type { Course } from '@/types/course';
-import { Loader2, Upload, ImageIcon, Trash2, BookCheck, ArrowLeft, Users, CalendarDays, Gift } from 'lucide-react';
+import { Loader2, Upload, ImageIcon, Trash2, BookCheck, ArrowLeft, Users, CalendarDays, Gift, Globe } from 'lucide-react'; // Added Globe
 import { Skeleton } from '@/components/ui/skeleton';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
@@ -41,6 +41,13 @@ import { Timestamp } from 'firebase/firestore';
 
 const companyFormSchema = z.object({
   name: z.string().min(2, { message: 'Brand name must be at least 2 characters.' }),
+  subdomainSlug: z.string()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug can only contain lowercase letters, numbers, and hyphens, and cannot start/end with a hyphen.' })
+    .min(3, { message: 'Subdomain slug must be at least 3 characters.'})
+    .max(63, { message: 'Subdomain slug cannot exceed 63 characters.'})
+    .optional()
+    .or(z.literal(''))
+    .nullable(),
   shortDescription: z.string().max(150, { message: 'Description must be 150 characters or less.' }).optional().or(z.literal('')),
   logoUrl: z.string().url({ message: 'Invalid URL format.' }).optional().or(z.literal('')),
   maxUsers: z.coerce
@@ -53,6 +60,10 @@ const companyFormSchema = z.object({
   assignedCourseIds: z.array(z.string()).optional(),
   isTrial: z.boolean().optional(),
   trialEndsAt: z.date().nullable().optional(),
+  whiteLabelEnabled: z.boolean().optional(),
+  primaryColor: z.string().optional().or(z.literal('')).nullable(),
+  secondaryColor: z.string().optional().or(z.literal('')).nullable(),
+  accentColor: z.string().optional().or(z.literal('')).nullable(),
 });
 
 type CompanyFormValues = z.infer<typeof companyFormSchema>;
@@ -76,17 +87,24 @@ export default function EditCompanyPage() {
     resolver: zodResolver(companyFormSchema),
     defaultValues: {
       name: '',
+      subdomainSlug: null,
       shortDescription: '',
       logoUrl: '',
       maxUsers: null,
       assignedCourseIds: [],
       isTrial: false,
       trialEndsAt: null,
+      whiteLabelEnabled: false,
+      primaryColor: null,
+      secondaryColor: null,
+      accentColor: null,
     },
   });
 
    const logoUrlValue = form.watch('logoUrl');
    const isTrialValue = form.watch('isTrial');
+   const whiteLabelEnabledValue = form.watch('whiteLabelEnabled');
+
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -118,12 +136,17 @@ export default function EditCompanyPage() {
       setCompany(companyData);
       form.reset({
         name: companyData.name,
+        subdomainSlug: companyData.subdomainSlug || null,
         shortDescription: companyData.shortDescription || '',
         logoUrl: companyData.logoUrl || '',
         maxUsers: companyData.maxUsers ?? null,
         assignedCourseIds: companyData.assignedCourseIds || [],
         isTrial: companyData.isTrial || false,
         trialEndsAt: companyData.trialEndsAt instanceof Timestamp ? companyData.trialEndsAt.toDate() : null,
+        whiteLabelEnabled: companyData.whiteLabelEnabled || false,
+        primaryColor: companyData.primaryColor || null,
+        secondaryColor: companyData.secondaryColor || null,
+        accentColor: companyData.accentColor || null,
       });
 
       const courses = await getAllCourses();
@@ -173,10 +196,16 @@ export default function EditCompanyPage() {
      try {
         const metadataToUpdate: Partial<CompanyFormData> = {
             name: data.name,
+            subdomainSlug: data.subdomainSlug?.trim().toLowerCase() || null,
             shortDescription: data.shortDescription || null,
             logoUrl: data.logoUrl || null,
             maxUsers: data.maxUsers ?? null,
             trialEndsAt: data.trialEndsAt ? Timestamp.fromDate(data.trialEndsAt) : null,
+            isTrial: data.isTrial, // Make sure isTrial is passed
+            whiteLabelEnabled: data.whiteLabelEnabled,
+            primaryColor: data.whiteLabelEnabled ? (data.primaryColor || null) : null,
+            secondaryColor: data.whiteLabelEnabled ? (data.secondaryColor || null) : null,
+            accentColor: data.whiteLabelEnabled ? (data.accentColor || null) : null,
         };
 
         const updatedCompanyMeta = await updateCompany(companyId, metadataToUpdate);
@@ -190,7 +219,7 @@ export default function EditCompanyPage() {
         }
 
         toast({ title: "Brand Updated", description: `"${data.name}" updated successfully.` });
-        fetchCompanyAndCourses();
+        fetchCompanyAndCourses(); // Re-fetch to reflect changes
 
      } catch (error: any) {
          console.error("Failed to update brand:", error);
@@ -259,6 +288,29 @@ export default function EditCompanyPage() {
                         />
                         <FormField
                           control={form.control}
+                          name="subdomainSlug"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center gap-1">
+                                <Globe className="h-4 w-4" /> Subdomain Slug (Optional)
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="e.g., global-fitness (for global-fitness.yourdomain.com)"
+                                  {...field}
+                                  value={field.value ?? ''}
+                                  onChange={e => field.onChange(e.target.value.toLowerCase())}
+                                />
+                              </FormControl>
+                               <p className="text-xs text-muted-foreground">
+                                Used for branded login URL. Only lowercase letters, numbers, and hyphens.
+                              </p>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
                           name="shortDescription"
                           render={({ field }) => (
                             <FormItem>
@@ -295,30 +347,6 @@ export default function EditCompanyPage() {
                             </FormItem>
                           )}
                         />
-
-                        {isTrialValue && (
-                             <FormField
-                                control={form.control}
-                                name="trialEndsAt"
-                                render={({ field }) => (
-                                  <FormItem className="flex flex-col">
-                                    <FormLabel className="flex items-center gap-1">
-                                        <CalendarDays className="h-4 w-4" /> Trial End Date
-                                    </FormLabel>
-                                    <FormControl>
-                                        <DatePickerWithPresets
-                                            date={field.value}
-                                            setDate={(date) => field.onChange(date || null)}
-                                        />
-                                    </FormControl>
-                                    <FormMessage />
-                                    <p className="text-xs text-muted-foreground">
-                                        Current trial end date. Adjust to extend or shorten the trial.
-                                    </p>
-                                  </FormItem>
-                                )}
-                              />
-                        )}
 
                          <FormItem className="space-y-2">
                              <FormLabel className="text-base font-semibold">Brand Logo (Optional)</FormLabel>
@@ -383,6 +411,74 @@ export default function EditCompanyPage() {
                            </FormItem>
                     </CardContent>
                 </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>White-Label Settings</CardTitle>
+                        <CardDescription>Customize the appearance of the platform for this brand.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <FormField
+                            control={form.control}
+                            name="whiteLabelEnabled"
+                            render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                <div className="space-y-0.5">
+                                    <FormLabel className="text-base">Enable White-Labeling</FormLabel>
+                                    <FormDescription>
+                                    Allow this brand to use custom colors. Logo is set above.
+                                    </FormDescription>
+                                </div>
+                                <FormControl>
+                                    <Checkbox
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                    />
+                                </FormControl>
+                                </FormItem>
+                            )}
+                        />
+                        {whiteLabelEnabledValue && (
+                            <>
+                                <FormField
+                                    control={form.control}
+                                    name="primaryColor"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>Primary Color (Hex)</FormLabel>
+                                        <FormControl><Input type="text" placeholder="#3498db" {...field} value={field.value ?? ''} /></FormControl>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="secondaryColor"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>Secondary Color (Hex)</FormLabel>
+                                        <FormControl><Input type="text" placeholder="#ecf0f1" {...field} value={field.value ?? ''} /></FormControl>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="accentColor"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>Accent Color (Hex)</FormLabel>
+                                        <FormControl><Input type="text" placeholder="#2ecc71" {...field} value={field.value ?? ''} /></FormControl>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </>
+                        )}
+                    </CardContent>
+                </Card>
+
+
              </div>
               <div className="md:col-span-1 space-y-6">
                  {isTrialValue && (
@@ -393,34 +489,42 @@ export default function EditCompanyPage() {
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <p className="text-sm text-blue-600 dark:text-blue-400">
-                                This brand is currently on a trial.
-                                {company?.trialEndsAt instanceof Timestamp && (
-                                    ` Trial ends on: ${company.trialEndsAt.toDate().toLocaleDateString()}`
-                                )}
-                            </p>
-                             <FormField
+                            <FormField
                                 control={form.control}
                                 name="isTrial"
                                 render={({ field }) => (
-                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 mt-4 rounded-md border p-3">
+                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 mb-4">
+                                    <FormLabel className="text-sm">Active Trial</FormLabel>
                                     <FormControl>
                                         <Checkbox
                                             checked={field.value}
                                             onCheckedChange={field.onChange}
                                         />
                                     </FormControl>
-                                    <div className="space-y-1 leading-none">
-                                        <FormLabel>
-                                        Mark as Active Trial
-                                        </FormLabel>
-                                        <FormDescription>
-                                        Check if this brand is currently on a trial period. Uncheck to mark as not a trial.
-                                        </FormDescription>
-                                    </div>
                                     </FormItem>
                                 )}
                             />
+                             <FormField
+                                control={form.control}
+                                name="trialEndsAt"
+                                render={({ field }) => (
+                                  <FormItem className="flex flex-col">
+                                    <FormLabel className="flex items-center gap-1 text-sm">
+                                        <CalendarDays className="h-4 w-4" /> Trial End Date
+                                    </FormLabel>
+                                    <FormControl>
+                                        <DatePickerWithPresets
+                                            date={field.value}
+                                            setDate={(date) => field.onChange(date || null)}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                    <p className="text-xs text-muted-foreground">
+                                        Adjust to extend or shorten the trial. Clear to remove end date.
+                                    </p>
+                                  </FormItem>
+                                )}
+                              />
                         </CardContent>
                     </Card>
                  )}
@@ -479,7 +583,7 @@ export default function EditCompanyPage() {
                    </CardContent>
                  </Card>
                   <Button type="submit" size="lg" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading || isUploading}>
-                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {isLoading || isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Save Changes
                   </Button>
               </div>

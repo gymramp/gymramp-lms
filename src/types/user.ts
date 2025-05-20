@@ -40,6 +40,7 @@ export interface UserCourseProgressData {
 export interface Company {
   id: string; // Firestore document ID
   name: string;
+  subdomainSlug?: string | null; // e.g., "brand-a" for brand-a.yourdomain.com
   shortDescription?: string | null;
   logoUrl?: string | null;
   assignedCourseIds?: string[]; // Courses assigned to the company from the library
@@ -56,10 +57,11 @@ export interface Company {
   // logoUrl: string | null; // Already present
   primaryColor: string | null;
   secondaryColor: string | null;
+  accentColor?: string | null; // Added for consistency if you want a third brand color
 }
 
 // Type for the form data when adding/editing a company (now Brand)
-export type CompanyFormData = Omit<Company, 'id' | 'isDeleted' | 'deletedAt'> & {
+export type CompanyFormData = Omit<Company, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt'> & {
   revenueSharePartners?: RevenueSharePartner[]; // Ensure this is included
 };
 

@@ -32,11 +32,18 @@ import {
 import type { Company, CompanyFormData } from '@/types/user';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage'; // Import uploadImage and paths
 import { useToast } from '@/hooks/use-toast'; // Import useToast
-import { Loader2, Upload, ImageIcon, Trash2, Users } from 'lucide-react'; // Import icons, Added Users
+import { Loader2, Upload, ImageIcon, Trash2, Users, Globe } from 'lucide-react'; // Added Globe
 
 // Zod schema for form validation
 const companyFormSchema = z.object({
   name: z.string().min(2, { message: 'Brand name must be at least 2 characters.' }),
+  subdomainSlug: z.string()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug can only contain lowercase letters, numbers, and hyphens, and cannot start/end with a hyphen.' })
+    .min(3, { message: 'Subdomain slug must be at least 3 characters.'})
+    .max(63, { message: 'Subdomain slug cannot exceed 63 characters.'})
+    .optional()
+    .or(z.literal(''))
+    .nullable(),
   shortDescription: z.string().max(150, { message: 'Description must be 150 characters or less.' }).optional().or(z.literal('')), // Optional, max length
   logoUrl: z.string().url({ message: 'Invalid URL format.' }).optional().or(z.literal('')), // Track uploaded logo URL
   maxUsers: z.coerce // Use coerce for number input
@@ -68,6 +75,7 @@ export function AddEditCompanyDialog({ isOpen, setIsOpen, onSave, initialData }:
     resolver: zodResolver(companyFormSchema),
     defaultValues: {
       name: '',
+      subdomainSlug: null,
       shortDescription: '',
       logoUrl: '',
       maxUsers: null, // Default to null (unlimited)
@@ -78,7 +86,7 @@ export function AddEditCompanyDialog({ isOpen, setIsOpen, onSave, initialData }:
 
   // Effect to reset form when dialog opens
   useEffect(() => {
-    form.reset({ name: '', shortDescription: '', logoUrl: '', maxUsers: null }); // Always reset for adding
+    form.reset({ name: '', subdomainSlug: null, shortDescription: '', logoUrl: '', maxUsers: null }); // Always reset for adding
     setIsUploading(false);
     setUploadProgress(0);
     setUploadError(null);
@@ -132,9 +140,20 @@ export function AddEditCompanyDialog({ isOpen, setIsOpen, onSave, initialData }:
     // Prepare data, ensuring null for optional fields if empty
     const formData: CompanyFormData = {
       name: data.name,
+      subdomainSlug: data.subdomainSlug?.trim() === '' ? null : data.subdomainSlug?.toLowerCase(),
       shortDescription: data.shortDescription?.trim() === '' ? null : data.shortDescription,
       logoUrl: data.logoUrl?.trim() === '' ? null : data.logoUrl,
       maxUsers: data.maxUsers ?? null, // Include maxUsers, use null if undefined/null
+      // Default values for other fields not in this form (handled by server action or Firestore default)
+      assignedCourseIds: [],
+      isTrial: false,
+      trialEndsAt: null,
+      saleAmount: null,
+      revenueSharePartners: null,
+      whiteLabelEnabled: false, // Assuming default is false when adding a new brand
+      primaryColor: null,
+      secondaryColor: null,
+      accentColor: null,
     };
     onSave(formData); // Pass the validated form data to the parent
     // Parent component handles API call, toast, and closing
@@ -174,6 +193,32 @@ export function AddEditCompanyDialog({ isOpen, setIsOpen, onSave, initialData }:
                 </FormItem>
               )}
             />
+
+            {/* Subdomain Slug */}
+            <FormField
+              control={form.control}
+              name="subdomainSlug"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-1">
+                    <Globe className="h-4 w-4" /> Subdomain Slug (Optional)
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="e.g., global-fitness (for global-fitness.yourdomain.com)"
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={e => field.onChange(e.target.value.toLowerCase())}
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">
+                    Used for branded login URL. Only lowercase letters, numbers, and hyphens.
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
 
             {/* Short Description */}
             <FormField
@@ -276,7 +321,7 @@ export function AddEditCompanyDialog({ isOpen, setIsOpen, onSave, initialData }:
                       control={form.control}
                       name="logoUrl"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="hidden">
                            <FormLabel className="text-xs text-muted-foreground pt-1 block">Logo URL (auto-filled after upload)</FormLabel>
                            <FormControl>
                              <Input

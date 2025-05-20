@@ -16,20 +16,60 @@ import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import Link from "next/link";
 import Image from 'next/image';
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from 'next/navigation';
-import { getUserByEmail } from '@/lib/user-data';
-import { getCompanyById } from '@/lib/company-data'; // Import getCompanyById
+import { getCompanyById, getCompanyBySubdomainSlug } from '@/lib/company-data'; // Imports for company data
+import { getUserByEmail } from '@/lib/user-data'; // Corrected import for user data
 import { Loader2 } from "lucide-react";
-import { Timestamp } from "firebase/firestore"; // Import Timestamp
+import { Timestamp } from "firebase/firestore";
 
-export default function LoginPage() {
+// Interface for conceptual brand props
+interface LoginPageProps {
+  brandName?: string | null;
+  brandLogoUrl?: string | null;
+}
+
+// Main component logic
+function LoginPageContent({ brandName: initialBrandName, brandLogoUrl: initialBrandLogoUrl }: LoginPageProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [displayBrandName, setDisplayBrandName] = useState(initialBrandName || "GYMRAMP");
+  const [displayBrandLogoUrl, setDisplayBrandLogoUrl] = useState(initialBrandLogoUrl || "/images/newlogo.png"); // Default GYMRAMP logo
   const { toast } = useToast();
   const router = useRouter();
+  const [isClientLoadingBrand, setIsClientLoadingBrand] = useState(true); // Manage loading state for client-side brand fetching
+
+  // This effect attempts to derive brand from subdomain if running client-side
+  useEffect(() => {
+    // Only run if no initial brand name (meaning not from server prop)
+    // and if window is defined (client-side)
+    if (typeof window !== 'undefined' && !initialBrandName) {
+      const hostnameParts = window.location.hostname.split('.');
+      // Basic check for subdomain (e.g., brand.example.com, not www.example.com or example.com or localhost)
+      // Adjust this condition based on your actual domain structure and needs.
+      // This check ensures it doesn't run for 'localhost' or simple TLDs without clear subdomains.
+      if (hostnameParts.length > 2 && hostnameParts[0] !== 'www' && hostnameParts[0] !== 'localhost' && !hostnameParts[0].startsWith('gymramp-lms')) {
+        const slug = hostnameParts[0];
+        setIsClientLoadingBrand(true); // Start loading brand info
+        getCompanyBySubdomainSlug(slug).then(company => {
+          if (company) {
+            setDisplayBrandName(company.name);
+            if (company.logoUrl) {
+              setDisplayBrandLogoUrl(company.logoUrl);
+            }
+          }
+        }).catch(err => console.error("Error fetching brand by subdomain:", err))
+        .finally(() => setIsClientLoadingBrand(false)); // Finish loading
+      } else {
+        setIsClientLoadingBrand(false); // No relevant subdomain found, finish loading
+      }
+    } else {
+        setIsClientLoadingBrand(false); // Already has initial props or not client-side, finish loading
+    }
+  }, [initialBrandName]);
+
 
   const handleLogin = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -53,13 +93,12 @@ export default function LoginPage() {
             return;
         }
 
-        // Check company trial status if user has a companyId
         if (userDetails && userDetails.companyId) {
             const companyDetails = await getCompanyById(userDetails.companyId);
             if (companyDetails?.isTrial && companyDetails.trialEndsAt) {
                 const trialEndDate = companyDetails.trialEndsAt instanceof Timestamp
                     ? companyDetails.trialEndsAt.toDate()
-                    : new Date(companyDetails.trialEndsAt); // Fallback if not Timestamp (should be)
+                    : new Date(companyDetails.trialEndsAt);
 
                 if (trialEndDate < new Date()) {
                     await signOut(auth);
@@ -123,15 +162,35 @@ export default function LoginPage() {
       }
   };
 
+  // Show loading state for brand logo only during client-side fetching.
+  // isLoading covers the login process itself.
+  if (isClientLoadingBrand && !initialBrandName && typeof window !== 'undefined') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-theme(spacing.14)*2)] py-12 px-4 sm:px-6 lg:px-8">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-theme(spacing.14)*2)] py-12 px-4 sm:px-6 lg:px-8">
-       <div className="mb-8">
-         <Image src="/images/newlogo.png" alt="GYMRAMP Logo" width={150} height={45} priority />
+       <div className="mb-8 h-[45px] flex items-center justify-center"> {/* Added fixed height for logo area to prevent layout shift */}
+         <Image
+            src={displayBrandLogoUrl}
+            alt={`${displayBrandName} Logo`}
+            width={150}
+            height={45}
+            priority
+            className="max-h-[45px] object-contain" // Ensure image respects height
+            onError={(e) => { (e.target as HTMLImageElement).src = '/images/newlogo.png'; }} // Fallback to default logo
+        />
        </div>
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-primary">Welcome Back!</CardTitle>
-          <CardDescription>Log in to access your GYMRAMP account.</CardDescription>
+          <CardTitle className="text-2xl font-bold text-primary">
+            {displayBrandName === "GYMRAMP" || !displayBrandName ? "Welcome Back!" : `Welcome to ${displayBrandName}!`}
+          </CardTitle>
+          <CardDescription>Log in to access your account.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
@@ -152,5 +211,19 @@ export default function LoginPage() {
          <CardFooter className="flex justify-center text-sm"> </CardFooter>
       </Card>
     </div>
+  );
+}
+
+// New default export that wraps content in Suspense
+export default function LoginPage() {
+  // For a true SSR white-labeling solution, brandName and brandLogoUrl
+  // would be fetched server-side (e.g., in a parent Server Component or layout
+  // based on hostname) and passed as props to LoginPageContent.
+  // Since this page is a client component and `useSearchParams` for brandId was removed,
+  // we'll rely on client-side detection or pass nulls.
+  return (
+    <Suspense fallback={<div className="flex flex-col items-center justify-center min-h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>}>
+      <LoginPageContent brandName={null} brandLogoUrl={null} />
+    </Suspense>
   );
 }

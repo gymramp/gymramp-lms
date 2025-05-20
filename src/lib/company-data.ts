@@ -70,19 +70,18 @@ export async function createDefaultCompany(): Promise<Company | null> {
             console.log(`Default brand "${DEFAULT_COMPANY_NAME}" not found or soft-deleted, creating it.`);
             const newCompanyData: CompanyFormData = {
                 name: DEFAULT_COMPANY_NAME,
+                subdomainSlug: null, // Default brand typically doesn't need a subdomain
                 maxUsers: null,
                 assignedCourseIds: [],
                 isTrial: false,
                 trialEndsAt: null,
                 saleAmount: null,
-                revSharePartnerName: null,
-                revSharePartnerCompany: null,
-                revSharePartnerPercentage: null,
-                whiteLabelEnabled: false,
+                revenueSharePartners: null,
+                whiteLabelEnabled: false, // Default brand might not use white-labeling for itself
                 primaryColor: null,
                 secondaryColor: null,
+                accentColor: null,
                 logoUrl: null,
-                 createdAt: serverTimestamp() as Timestamp,
             };
             const docRef = await addDoc(companiesRef, { ...newCompanyData, isDeleted: false, deletedAt: null, createdAt: serverTimestamp() });
             const newDocSnap = await getDoc(docRef);
@@ -127,11 +126,32 @@ export async function getCompanyById(companyId: string): Promise<Company | null>
     });
 }
 
+export async function getCompanyBySubdomainSlug(slug: string): Promise<Company | null> {
+    if (!slug) {
+        console.warn("getCompanyBySubdomainSlug called with empty slug.");
+        return null;
+    }
+    return retryOperation(async () => {
+        const companiesRef = collection(db, COMPANIES_COLLECTION);
+        const q = query(companiesRef, where("subdomainSlug", "==", slug), where("isDeleted", "==", false));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+            const docSnap = querySnapshot.docs[0];
+            if (docSnap.exists()) { // Double check existence though query implies it
+                return { id: docSnap.id, ...docSnap.data() } as Company;
+            }
+        }
+        return null; // No active company found with this slug
+    });
+}
+
+
 export async function addCompany(companyData: CompanyFormData): Promise<Company | null> {
     return retryOperation(async () => {
         const companiesRef = collection(db, COMPANIES_COLLECTION);
         const docData = {
             ...companyData,
+            subdomainSlug: companyData.subdomainSlug?.trim().toLowerCase() || null,
             shortDescription: companyData.shortDescription?.trim() || null,
             logoUrl: companyData.logoUrl?.trim() || null,
             maxUsers: companyData.maxUsers ?? null,
@@ -139,12 +159,11 @@ export async function addCompany(companyData: CompanyFormData): Promise<Company 
             isTrial: companyData.isTrial || false,
             trialEndsAt: companyData.trialEndsAt instanceof Date ? Timestamp.fromDate(companyData.trialEndsAt) : companyData.trialEndsAt,
             saleAmount: companyData.saleAmount ?? null,
-            revSharePartnerName: companyData.revSharePartnerName?.trim() || null,
-            revSharePartnerCompany: companyData.revSharePartnerCompany?.trim() || null,
-            revSharePartnerPercentage: companyData.revSharePartnerPercentage ?? null,
+            revenueSharePartners: companyData.revenueSharePartners || null,
             whiteLabelEnabled: companyData.whiteLabelEnabled || false,
             primaryColor: companyData.primaryColor || null,
             secondaryColor: companyData.secondaryColor || null,
+            accentColor: companyData.accentColor || null,
             isDeleted: false,
             deletedAt: null,
             createdAt: serverTimestamp(),
@@ -170,6 +189,7 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
         const dataToUpdate: Partial<Company> = {};
 
         if (companyData.name !== undefined) dataToUpdate.name = companyData.name;
+        if (companyData.subdomainSlug !== undefined) dataToUpdate.subdomainSlug = companyData.subdomainSlug?.trim().toLowerCase() || null;
         dataToUpdate.shortDescription = companyData.shortDescription?.trim() || null;
         dataToUpdate.logoUrl = companyData.logoUrl?.trim() || null;
         dataToUpdate.maxUsers = companyData.maxUsers ?? null;
@@ -184,14 +204,14 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
         } else if (companyData.trialEndsAt instanceof Timestamp) {
             dataToUpdate.trialEndsAt = companyData.trialEndsAt;
         }
-
-        if (companyData.revSharePartnerName !== undefined) dataToUpdate.revSharePartnerName = companyData.revSharePartnerName?.trim() || null;
-        if (companyData.revSharePartnerCompany !== undefined) dataToUpdate.revSharePartnerCompany = companyData.revSharePartnerCompany?.trim() || null;
-        if (companyData.revSharePartnerPercentage !== undefined) dataToUpdate.revSharePartnerPercentage = companyData.revSharePartnerPercentage ?? null;
+        
+        if (companyData.revenueSharePartners !== undefined) dataToUpdate.revenueSharePartners = companyData.revenueSharePartners || null;
 
         if (companyData.whiteLabelEnabled !== undefined) dataToUpdate.whiteLabelEnabled = companyData.whiteLabelEnabled;
         if (companyData.primaryColor !== undefined) dataToUpdate.primaryColor = companyData.primaryColor;
         if (companyData.secondaryColor !== undefined) dataToUpdate.secondaryColor = companyData.secondaryColor;
+        if (companyData.accentColor !== undefined) dataToUpdate.accentColor = companyData.accentColor;
+
 
         if (Object.keys(dataToUpdate).length === 0) {
             console.warn("updateCompany called with no valid data to update.");
