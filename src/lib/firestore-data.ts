@@ -82,9 +82,14 @@ export async function getCourseById(courseId: string): Promise<Course | null> {
 export async function addCourse(courseData: CourseFormData): Promise<Course | null> {
     return retryOperation(async () => {
         const coursesRef = collection(db, COURSES_COLLECTION);
-        const { ...restOfCourseData } = courseData; 
         const newCourseDoc = {
-            ...restOfCourseData,
+            title: courseData.title,
+            description: courseData.description,
+            longDescription: courseData.longDescription,
+            imageUrl: courseData.imageUrl || `https://placehold.co/600x350.png?text=${encodeURIComponent(courseData.title)}`,
+            featuredImageUrl: courseData.featuredImageUrl || null,
+            level: courseData.level,
+            duration: courseData.duration,
             curriculum: [],
             isDeleted: false,
             deletedAt: null,
@@ -110,12 +115,16 @@ export async function updateCourseMetadata(courseId: string, courseData: CourseF
              throw new Error("Course not found or is soft-deleted for update.");
         }
         
-        const { ...restOfCourseData } = courseData; 
         const updatedDocData: Partial<Course> = {
-            ...restOfCourseData,
+            title: courseData.title,
+            description: courseData.description,
+            longDescription: courseData.longDescription,
+            imageUrl: courseData.imageUrl || `https://placehold.co/600x350.png?text=${encodeURIComponent(courseData.title)}`,
+            featuredImageUrl: courseData.featuredImageUrl || null,
+            level: courseData.level,
+            duration: courseData.duration,
             updatedAt: serverTimestamp(),
         };
-        delete (updatedDocData as any).curriculum;
 
 
         await updateDoc(courseRef, updatedDocData);
@@ -328,7 +337,8 @@ export type QuestionPayload = {
     type: QuestionType;
     text: string;
     options: string[];
-    correctAnswer: string;
+    correctAnswer?: string;     // for single answer types
+    correctAnswers?: string[];  // for 'multiple-select'
 };
 
 
@@ -343,16 +353,25 @@ export async function addQuestionToQuiz(quizId: string, questionData: QuestionPa
 
         const questionId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         
-        const newQuestion: Question = {
+        const questionForFirestore: any = {
             id: questionId,
-            type: questionData.type,
-            text: questionData.text,
-            options: questionData.options, 
-            correctAnswer: questionData.correctAnswer,
+            type: questionData.type, // Zod should ensure this is defined
+            text: questionData.text,   // Zod should ensure this is defined
+            options: questionData.options || [], // Zod should ensure this is string[]
         };
 
+        if (questionData.type === 'multiple-select') {
+            // Zod in dialog ensures questionData.correctAnswers is a non-empty array of strings
+            questionForFirestore.correctAnswers = questionData.correctAnswers;
+        } else { // 'multiple-choice' or 'true-false'
+            // Zod in dialog ensures questionData.correctAnswer is a non-empty string or ('True'/'False')
+            questionForFirestore.correctAnswer = questionData.correctAnswer;
+        }
+        
+        console.log("[addQuestionToQuiz] Object to be added via arrayUnion:", JSON.stringify(questionForFirestore, null, 2));
+
         await updateDoc(quizRef, {
-            questions: arrayUnion(newQuestion),
+            questions: arrayUnion(questionForFirestore as Question),
             updatedAt: serverTimestamp(),
         });
 
@@ -373,26 +392,40 @@ export async function updateQuestion(quizId: string, questionId: string, questio
         }
 
         const currentQuestions: Question[] = quizSnap.data().questions || [];
-        let updatedQuestionData: Question | null = null; 
+        let questionFound = false;
         const newQuestionsArray = currentQuestions.map(q => {
             if (q.id === questionId) {
-                updatedQuestionData = {
-                    ...q, 
+                questionFound = true;
+                const updatedQuestionData: any = {
+                    id: q.id, // Preserve existing ID
                     type: questionData.type,
                     text: questionData.text,
-                    options: questionData.options, 
-                    correctAnswer: questionData.correctAnswer,
+                    options: questionData.options || [],
                 };
-                 return updatedQuestionData;
+                if (questionData.type === 'multiple-select') {
+                    updatedQuestionData.correctAnswers = questionData.correctAnswers;
+                    //  delete updatedQuestionData.correctAnswer; // Ensure other type is not present
+                } else {
+                    updatedQuestionData.correctAnswer = questionData.correctAnswer;
+                    // delete updatedQuestionData.correctAnswers; // Ensure other type is not present
+                }
+                 console.log("[updateQuestion] Object to replace item in array:", JSON.stringify(updatedQuestionData, null, 2));
+                return updatedQuestionData as Question;
             }
             return q;
         });
 
-        if (!updatedQuestionData) {
+        if (!questionFound) {
              throw new Error(`Question with ID ${questionId} not found in quiz ${quizId}.`);
         }
+
         await updateDoc(quizRef, { questions: newQuestionsArray, updatedAt: serverTimestamp() });
-        return updatedQuestionData;
+        
+        // Fetch the updated question from the array to return it
+        const updatedQuizSnap = await getDoc(quizRef);
+        const updatedQuiz = updatedQuizSnap.data() as Quiz;
+        const updatedQuestion = updatedQuiz?.questions?.find(q => q.id === questionId);
+        return updatedQuestion || null;
     });
 }
 
