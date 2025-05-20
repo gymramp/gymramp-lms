@@ -1,7 +1,8 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form'; // Import useFieldArray
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox'; // Import Checkbox
 import {
   Form,
   FormControl,
@@ -28,8 +30,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from '@/hooks/use-toast';
 import type { Question, QuestionFormData, QuestionType } from '@/types/course';
-import { CheckCircle, PlusCircle, Trash2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { PlusCircle, Trash2 } from 'lucide-react';
 import { addQuestionToQuiz, updateQuestion } from '@/lib/firestore-data';
 
 // Zod schema using discriminated union for question types
@@ -44,42 +45,57 @@ const multipleChoiceOptionSchema = z.object({
 const multipleChoiceSchema = baseSchema.extend({
   type: z.literal('multiple-choice'),
   options: z.array(multipleChoiceOptionSchema)
-    .min(2, "At least two options are required."),
-  correctAnswer: z.string().min(1, { message: 'Please select the correct answer.' }),
+    .min(2, "At least two options are required for multiple choice."),
+  correctAnswer: z.string().min(1, { message: 'Please select the correct answer for multiple choice.' }),
+  correctAnswers: z.array(z.string()).optional(), // Not used by this specific type
 });
 
 const trueFalseSchema = baseSchema.extend({
   type: z.literal('true-false'),
+  options: z.array(multipleChoiceOptionSchema).optional(), // Not used by this specific type, but kept for schema consistency
   correctAnswer: z.enum(['True', 'False'], { required_error: 'Please select True or False.' }),
-  // Keep options for form structure consistency, though not used by true-false logic directly
-  options: z.array(multipleChoiceOptionSchema).optional(),
+  correctAnswers: z.array(z.string()).optional(), // Not used by this specific type
+});
+
+const multipleSelectSchema = baseSchema.extend({
+  type: z.literal('multiple-select'),
+  options: z.array(multipleChoiceOptionSchema)
+    .min(2, "At least two options are required for multiple select."),
+  correctAnswer: z.string().optional(), // Not used by this specific type
+  correctAnswers: z.array(z.string()).min(1, { message: "At least one correct answer must be selected for multiple select."}),
 });
 
 const questionFormSchema = z.discriminatedUnion("type", [
   multipleChoiceSchema,
   trueFalseSchema,
+  multipleSelectSchema,
 ])
-.refine(data => {
-    if (data.type === 'multiple-choice') {
+.refine(data => { // Uniqueness for options in MC and MS
+    if (data.type === 'multiple-choice' || data.type === 'multiple-select') {
         const providedOptions = data.options.map(opt => opt.text.trim()).filter(Boolean);
         const uniqueOptions = new Set(providedOptions);
         return providedOptions.length === uniqueOptions.size;
     }
     return true;
 }, {
-    message: "Multiple choice options must be unique.",
+    message: "Answer options must be unique.",
     path: ["options"],
 })
-.refine(data => {
+.refine(data => { // Correct answer(s) must be among provided options
     if (data.type === 'multiple-choice') {
         const providedOptionTexts = data.options.map(opt => opt.text.trim()).filter(Boolean);
         return data.correctAnswer && providedOptionTexts.includes(data.correctAnswer);
     }
+    if (data.type === 'multiple-select') {
+        const providedOptionTexts = data.options.map(opt => opt.text.trim()).filter(Boolean);
+        return data.correctAnswers && data.correctAnswers.every(ca => providedOptionTexts.includes(ca));
+    }
     return true;
 }, {
-    message: "Correct answer must be selected and match one of the filled-in options.",
-    path: ["correctAnswer"],
+    message: "Correct answer(s) must be selected from the provided options.",
+    path: ["correctAnswer"], // This path might need adjustment for multiple-select if error shows on wrong field
 });
+
 
 type QuestionFormValues = z.infer<typeof questionFormSchema>;
 
@@ -104,16 +120,17 @@ export function AddEditQuestionDialog({
   const form = useForm<QuestionFormValues>({
     resolver: zodResolver(questionFormSchema),
     defaultValues: {
-      type: 'multiple-choice',
+      type: 'multiple-choice', // Default to single answer multiple choice
       text: '',
-      options: [{ text: '' }, { text: '' }], // Default to two empty options for MC
-      correctAnswer: '',
+      options: [{ text: '' }, { text: '' }],
+      correctAnswer: '', // For single answer
+      correctAnswers: [], // For multiple answers
     },
   });
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
-    name: "options" as any, // Type assertion needed for discriminated union
+    name: "options" as any, // Type assertion for discriminated union
   });
 
   const questionType = form.watch('type');
@@ -125,17 +142,19 @@ export function AddEditQuestionDialog({
         form.reset({
           type: initialData.type,
           text: initialData.text,
-          options: initialData.type === 'multiple-choice'
-            ? initialData.options.map(opt => ({ text: opt }))
-            : [{ text: 'True' }, { text: 'False' }], // Or keep current options for TF if any
-          correctAnswer: initialData.correctAnswer,
+          options: (initialData.type === 'multiple-choice' || initialData.type === 'multiple-select')
+            ? (initialData.options || []).map(opt => ({ text: opt }))
+            : [{ text: 'True' }, { text: 'False' }], // Default for TF if no options stored
+          correctAnswer: initialData.type !== 'multiple-select' ? initialData.correctAnswer || '' : '',
+          correctAnswers: initialData.type === 'multiple-select' ? initialData.correctAnswers || [] : [],
         });
-      } else {
+      } else { // Reset for new question
         form.reset({
           type: 'multiple-choice',
           text: '',
           options: [{ text: '' }, { text: '' }],
           correctAnswer: '',
+          correctAnswers: [],
         });
       }
     }
@@ -145,24 +164,34 @@ export function AddEditQuestionDialog({
     try {
       let savedQuestion: Question | null = null;
       let optionsForStorage: string[] = [];
+      let finalCorrectAnswer: string | undefined = undefined;
+      let finalCorrectAnswers: string[] | undefined = undefined;
 
-      if (data.type === 'multiple-choice') {
+      if (data.type === 'multiple-choice' || data.type === 'multiple-select') {
         optionsForStorage = data.options.map(opt => opt.text.trim()).filter(Boolean);
       } else if (data.type === 'true-false') {
         optionsForStorage = ["True", "False"];
       }
 
-      const finalQuestionPayload = {
+      if (data.type === 'multiple-choice' || data.type === 'true-false') {
+        finalCorrectAnswer = data.correctAnswer;
+      } else if (data.type === 'multiple-select') {
+        finalCorrectAnswers = data.correctAnswers;
+      }
+
+      const finalQuestionPayload: Omit<Question, 'id'> = {
         type: data.type,
         text: data.text,
         options: optionsForStorage,
-        correctAnswer: data.correctAnswer,
+        ...(finalCorrectAnswer !== undefined && { correctAnswer: finalCorrectAnswer }),
+        ...(finalCorrectAnswers !== undefined && { correctAnswers: finalCorrectAnswers }),
       };
 
+
       if (isEditing && initialData) {
-        savedQuestion = await updateQuestion(quizId, initialData.id, finalQuestionPayload);
+        savedQuestion = await updateQuestion(quizId, initialData.id, finalQuestionPayload as QuestionFormData);
       } else {
-        savedQuestion = await addQuestionToQuiz(quizId, finalQuestionPayload);
+        savedQuestion = await addQuestionToQuiz(quizId, finalQuestionPayload as QuestionFormData);
       }
 
       if (savedQuestion) {
@@ -189,9 +218,10 @@ export function AddEditQuestionDialog({
     setIsOpen(false);
   };
 
-  const currentOptionsForRadio = questionType === 'multiple-choice'
-    ? watchedOptions.map((opt: { text: string }) => opt.text.trim()).filter(Boolean)
-    : ["True", "False"];
+  const currentOptionsForDisplay = (questionType === 'multiple-choice' || questionType === 'multiple-select')
+    ? watchedOptions
+    : [{ text: 'True' }, { text: 'False' }];
+
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -203,7 +233,7 @@ export function AddEditQuestionDialog({
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
             <FormField
               control={form.control}
               name="type"
@@ -214,12 +244,20 @@ export function AddEditQuestionDialog({
                     <RadioGroup
                       onValueChange={(value) => {
                         field.onChange(value as QuestionType);
+                        // Reset options and correct answers based on type
                         if (value === 'multiple-choice') {
                           form.setValue('options' as any, [{ text: '' }, { text: '' }]);
-                        } else {
-                          form.setValue('options' as any, []); // Clear options for true/false
+                          form.setValue('correctAnswers', []); // Clear multi-correct
+                          form.setValue('correctAnswer', ''); // Reset single-correct
+                        } else if (value === 'true-false') {
+                          form.setValue('options' as any, []); // True/false doesn't use custom options array in form
+                          form.setValue('correctAnswers', []);
+                          form.setValue('correctAnswer', ''); // Or a default like 'True'
+                        } else if (value === 'multiple-select') {
+                          form.setValue('options' as any, [{ text: '' }, { text: '' }]);
+                          form.setValue('correctAnswer', ''); // Clear single-correct
+                          form.setValue('correctAnswers', []); // Reset multi-correct
                         }
-                        form.setValue('correctAnswer', '');
                       }}
                       value={field.value}
                       className="flex space-x-4"
@@ -228,13 +266,19 @@ export function AddEditQuestionDialog({
                         <FormControl>
                           <RadioGroupItem value="multiple-choice" />
                         </FormControl>
-                        <FormLabel className="font-normal">Multiple Choice</FormLabel>
+                        <FormLabel className="font-normal">Multiple Choice (Single Answer)</FormLabel>
                       </FormItem>
                       <FormItem className="flex items-center space-x-2 space-y-0">
                         <FormControl>
                           <RadioGroupItem value="true-false" />
                         </FormControl>
                         <FormLabel className="font-normal">True/False</FormLabel>
+                      </FormItem>
+                      <FormItem className="flex items-center space-x-2 space-y-0">
+                        <FormControl>
+                          <RadioGroupItem value="multiple-select" />
+                        </FormControl>
+                        <FormLabel className="font-normal">Multiple Select (Multiple Answers)</FormLabel>
                       </FormItem>
                     </RadioGroup>
                   </FormControl>
@@ -257,7 +301,7 @@ export function AddEditQuestionDialog({
               )}
             />
 
-            {questionType === 'multiple-choice' && (
+            {(questionType === 'multiple-choice' || questionType === 'multiple-select') && (
               <div className="space-y-3">
                 <FormLabel>Answer Options</FormLabel>
                 {fields.map((item, index) => (
@@ -298,51 +342,115 @@ export function AddEditQuestionDialog({
                 >
                   <PlusCircle className="mr-2 h-4 w-4" /> Add Option
                 </Button>
-                {form.formState.errors.options && !form.formState.errors.options.root && form.formState.errors.options.message && (
+                {form.formState.errors.options && !Array.isArray(form.formState.errors.options) && form.formState.errors.options.message && (
                     <p className="text-sm font-medium text-destructive">{form.formState.errors.options.message}</p>
                 )}
-                 {Array.isArray(form.formState.errors.options) && form.formState.errors.options.map((error, index) => (
-                    error && error.text && <p key={index} className="text-sm font-medium text-destructive">{error.text.message}</p>
+                 {Array.isArray(form.formState.errors.options) && form.formState.errors.options.map((error: any, index: number) => (
+                    error && error.text && <p key={index} className="text-sm font-medium text-destructive">Option {index+1}: {error.text.message}</p>
                 ))}
-
-
               </div>
             )}
 
-            <FormField
-              control={form.control}
-              name="correctAnswer"
-              render={({ field }) => (
-                <FormItem className="space-y-3">
-                  <FormLabel>Correct Answer</FormLabel>
-                  <FormControl>
-                    <RadioGroup
-                      onValueChange={field.onChange}
-                      value={field.value}
-                      className="flex flex-col space-y-1"
-                    >
-                      {currentOptionsForRadio.map((optionValue, index) => (
-                        <FormItem key={`${questionType}-correct-${index}-${optionValue}`} className="flex items-center space-x-3 space-y-0">
-                          <FormControl>
-                            <RadioGroupItem
-                              value={optionValue}
-                              id={`${field.name}-${questionType}-${index}`}
-                            />
-                          </FormControl>
-                          <FormLabel htmlFor={`${field.name}-${questionType}-${index}`} className="font-normal">
-                            {optionValue}
-                          </FormLabel>
+            {questionType === 'multiple-choice' && (
+              <FormField
+                control={form.control}
+                name="correctAnswer"
+                render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel>Correct Answer (Pick One)</FormLabel>
+                    <FormControl>
+                      <RadioGroup onValueChange={field.onChange} value={field.value} className="flex flex-col space-y-1">
+                        {currentOptionsForDisplay.map((option, index) => (
+                          option.text.trim() !== '' && (
+                            <FormItem key={`mc-correct-${index}`} className="flex items-center space-x-3 space-y-0">
+                              <FormControl>
+                                <RadioGroupItem value={option.text} id={`mc-correct-${index}-${option.text}`} />
+                              </FormControl>
+                              <Label htmlFor={`mc-correct-${index}-${option.text}`} className="font-normal">{option.text}</Label>
+                            </FormItem>
+                          )
+                        ))}
+                      </RadioGroup>
+                    </FormControl>
+                    {currentOptionsForDisplay.filter(opt => opt.text.trim() !== '').length < 2 && (
+                         <p className="text-xs font-medium text-muted-foreground">Fill at least two options above to select a correct answer.</p>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {questionType === 'true-false' && (
+              <FormField
+                control={form.control}
+                name="correctAnswer"
+                render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel>Correct Answer</FormLabel>
+                    <FormControl>
+                      <RadioGroup onValueChange={field.onChange} value={field.value} className="flex flex-col space-y-1">
+                        <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormControl><RadioGroupItem value="True" id="tf-correct-true" /></FormControl>
+                          <Label htmlFor="tf-correct-true" className="font-normal">True</Label>
                         </FormItem>
+                        <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormControl><RadioGroupItem value="False" id="tf-correct-false" /></FormControl>
+                          <Label htmlFor="tf-correct-false" className="font-normal">False</Label>
+                        </FormItem>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {questionType === 'multiple-select' && (
+              <FormField
+                control={form.control}
+                name="correctAnswers"
+                render={() => ( // Field prop not directly used here, form.getValues/setValue is used for array
+                  <FormItem className="space-y-3">
+                    <FormLabel>Correct Answers (Select All That Apply)</FormLabel>
+                    <div className="space-y-2">
+                      {currentOptionsForDisplay.map((option, index) => (
+                        option.text.trim() !== '' && (
+                          <FormField
+                            key={`ms-correct-${index}`}
+                            control={form.control}
+                            name={`correctAnswers`}
+                            render={({ field: checkboxField }) => (
+                              <FormItem className="flex flex-row items-center space-x-3 space-y-0 p-2 border rounded-md hover:bg-muted/50">
+                                <FormControl>
+                                  <Checkbox
+                                    checked={checkboxField.value?.includes(option.text)}
+                                    onCheckedChange={(checked) => {
+                                      const currentValues = checkboxField.value || [];
+                                      return checked
+                                        ? checkboxField.onChange([...currentValues, option.text])
+                                        : checkboxField.onChange(currentValues.filter(value => value !== option.text));
+                                    }}
+                                    id={`ms-correct-${index}-${option.text}`}
+                                  />
+                                </FormControl>
+                                <Label htmlFor={`ms-correct-${index}-${option.text}`} className="font-normal cursor-pointer flex-1">
+                                  {option.text}
+                                </Label>
+                              </FormItem>
+                            )}
+                          />
+                        )
                       ))}
-                    </RadioGroup>
-                  </FormControl>
-                  {questionType === 'multiple-choice' && currentOptionsForRadio.length < 2 && (
-                    <p className="text-xs font-medium text-muted-foreground">Fill at least two options above to select a correct answer.</p>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    </div>
+                    {currentOptionsForDisplay.filter(opt => opt.text.trim() !== '').length < 2 && (
+                         <p className="text-xs font-medium text-muted-foreground">Fill at least two options above to select correct answers.</p>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <DialogFooter>
               <DialogClose asChild>
@@ -351,7 +459,7 @@ export function AddEditQuestionDialog({
               <Button
                 type="submit"
                 className="bg-primary hover:bg-primary/90"
-                disabled={questionType === 'multiple-choice' && currentOptionsForRadio.length < 2}
+                disabled={(questionType === 'multiple-choice' || questionType === 'multiple-select') && currentOptionsForDisplay.filter(opt => opt.text.trim() !== '').length < 2}
               >
                 {isEditing ? 'Save Changes' : 'Add Question'}
               </Button>
@@ -362,3 +470,4 @@ export function AddEditQuestionDialog({
     </Dialog>
   );
 }
+
