@@ -41,6 +41,7 @@ export interface Company {
   id: string; // Firestore document ID
   name: string;
   subdomainSlug?: string | null; // e.g., "brand-a" for brand-a.yourdomain.com
+  customDomain?: string | null; // e.g., learn.theirgym.com
   shortDescription?: string | null;
   logoUrl?: string | null;
   assignedCourseIds?: string[]; // Courses assigned to the company from the library
@@ -54,10 +55,10 @@ export interface Company {
   revenueSharePartners?: RevenueSharePartner[] | null; // Updated to an array
   // White-labeling fields
   whiteLabelEnabled: boolean;
-  // logoUrl: string | null; // Already present
   primaryColor: string | null;
   secondaryColor: string | null;
-  accentColor?: string | null; // Added for consistency if you want a third brand color
+  accentColor?: string | null;
+  stripeCustomerId?: string | null; // Added for Stripe integration
 }
 
 // Type for the form data when adding/editing a company (now Brand)

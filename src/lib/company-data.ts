@@ -70,18 +70,20 @@ export async function createDefaultCompany(): Promise<Company | null> {
             console.log(`Default brand "${DEFAULT_COMPANY_NAME}" not found or soft-deleted, creating it.`);
             const newCompanyData: CompanyFormData = {
                 name: DEFAULT_COMPANY_NAME,
-                subdomainSlug: null, // Default brand typically doesn't need a subdomain
+                subdomainSlug: null, 
+                customDomain: null,
                 maxUsers: null,
                 assignedCourseIds: [],
                 isTrial: false,
                 trialEndsAt: null,
                 saleAmount: null,
                 revenueSharePartners: null,
-                whiteLabelEnabled: false, // Default brand might not use white-labeling for itself
+                whiteLabelEnabled: false, 
                 primaryColor: null,
                 secondaryColor: null,
                 accentColor: null,
                 logoUrl: null,
+                stripeCustomerId: null, // Initialize Stripe Customer ID
             };
             const docRef = await addDoc(companiesRef, { ...newCompanyData, isDeleted: false, deletedAt: null, createdAt: serverTimestamp() });
             const newDocSnap = await getDoc(docRef);
@@ -137,11 +139,30 @@ export async function getCompanyBySubdomainSlug(slug: string): Promise<Company |
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
             const docSnap = querySnapshot.docs[0];
-            if (docSnap.exists()) { // Double check existence though query implies it
+            if (docSnap.exists()) { 
                 return { id: docSnap.id, ...docSnap.data() } as Company;
             }
         }
-        return null; // No active company found with this slug
+        return null; 
+    });
+}
+
+export async function getCompanyByCustomDomain(domain: string): Promise<Company | null> {
+    if (!domain) {
+        console.warn("getCompanyByCustomDomain called with empty domain.");
+        return null;
+    }
+    return retryOperation(async () => {
+        const companiesRef = collection(db, COMPANIES_COLLECTION);
+        const q = query(companiesRef, where("customDomain", "==", domain), where("isDeleted", "==", false));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+            const docSnap = querySnapshot.docs[0];
+            if (docSnap.exists()) {
+                return { id: docSnap.id, ...docSnap.data() } as Company;
+            }
+        }
+        return null;
     });
 }
 
@@ -152,6 +173,7 @@ export async function addCompany(companyData: CompanyFormData): Promise<Company 
         const docData = {
             ...companyData,
             subdomainSlug: companyData.subdomainSlug?.trim().toLowerCase() || null,
+            customDomain: companyData.customDomain?.trim().toLowerCase() || null,
             shortDescription: companyData.shortDescription?.trim() || null,
             logoUrl: companyData.logoUrl?.trim() || null,
             maxUsers: companyData.maxUsers ?? null,
@@ -164,6 +186,7 @@ export async function addCompany(companyData: CompanyFormData): Promise<Company 
             primaryColor: companyData.primaryColor || null,
             secondaryColor: companyData.secondaryColor || null,
             accentColor: companyData.accentColor || null,
+            stripeCustomerId: companyData.stripeCustomerId || null, // Initialize Stripe Customer ID
             isDeleted: false,
             deletedAt: null,
             createdAt: serverTimestamp(),
@@ -190,6 +213,7 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
 
         if (companyData.name !== undefined) dataToUpdate.name = companyData.name;
         if (companyData.subdomainSlug !== undefined) dataToUpdate.subdomainSlug = companyData.subdomainSlug?.trim().toLowerCase() || null;
+        if (companyData.customDomain !== undefined) dataToUpdate.customDomain = companyData.customDomain?.trim().toLowerCase() || null;
         dataToUpdate.shortDescription = companyData.shortDescription?.trim() || null;
         dataToUpdate.logoUrl = companyData.logoUrl?.trim() || null;
         dataToUpdate.maxUsers = companyData.maxUsers ?? null;
@@ -211,6 +235,7 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
         if (companyData.primaryColor !== undefined) dataToUpdate.primaryColor = companyData.primaryColor;
         if (companyData.secondaryColor !== undefined) dataToUpdate.secondaryColor = companyData.secondaryColor;
         if (companyData.accentColor !== undefined) dataToUpdate.accentColor = companyData.accentColor;
+        if (companyData.stripeCustomerId !== undefined) dataToUpdate.stripeCustomerId = companyData.stripeCustomerId || null;
 
 
         if (Object.keys(dataToUpdate).length === 0) {

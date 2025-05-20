@@ -2,11 +2,12 @@
 'use server';
 
 import type { CheckoutFormData } from '@/types/user';
-import { addCompany, createDefaultLocation } from '@/lib/company-data';
+import { addCompany, updateCompany, createDefaultLocation } from '@/lib/company-data';
 import { addUser } from '@/lib/user-data';
 import { addCustomerPurchaseRecord } from '@/lib/customer-data';
-import { getProgramById, getCourseById } from '@/lib/firestore-data'; // Added getProgramById
+import { getProgramById, getCourseById } from '@/lib/firestore-data'; 
 import { db } from '@/lib/firebase';
+import { stripe } from '@/lib/stripe'; // Import stripe
 
 import { initializeApp, deleteApp, getApps } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
@@ -57,6 +58,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
 
   const localAuthAppName = `checkoutAuthApp-${Date.now()}`;
   let localAuthInstance;
+  let newCompanyId: string | undefined; // To store the new company ID for potential Stripe customer update
 
   try {
     const selectedProgram = await getProgramById(data.selectedProgramId);
@@ -71,7 +73,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         maxUsers: data.maxUsers ?? null,
         isTrial: false,
         trialEndsAt: null,
-        saleAmount: data.finalTotalAmount ?? 0, // This is now the Program's base price
+        saleAmount: data.finalTotalAmount ?? 0, 
         revenueSharePartners: data.revenueSharePartners || null,
         whiteLabelEnabled: false,
         primaryColor: null,
@@ -79,17 +81,19 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         logoUrl: null,
         shortDescription: null,
         createdAt: Timestamp.now(),
+        stripeCustomerId: null, // Initialize stripeCustomerId
     };
     const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
       throw new Error("Failed to create the brand in the database.");
     }
+    newCompanyId = newCompany.id; // Store the new company ID
     console.log(`[Server Action] Brand "${newCompany.name}" (Paid Program) created with ID: ${newCompany.id}`);
 
     const defaultLocation = await createDefaultLocation(newCompany.id);
     const defaultLocationId = defaultLocation ? [defaultLocation.id] : [];
 
-    const tempPassword = data.password || "password"; // Ensure this is handled securely in production
+    const tempPassword = data.password || "password"; 
     let authUserUid: string;
     try {
         localAuthInstance = getFirebaseAuthInstance(localAuthAppName);
@@ -114,8 +118,33 @@ export async function processCheckout(data: CheckoutFormData): Promise<
       throw new Error("Failed to create the admin user account in Firestore (Paid Program).");
     }
     console.log(`[Server Action] Admin user "${newAdminUser.name}" (Paid Program) created in Firestore with ID: ${newAdminUser.id}`);
+    
+    // Create Stripe Customer if this was a paid checkout
+    let stripeCustomerId: string | null = null;
+    if (data.paymentIntentId && data.paymentIntentId !== 'pi_0_free_checkout' && data.finalTotalAmount && data.finalTotalAmount > 0) {
+        try {
+            console.log(`[Server Action] Creating Stripe Customer for ${data.adminEmail}, Brand: ${newCompany.name}`);
+            const customer = await stripe.customers.create({
+                email: data.adminEmail,
+                name: newCompany.name, // Use Brand name for Stripe Customer name
+                metadata: {
+                    brandId: newCompany.id,
+                    adminUserId: newAdminUser.id,
+                }
+            });
+            stripeCustomerId = customer.id;
+            console.log(`[Server Action] Stripe Customer created with ID: ${stripeCustomerId}`);
+            // Update the company document with the Stripe Customer ID
+            await updateCompany(newCompany.id, { stripeCustomerId });
+            console.log(`[Server Action] Brand ${newCompany.id} updated with Stripe Customer ID: ${stripeCustomerId}`);
+        } catch (stripeError: any) {
+            console.error("[Server Action] Error creating Stripe Customer or updating Brand:", stripeError);
+            // Decide if this is a critical failure. For now, log and continue.
+            // The purchase record will not have a stripeCustomerId if this fails.
+        }
+    }
 
-    // Get titles of courses within the program for the customer purchase record
+
     const programCourseTitles = [];
     if (coursesToAssignToBrand.length > 0) {
         for (const courseId of coursesToAssignToBrand) {
@@ -133,11 +162,11 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         brandName: newCompany.name,
         adminUserId: newAdminUser.id,
         adminUserEmail: newAdminUser.email,
-        totalAmountPaid: data.finalTotalAmount ?? 0, // Program base price
+        totalAmountPaid: data.finalTotalAmount ?? 0, 
         paymentIntentId: data.paymentIntentId || null,
         selectedProgramId: data.selectedProgramId,
         selectedProgramTitle: selectedProgram.title,
-        selectedCourseIds: coursesToAssignToBrand, // Courses from the program
+        selectedCourseIds: coursesToAssignToBrand, 
         selectedCourseTitles: programCourseTitles,
         revenueSharePartners: data.revenueSharePartners || null,
         maxUsersConfigured: data.maxUsers ?? null,
@@ -154,6 +183,8 @@ export async function processCheckout(data: CheckoutFormData): Promise<
 
   } catch (error: any) {
     console.error("[Server Action] Error during paid checkout processing (Program):", error);
+    // If company was created but subsequent steps failed, consider if cleanup is needed
+    // For now, we are not deleting the company if subsequent steps fail, to preserve data.
     await cleanupFirebaseApp(localAuthAppName);
     return { success: false, error: error.message || "An unexpected error occurred during paid checkout." };
   }
@@ -170,7 +201,6 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
   let localAuthInstance;
 
   try {
-    // For free trials, we still need to know which program's courses to assign
     const selectedProgram = await getProgramById(data.selectedProgramId);
     if (!selectedProgram) {
         throw new Error(`Selected Program (ID: ${data.selectedProgramId}) not found for free trial.`);
@@ -185,18 +215,19 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
 
     const newCompanyData = {
         name: data.companyName,
-        assignedCourseIds: coursesToAssignToBrand, // Assign courses from the selected program
+        assignedCourseIds: coursesToAssignToBrand, 
         maxUsers: data.maxUsers ?? null,
         isTrial: true,
         trialEndsAt: trialEndsAtTimestamp,
         saleAmount: 0,
-        revenueSharePartners: null, // No revenue share for trials
+        revenueSharePartners: null, 
         whiteLabelEnabled: false,
         primaryColor: null,
         secondaryColor: null,
         logoUrl: null,
         shortDescription: null,
         createdAt: Timestamp.now(),
+        stripeCustomerId: null, // Trials don't need a Stripe Customer ID initially
     };
     const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
@@ -207,7 +238,7 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
     const defaultLocation = await createDefaultLocation(newCompany.id);
     const defaultLocationId = defaultLocation ? [defaultLocation.id] : [];
 
-    const tempPassword = data.password || "password"; // Ensure this is handled securely
+    const tempPassword = data.password || "password"; 
     let authUserUid: string;
     try {
         localAuthInstance = getFirebaseAuthInstance(localAuthAppName);
@@ -233,8 +264,6 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
     }
     console.log(`[Server Action] Trial Admin user "${newAdminUser.name}" created in Firestore`);
 
-    // TODO: Optionally create a $0 CustomerPurchaseRecord for trials if tracking is desired.
-    // For now, trials don't create a purchase record.
 
     await cleanupFirebaseApp(localAuthAppName);
     return { success: true, companyId: newCompany.id, adminUserId: newAdminUser.id };
