@@ -5,140 +5,157 @@ import React, { useState, useEffect } from 'react';
 import type { Quiz, Question, QuestionType } from '@/types/course';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox'; // Import Checkbox
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Progress } from '@/components/ui/progress'; // Import Progress
+import { Progress } from '@/components/ui/progress';
 
 interface QuizTakingProps {
   quiz: Quiz;
-  onComplete: (quizId: string, score: number, passed: boolean) => void; // Callback with quiz ID, score, and pass status
-  isCompleted?: boolean; // Optional: Indicates if the quiz is already completed for the user
+  onComplete: (quizId: string, score: number, passed: boolean) => void;
+  isCompleted?: boolean;
 }
 
 export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTakingProps) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [userAnswers, setUserAnswers] = useState<Record<string, string>>({}); // Store answers keyed by question ID
-  const [selectedAnswer, setSelectedAnswer] = useState<string | undefined>(undefined);
-  const [quizSubmitted, setQuizSubmitted] = useState(isCompleted); // Initialize as submitted if already completed
-  const [score, setScore] = useState(0); // Will be recalculated if submitted initially
-  const [passed, setPassed] = useState(false); // Will be recalculated if submitted initially
-  const [incorrectQuestionNumbers, setIncorrectQuestionNumbers] = useState<number[]>([]); // State for incorrect question numbers
+  const [userAnswers, setUserAnswers] = useState<Record<string, string | string[]>>({}); // Can be string or array
+  const [selectedRadioAnswer, setSelectedRadioAnswer] = useState<string | undefined>(undefined);
+  const [selectedCheckboxAnswers, setSelectedCheckboxAnswers] = useState<string[]>([]);
+  const [quizSubmitted, setQuizSubmitted] = useState(isCompleted);
+  const [score, setScore] = useState(0);
+  const [passed, setPassed] = useState(false);
+  const [incorrectQuestionNumbers, setIncorrectQuestionNumbers] = useState<number[]>([]);
 
-  const totalQuestions = quiz.questions?.length || 0; // Handle cases where questions might be undefined
+  const totalQuestions = quiz.questions?.length || 0;
   const currentQuestion = totalQuestions > 0 ? quiz.questions[currentQuestionIndex] : null;
 
-
-  // Recalculate score/passed status if quiz starts in completed state
   useEffect(() => {
     if (isCompleted && totalQuestions > 0) {
-      // In a real scenario, you'd ideally fetch the user's previous answers/score.
-      // For now, we'll assume 100% if marked complete externally.
       setScore(100);
       setPassed(true);
       setQuizSubmitted(true);
-      setIncorrectQuestionNumbers([]); // Ensure this is cleared if starting as completed & passed
+      setIncorrectQuestionNumbers([]);
     } else if (!isCompleted) {
-        // Reset if completion status changes back to false
-        setCurrentQuestionIndex(0);
-        setUserAnswers({});
-        setSelectedAnswer(undefined);
-        setQuizSubmitted(false);
-        setScore(0);
-        setPassed(false);
-        setIncorrectQuestionNumbers([]);
+      setCurrentQuestionIndex(0);
+      setUserAnswers({});
+      setSelectedRadioAnswer(undefined);
+      setSelectedCheckboxAnswers([]);
+      setQuizSubmitted(false);
+      setScore(0);
+      setPassed(false);
+      setIncorrectQuestionNumbers([]);
     }
   }, [isCompleted, quiz, totalQuestions]);
 
+  // Reset selections when question changes
+  useEffect(() => {
+    setSelectedRadioAnswer(undefined);
+    setSelectedCheckboxAnswers([]);
+  }, [currentQuestionIndex]);
 
-  const handleAnswerSelect = (value: string) => {
-     if (quizSubmitted) return; // Don't allow changes after submission
-    setSelectedAnswer(value);
+
+  const handleRadioAnswerSelect = (value: string) => {
+    if (quizSubmitted) return;
+    setSelectedRadioAnswer(value);
+  };
+
+  const handleCheckboxAnswerChange = (optionValue: string, checked: boolean) => {
+    if (quizSubmitted) return;
+    setSelectedCheckboxAnswers(prev =>
+      checked ? [...prev, optionValue] : prev.filter(val => val !== optionValue)
+    );
+  };
+
+  const recordCurrentAnswer = () => {
+    if (!currentQuestion || quizSubmitted) return {};
+
+    let answerToStore: string | string[];
+    if (currentQuestion.type === 'multiple-select') {
+      answerToStore = [...selectedCheckboxAnswers].sort(); // Store sorted for consistent comparison
+    } else {
+      answerToStore = selectedRadioAnswer || ""; // Store empty string if undefined
+    }
+
+    return {
+      ...userAnswers,
+      [currentQuestion.id]: answerToStore,
+    };
   };
 
   const handleNextQuestion = () => {
-    if (!selectedAnswer || !currentQuestion || quizSubmitted) return;
-
-    // Store the selected answer
-    const updatedAnswers = {
-      ...userAnswers,
-      [currentQuestion.id]: selectedAnswer,
-    };
+    const updatedAnswers = recordCurrentAnswer();
     setUserAnswers(updatedAnswers);
 
-    // Move to the next question
-    setSelectedAnswer(undefined); // Reset selection for the next question
+    // Reset selections for the next question is handled by useEffect on currentQuestionIndex change
     setCurrentQuestionIndex((prev) => prev + 1);
   };
 
   const handleSubmitQuiz = () => {
-    if (!selectedAnswer || !currentQuestion || quizSubmitted) return; // Need an answer for the last question or already submitted
-
-     // Store the last answer
-    const finalAnswers = {
-      ...userAnswers,
-      [currentQuestion.id]: selectedAnswer,
-    };
+    const finalAnswers = recordCurrentAnswer();
     setUserAnswers(finalAnswers);
 
-    // Grade the quiz
     let correctCount = 0;
-    const incorrectNumbers: number[] = []; // Local array for this submission
-    quiz.questions?.forEach((q, index) => { // Check if questions exist
-      if (finalAnswers[q.id] === q.correctAnswer) {
+    const incorrectNumbers: number[] = [];
+    quiz.questions?.forEach((q, index) => {
+      const userAnswer = finalAnswers[q.id];
+      let isCorrect = false;
+      if (q.type === 'multiple-select') {
+        const userAnsArray = Array.isArray(userAnswer) ? userAnswer.sort() : [];
+        const correctAnsArray = (q.correctAnswers || []).sort();
+        isCorrect = userAnsArray.length === correctAnsArray.length &&
+                    userAnsArray.every((val, idx) => val === correctAnsArray[idx]);
+      } else {
+        isCorrect = userAnswer === q.correctAnswer;
+      }
+
+      if (isCorrect) {
         correctCount++;
       } else {
-        incorrectNumbers.push(index + 1); // Store 1-based question number
+        incorrectNumbers.push(index + 1);
       }
     });
 
-    const calculatedScore = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 100; // Score 100 if no questions
-    const didPass = correctCount === totalQuestions; // Require 100% for now
+    const calculatedScore = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 100;
+    const didPass = correctCount === totalQuestions; // Requires 100% for now
 
     setScore(calculatedScore);
     setPassed(didPass);
-    if (!didPass) {
-        setIncorrectQuestionNumbers(incorrectNumbers); // Set state for incorrect numbers
-    } else {
-        setIncorrectQuestionNumbers([]); // Clear if passed
-    }
+    setIncorrectQuestionNumbers(didPass ? [] : incorrectNumbers);
     setQuizSubmitted(true);
   };
 
   const handleRetry = () => {
-    // Reset state to retry the quiz
     setCurrentQuestionIndex(0);
     setUserAnswers({});
-    setSelectedAnswer(undefined);
+    setSelectedRadioAnswer(undefined);
+    setSelectedCheckboxAnswers([]);
     setQuizSubmitted(false);
     setScore(0);
     setPassed(false);
-    setIncorrectQuestionNumbers([]); // Reset incorrect numbers
+    setIncorrectQuestionNumbers([]);
   };
 
   const handleContinue = () => {
-      // Notify parent component of completion status
-      onComplete(quiz.id, score, passed);
-  }
-
-  // --- Render Logic ---
+    onComplete(quiz.id, score, passed);
+  };
 
   if (totalQuestions === 0) {
     return (
-        <Alert variant="default" className="my-6">
-            <AlertCircle className="h-4 w-4" />
-             <AlertTitle>Quiz Empty</AlertTitle>
-             <AlertDescription>This quiz doesn't have any questions yet. Please proceed.</AlertDescription>
-             <Button onClick={() => onComplete(quiz.id, 100, true)} className="mt-4">Continue Course</Button>
-        </Alert>
+      <Alert variant="default" className="my-6">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Quiz Empty</AlertTitle>
+        <AlertDescription>This quiz doesn't have any questions yet. Please proceed.</AlertDescription>
+        <Button onClick={() => onComplete(quiz.id, 100, true)} className="mt-4">Continue Course</Button>
+      </Alert>
     );
   }
 
   if (quizSubmitted) {
     let incorrectMessagePart = "";
     if (!passed && incorrectQuestionNumbers.length > 0) {
-        incorrectMessagePart = ` You answered the following questions incorrectly: ${incorrectQuestionNumbers.map(n => `#${n}`).join(', ')}.`;
+      incorrectMessagePart = ` You answered the following questions incorrectly: ${incorrectQuestionNumbers.map(n => `#${n}`).join(', ')}.`;
     }
 
     return (
@@ -149,18 +166,18 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
         </CardHeader>
         <CardContent className="space-y-4">
           {passed ? (
-             <Alert variant="success" className="bg-green-50 border-green-200 dark:bg-green-900/30 dark:border-green-700">
+            <Alert variant="success" className="bg-green-50 border-green-200 dark:bg-green-900/30 dark:border-green-700">
               <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-               <AlertTitle className="text-green-800 dark:text-green-300">Quiz Passed!</AlertTitle>
-               <AlertDescription className="text-green-700 dark:text-green-400">
-                 {score > 0 ? `Your score: ${score}%` : 'Completed (No score calculated for empty quiz)'}
+              <AlertTitle className="text-green-800 dark:text-green-300">Quiz Passed!</AlertTitle>
+              <AlertDescription className="text-green-700 dark:text-green-400">
+                {score > 0 ? `Your score: ${score}%` : 'Completed (No score calculated for empty quiz)'}
               </AlertDescription>
             </Alert>
           ) : (
-             <Alert variant="destructive">
+            <Alert variant="destructive">
               <XCircle className="h-4 w-4" />
-               <AlertTitle>Quiz Failed</AlertTitle>
-               <AlertDescription>
+              <AlertTitle>Quiz Failed</AlertTitle>
+              <AlertDescription>
                 Your score: {score}%.{incorrectMessagePart} You must score 100% to pass. Please review the material and try again.
               </AlertDescription>
             </Alert>
@@ -170,7 +187,6 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
           {passed ? (
             <Button onClick={handleContinue}>Continue Course</Button>
           ) : (
-             // Disable retry if quiz was marked completed externally (though score indicates fail)
             <Button onClick={handleRetry} variant="outline" disabled={isCompleted}>Retry Quiz</Button>
           )}
         </CardFooter>
@@ -179,11 +195,14 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
   }
 
   if (!currentQuestion) {
-      // Should not happen if totalQuestions > 0 and not submitted, but good safety check
-      return <p>Loading question...</p>;
+    return <p>Loading question...</p>;
   }
 
   const progressValue = totalQuestions > 0 ? Math.round(((currentQuestionIndex + 1) / totalQuestions) * 100) : 0;
+
+  const isCurrentQuestionAnswered = currentQuestion.type === 'multiple-select'
+    ? selectedCheckboxAnswers.length > 0 // Or based on your specific requirement for "answered"
+    : !!selectedRadioAnswer;
 
   return (
     <Card className="my-6 shadow-lg">
@@ -191,34 +210,54 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
         <CardTitle>Quiz: {quiz.title}</CardTitle>
         <CardDescription>
           Question {currentQuestionIndex + 1} of {totalQuestions}
+          {currentQuestion.type === 'multiple-select' && <span className="text-xs text-muted-foreground ml-2">(Select all that apply)</span>}
         </CardDescription>
-         <Progress value={progressValue} aria-label={`Quiz progress ${progressValue}%`} className="mt-2 h-2" />
+        <Progress value={progressValue} aria-label={`Quiz progress ${progressValue}%`} className="mt-2 h-2" />
       </CardHeader>
       <CardContent className="space-y-6">
         <p className="text-lg font-medium">{currentQuestion.text}</p>
-        <RadioGroup
-          onValueChange={handleAnswerSelect}
-          value={selectedAnswer}
-          className="space-y-3"
-           disabled={quizSubmitted} // Disable selections after submit
-        >
-          {currentQuestion.options.map((option, index) => (
-            <div key={index} className="flex items-center space-x-3 rounded-md border border-input p-3 hover:bg-muted/50 transition-colors has-[:checked]:bg-primary/10 has-[:checked]:border-primary">
-              <RadioGroupItem value={option} id={`${currentQuestion.id}-option-${index}`} disabled={quizSubmitted} />
-              <Label htmlFor={`${currentQuestion.id}-option-${index}`} className="font-normal flex-1 cursor-pointer">
-                {option}
-              </Label>
-            </div>
-          ))}
-        </RadioGroup>
+
+        {currentQuestion.type === 'multiple-select' ? (
+          <div className="space-y-3">
+            {currentQuestion.options.map((option, index) => (
+              <div key={index} className="flex items-center space-x-3 rounded-md border border-input p-3 hover:bg-muted/50 transition-colors has-[:checked]:bg-primary/10 has-[:checked]:border-primary">
+                <Checkbox
+                  id={`${currentQuestion.id}-option-${index}`}
+                  checked={selectedCheckboxAnswers.includes(option)}
+                  onCheckedChange={(checked) => handleCheckboxAnswerChange(option, !!checked)}
+                  disabled={quizSubmitted}
+                />
+                <Label htmlFor={`${currentQuestion.id}-option-${index}`} className="font-normal flex-1 cursor-pointer">
+                  {option}
+                </Label>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <RadioGroup
+            onValueChange={handleRadioAnswerSelect}
+            value={selectedRadioAnswer}
+            className="space-y-3"
+            disabled={quizSubmitted}
+          >
+            {currentQuestion.options.map((option, index) => (
+              <div key={index} className="flex items-center space-x-3 rounded-md border border-input p-3 hover:bg-muted/50 transition-colors has-[:checked]:bg-primary/10 has-[:checked]:border-primary">
+                <RadioGroupItem value={option} id={`${currentQuestion.id}-option-${index}`} disabled={quizSubmitted} />
+                <Label htmlFor={`${currentQuestion.id}-option-${index}`} className="font-normal flex-1 cursor-pointer">
+                  {option}
+                </Label>
+              </div>
+            ))}
+          </RadioGroup>
+        )}
       </CardContent>
       <CardFooter className="flex justify-end">
         {currentQuestionIndex < totalQuestions - 1 ? (
-          <Button onClick={handleNextQuestion} disabled={!selectedAnswer || quizSubmitted}>
+          <Button onClick={handleNextQuestion} disabled={!isCurrentQuestionAnswered || quizSubmitted}>
             Next Question
           </Button>
         ) : (
-          <Button onClick={handleSubmitQuiz} disabled={!selectedAnswer || quizSubmitted}>
+          <Button onClick={handleSubmitQuiz} disabled={!isCurrentQuestionAnswered || quizSubmitted}>
             Submit Quiz
           </Button>
         )}

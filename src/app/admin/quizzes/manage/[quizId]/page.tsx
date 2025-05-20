@@ -17,8 +17,8 @@ import {
 import { ArrowLeft, PlusCircle, Edit, Trash2, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Quiz, Question } from '@/types/course';
-import { getQuizById, deleteQuestion, addQuestionToQuiz, updateQuestion } from '@/lib/firestore-data'; // Import necessary functions
-import { AddEditQuestionDialog } from '@/components/admin/AddEditQuestionDialog'; // Import the new dialog
+import { getQuizById, deleteQuestion, addQuestionToQuiz, updateQuestion } from '@/lib/firestore-data';
+import { AddEditQuestionDialog } from '@/components/admin/AddEditQuestionDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,7 +58,7 @@ export default function ManageQuizQuestionsPage() {
         return;
       }
       setQuiz(fetchedQuiz);
-      setQuestions(fetchedQuiz.questions || []); // Set questions from fetched quiz
+      setQuestions(fetchedQuiz.questions || []); 
 
     } catch (error) {
       console.error("Error fetching quiz/questions:", error);
@@ -116,7 +116,7 @@ export default function ManageQuizQuestionsPage() {
   };
 
    const handleQuestionSaved = (savedQuestion: Question) => {
-        fetchQuizAndQuestions(); // Re-fetch quiz data to update the questions list
+        fetchQuizAndQuestions(); 
         setIsQuestionDialogOpen(false);
         setEditingQuestion(null);
    };
@@ -144,7 +144,6 @@ export default function ManageQuizQuestionsPage() {
          </Button>
       </div>
 
-      {/* Questions Section */}
       <Card className="mb-8">
         <CardHeader>
           <CardTitle>
@@ -160,8 +159,9 @@ export default function ManageQuizQuestionsPage() {
                 <TableHeader>
                     <TableRow>
                         <TableHead>Question Text</TableHead>
+                        <TableHead>Type</TableHead>
                         <TableHead>Options</TableHead>
-                        <TableHead>Correct Answer</TableHead>
+                        <TableHead>Correct Answer(s)</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                  </TableHeader>
@@ -169,15 +169,23 @@ export default function ManageQuizQuestionsPage() {
                     {questions.map((question, index) => (
                         <TableRow key={question.id || index}>
                              <TableCell className="font-medium max-w-sm truncate">{question.text}</TableCell>
+                             <TableCell>
+                                <Badge variant="outline" className="capitalize">{question.type.replace('-', ' ')}</Badge>
+                             </TableCell>
                              <TableCell className="text-sm text-muted-foreground">
                                 <ul className="list-disc list-inside">
                                     {question.options.map((opt, i) => <li key={i}>{opt}</li>)}
                                 </ul>
                              </TableCell>
                             <TableCell>
-                                <Badge variant="secondary" className="flex items-center gap-1 w-fit">
-                                   <CheckCircle className="h-3 w-3 text-green-600" />
-                                    {question.correctAnswer}
+                                <Badge variant="secondary" className="flex items-center gap-1 w-fit whitespace-normal">
+                                   <CheckCircle className="h-3 w-3 text-green-600 flex-shrink-0" />
+                                    <span className="break-all">
+                                      {question.type === 'multiple-select' 
+                                        ? (question.correctAnswers || []).join(', ') 
+                                        : question.correctAnswer
+                                      }
+                                    </span>
                                 </Badge>
                             </TableCell>
                              <TableCell className="text-right">
@@ -206,7 +214,6 @@ export default function ManageQuizQuestionsPage() {
         </CardContent>
       </Card>
 
-       {/* Add/Edit Question Dialog */}
        <AddEditQuestionDialog
             isOpen={isQuestionDialogOpen}
             setIsOpen={setIsQuestionDialogOpen}
@@ -215,7 +222,6 @@ export default function ManageQuizQuestionsPage() {
             onQuestionSaved={handleQuestionSaved}
        />
 
-       {/* Delete Confirmation Dialog */}
        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
