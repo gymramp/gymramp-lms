@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +15,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { getAllPrograms, getCourseById } from '@/lib/firestore-data'; // Fetch programs
-import { processFreeTrialCheckout } from '@/app/actions/checkout'; // Corrected import
+import { processFreeTrialCheckout } from '@/actions/checkout'; // Corrected import
 import type { Program, Course } from '@/types/course'; // Import Program
 import type { User } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
@@ -382,3 +382,5 @@ export default function FreeTrialCheckoutPage() {
     </div>
   );
 }
+
+    

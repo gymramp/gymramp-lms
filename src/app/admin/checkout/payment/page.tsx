@@ -15,7 +15,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { processCheckout } from '@/app/actions/checkout'; // Corrected import
+import { processCheckout } from '@/actions/checkout'; // Corrected import path
 import { createPaymentIntent } from '@/actions/stripe';
 import type { CheckoutFormData, RevenueSharePartner } from '@/types/user'; // Import RevenueSharePartner
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
