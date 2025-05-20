@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { createTestPaymentIntent } from '@/actions/stripe';
 import { getAllCourses } from '@/lib/firestore-data';
 import type { Course } from '@/types/course';
-import { Loader2, CreditCard, AlertTriangle, BookOpen, Percent } from 'lucide-react';
+import { Loader2, CreditCard, AlertTriangle, BookOpen, Percent, DollarSign } from 'lucide-react'; // Added DollarSign
 import { useRouter } from 'next/navigation';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
@@ -123,18 +123,10 @@ export default function TestCheckoutPage() {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoadingSecret, setIsLoadingSecret] = useState(false);
   const [errorSecret, setErrorSecret] = useState<string | null>(null);
-  // const [allCourses, setAllCourses] = useState<Course[]>([]); // REMOVED, courses no longer have prices
-  // const [isLoadingCourses, setIsLoadingCourses] = useState(true); // REMOVED
-  // const [selectedCourseId, setSelectedCourseId] = useState<string | undefined>(undefined); // REMOVED
   const { toast } = useToast();
 
-  const [testAmountInput, setTestAmountInput] = useState('1.00'); // Default to $1.00
+  const [testAmountInput, setTestAmountInput] = useState('1.00'); 
   const finalTotalAmount = parseFloat(testAmountInput) || 0;
-
-  // REMOVED: useEffect to fetch courses
-  // REMOVED: selectedCourse useMemo
-  // REMOVED: subtotalInCents useMemo
-  // REMOVED: useEffect for discount and finalTotalAmount based on course price
 
   const fetchClientSecret = useCallback(async (cents: number) => {
     if (cents <= 0) {
@@ -143,7 +135,6 @@ export default function TestCheckoutPage() {
         setIsLoadingSecret(false);
         return;
     }
-     // createTestPaymentIntent has its own minimum check (e.g. 50 cents)
 
     setIsLoadingSecret(true);
     setErrorSecret(null);
@@ -177,9 +168,9 @@ export default function TestCheckoutPage() {
     if (finalAmountInCentsValue > 0) {
         fetchClientSecret(finalAmountInCentsValue);
     } else {
-        setErrorSecret('Please enter a valid amount greater than $0.00.');
+        setErrorSecret('Please enter a valid amount greater than $0.00 (min $0.50 for Stripe).');
         setClientSecret(null);
-        setIsLoadingSecret(false);
+        // setIsLoadingSecret(false); // Ensure loading is false if amount is invalid
     }
   }, [finalTotalAmount, fetchClientSecret]);
 
@@ -194,7 +185,6 @@ export default function TestCheckoutPage() {
           <CardDescription>Enter an amount and test the Stripe Payment Element.</CardDescription>
         </CardHeader>
         <CardContent>
-          {/* REMOVED: Course selection UI */}
            <div className="space-y-4 mb-6 border-b pb-4">
             <h3 className="text-md font-semibold text-primary">Test Payment Amount</h3>
             <Label htmlFor="test-amount" className="flex items-center gap-1 text-sm font-medium">

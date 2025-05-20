@@ -38,7 +38,7 @@ export default async function RootLayout({
           '--accent-color': accentColor,
         } as React.CSSProperties}>
         <Navbar />
-        <div className="flex flex-1 pt-14 overflow-hidden"> {/* flex-1 to take available space, overflow-hidden for child scrolling, pt-14 for navbar offset */}
+        <div className="flex flex-1 overflow-hidden"> {/* flex-1 to take available space, overflow-hidden for child scrolling, pt-14 for navbar offset */}
           <Sidebar /> {/* Sidebar is now a direct flex child */}
           <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto bg-secondary/30"> {/* No md:ml-64 needed, main takes remaining space */}
             {children}
