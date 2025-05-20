@@ -2,14 +2,12 @@
 import type { Metadata } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import './globals.css';
-// Assuming you have a way to get the current user and their company.
-// This might require server-side logic or context providers depending on your auth setup.
-// For this example, we'll assume a placeholder function `getUserCompany` exists.
-import { getUserCompany } from '@/lib/user-data'; // Adjust the import path as needed
+import { getUserCompany } from '@/lib/user-data'; 
 import { Footer } from '@/components/layout/Footer';
 import { Toaster } from "@/components/ui/toaster";
 import { cn } from '@/lib/utils';
-import { Navbar } from '@/components/layout/Navbar'; // Added this import
+import { Navbar } from '@/components/layout/Navbar';
+import { Sidebar } from '@/components/layout/Sidebar'; // Import the new Sidebar
 
 export const metadata: Metadata = {
   title: 'GYMRAMP',
@@ -21,16 +19,11 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Fetch the current user's company data
-  // This is a placeholder and needs to be replaced with your actual data fetching logic
-  const company = await getUserCompany();
+  const company = await getUserCompany(); 
+  const defaultPrimary = '#004d40'; 
+  const defaultSecondary = '#e0e0e0'; 
+  const defaultAccent = '#ff9800'; 
 
-  // Define default colors
-  const defaultPrimary = '#004d40'; // Deep Teal
-  const defaultSecondary = '#e0e0e0'; // Light Gray
-  const defaultAccent = '#ff9800'; // Bright Orange
-
-  // Determine colors based on white-labeling settings
   const primaryColor = company?.whiteLabelEnabled ? company.primaryColor || defaultPrimary : defaultPrimary;
   const secondaryColor = company?.whiteLabelEnabled ? company.secondaryColor || defaultSecondary : defaultSecondary;
   const accentColor = company?.whiteLabelEnabled ? company.accentColor || defaultAccent : defaultAccent;
@@ -38,18 +31,19 @@ export default async function RootLayout({
   return (
     <html lang="en" className={cn("h-full", GeistSans.variable)}>
       <body
-        className={cn("relative h-full font-sans antialiased")}
+        className={cn("relative h-full font-sans antialiased flex flex-col")} // Updated for flex layout
         style={{
           '--primary-color': primaryColor,
           '--secondary-color': secondaryColor,
           '--accent-color': accentColor,
         } as React.CSSProperties}>
-        {/* Navbar might need adjustments based on whether the root layout can access auth state easily */}
-        {/* For now, assuming Navbar handles its own auth state logic */}
-        <Navbar />
-        <main className="relative flex flex-col min-h-screen">
-          <div className="flex-grow flex-1">{children}</div>
-        </main>
+        <Navbar /> {/* This will be the fixed top bar */}
+        <div className="flex flex-1 pt-14"> {/* pt-14 to offset fixed Navbar height */}
+          <Sidebar /> {/* Sidebar for logged-in users */}
+          <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto bg-secondary/30"> {/* Main content area */}
+            {children}
+          </main>
+        </div>
         <Footer />
         <Toaster />
       </body>
