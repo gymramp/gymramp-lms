@@ -32,7 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { PlusCircle, MoreHorizontal, Trash2, Edit, BookOpen, Search, Layers, Loader2, DollarSign } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Trash2, Edit, BookOpen, Search, Layers, Loader2, DollarSign, Package } from 'lucide-react'; // Added Package
 import { useToast } from '@/hooks/use-toast';
 import type { Program } from '@/types/course';
 import type { User } from '@/types/user';
@@ -197,7 +197,9 @@ export default function AdminProgramsPage() {
                   <TableHead className="text-center">Courses</TableHead>
                   <TableHead><DollarSign className="inline h-4 w-4 mr-1" />Base Price</TableHead>
                   <TableHead><DollarSign className="inline h-4 w-4 mr-1" />Sub (M4-12)</TableHead>
+                  <TableHead>Stripe M4-12 ID</TableHead>
                   <TableHead><DollarSign className="inline h-4 w-4 mr-1" />Sub (M13+)</TableHead>
+                  <TableHead>Stripe M13+ ID</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -213,7 +215,9 @@ export default function AdminProgramsPage() {
                     </TableCell>
                     <TableCell>{program.price}</TableCell>
                     <TableCell>{program.firstSubscriptionPrice || 'N/A'}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{program.stripeFirstPriceId || 'N/A'}</TableCell>
                     <TableCell>{program.secondSubscriptionPrice || 'N/A'}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{program.stripeSecondPriceId || 'N/A'}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -226,12 +230,12 @@ export default function AdminProgramsPage() {
                           <DropdownMenuLabel>Manage</DropdownMenuLabel>
                           <DropdownMenuItem onClick={() => handleEditProgramClick(program)}>
                             <Edit className="mr-2 h-4 w-4" />
-                            <span>Edit Details</span>
+                            <span>Edit Details & Pricing</span>
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild>
                             <Link href={`/admin/programs/manage/${program.id}`}>
                               <BookOpen className="mr-2 h-4 w-4" />
-                              <span>Manage Courses</span>
+                              <span>Manage Courses in Program</span>
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />

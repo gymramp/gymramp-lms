@@ -35,7 +35,9 @@ const programFormSchema = z.object({
   description: z.string().min(10, { message: 'Description must be at least 10 characters.' }),
   price: z.string().regex(/^\$?\d+(\.\d{1,2})?$/, { message: 'Please enter a valid price (e.g., $199 or 199.99).' }),
   firstSubscriptionPrice: z.string().regex(/^\$?\d+(\.\d{1,2})?(\/(mo|month))?$/i, { message: 'Valid format: $29/mo or 29.99' }).optional().or(z.literal('')),
+  stripeFirstPriceId: z.string().optional().or(z.literal('')),
   secondSubscriptionPrice: z.string().regex(/^\$?\d+(\.\d{1,2})?(\/(mo|month))?$/i, { message: 'Valid format: $19/mo or 19.99' }).optional().or(z.literal('')),
+  stripeSecondPriceId: z.string().optional().or(z.literal('')),
 });
 
 type ProgramFormValues = z.infer<typeof programFormSchema>;
@@ -58,8 +60,10 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
       title: '',
       description: '',
       price: '',
-      firstSubscriptionPrice: '', // Ensure default is an empty string
-      secondSubscriptionPrice: '', // Ensure default is an empty string
+      firstSubscriptionPrice: '',
+      stripeFirstPriceId: '',
+      secondSubscriptionPrice: '',
+      stripeSecondPriceId: '',
     },
   });
 
@@ -70,8 +74,10 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
           title: initialData.title || '',
           description: initialData.description || '',
           price: initialData.price || '',
-          firstSubscriptionPrice: initialData.firstSubscriptionPrice || '', // Coalesce null/undefined to empty string
-          secondSubscriptionPrice: initialData.secondSubscriptionPrice || '', // Coalesce null/undefined to empty string
+          firstSubscriptionPrice: initialData.firstSubscriptionPrice || '',
+          stripeFirstPriceId: initialData.stripeFirstPriceId || '',
+          secondSubscriptionPrice: initialData.secondSubscriptionPrice || '',
+          stripeSecondPriceId: initialData.stripeSecondPriceId || '',
         });
       } else {
         form.reset({ 
@@ -79,7 +85,9 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
             description: '', 
             price: '', 
             firstSubscriptionPrice: '', 
-            secondSubscriptionPrice: '' 
+            stripeFirstPriceId: '',
+            secondSubscriptionPrice: '',
+            stripeSecondPriceId: '',
         });
       }
     }
@@ -94,7 +102,9 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
         description: data.description,
         price: data.price,
         firstSubscriptionPrice: data.firstSubscriptionPrice || null,
+        stripeFirstPriceId: data.stripeFirstPriceId || null,
         secondSubscriptionPrice: data.secondSubscriptionPrice || null,
+        stripeSecondPriceId: data.stripeSecondPriceId || null,
       };
 
       if (isEditing && initialData) {
@@ -185,9 +195,22 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
                 <FormItem>
                   <FormLabel>First Subscription Price (Months 4-12, Optional)</FormLabel>
                   <FormControl>
-                    {/* Rely on RHF to pass '' from defaultValues */}
                     <Input placeholder="e.g., $29/mo or 29.99" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="stripeFirstPriceId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Stripe Price ID (First Subscription Tier)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., price_1L2X..." {...field} value={field.value ?? ''}/>
+                  </FormControl>
+                   <p className="text-xs text-muted-foreground">Optional. From your Stripe Dashboard.</p>
                   <FormMessage />
                 </FormItem>
               )}
@@ -199,9 +222,22 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
                 <FormItem>
                   <FormLabel>Second Subscription Price (Month 13+ onwards, Optional)</FormLabel>
                   <FormControl>
-                    {/* Rely on RHF to pass '' from defaultValues */}
                     <Input placeholder="e.g., $19/mo or 19.99" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="stripeSecondPriceId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Stripe Price ID (Second Subscription Tier)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., price_1L2Y..." {...field} value={field.value ?? ''}/>
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">Optional. From your Stripe Dashboard.</p>
                   <FormMessage />
                 </FormItem>
               )}

@@ -1,6 +1,6 @@
 
 // Define question types
-export type QuestionType = 'multiple-choice' | 'true-false';
+export type QuestionType = 'multiple-choice' | 'true-false' | 'multiple-select'; // Added multiple-select
 import type { Timestamp } from 'firebase/firestore'; // Import Timestamp
 
 // Represents a single question within a quiz
@@ -8,8 +8,13 @@ export interface Question {
     id: string;
     text: string;
     type: QuestionType;
-    options: string[];
-    correctAnswer: string;
+    options: string[]; // Always an array of available option texts
+
+    // For single-answer types ('multiple-choice', 'true-false')
+    correctAnswer?: string; // The single correct option text
+
+    // For multi-answer type ('multiple-select')
+    correctAnswers?: string[]; // Array of correct option texts
 }
 
 // Represents a standalone quiz in the library
@@ -71,12 +76,13 @@ export interface QuizFormData {
     title: string;
 }
 
-// Type for adding/editing a single question (includes type)
+// Type for adding/editing a single question
 export interface QuestionFormData {
     type: QuestionType;
     text: string;
-    options: string[]; // Already correctly an array of strings
-    correctAnswer: string;
+    options: string[];
+    correctAnswer?: string;
+    correctAnswers?: string[];
 }
 
 // Represents user's progress on a specific course
@@ -101,7 +107,9 @@ export interface Program {
   courseIds: string[];
   price: string; // e.g., "$499" (One-time base price)
   firstSubscriptionPrice?: string | null; // e.g., "$29/mo" (for months 4-12)
+  stripeFirstPriceId?: string | null; // Stripe Price ID for the first subscription tier
   secondSubscriptionPrice?: string | null; // e.g., "$19/mo" (for month 13+ onwards)
+  stripeSecondPriceId?: string | null; // Stripe Price ID for the second subscription tier
   isDeleted?: boolean;
   deletedAt?: Timestamp | null;
   createdAt?: Timestamp;
@@ -112,6 +120,8 @@ export interface Program {
 export type ProgramFormData = Omit<Program, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'courseIds'> & {
   price: string;
   firstSubscriptionPrice?: string | null;
+  stripeFirstPriceId?: string | null;
   secondSubscriptionPrice?: string | null;
+  stripeSecondPriceId?: string | null;
 };
 

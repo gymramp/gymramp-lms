@@ -58,7 +58,8 @@ export interface Company {
   primaryColor: string | null;
   secondaryColor: string | null;
   accentColor?: string | null;
-  stripeCustomerId?: string | null; // Added for Stripe integration
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null; // ID of the active Stripe Subscription object
 }
 
 // Type for the form data when adding/editing a company (now Brand)

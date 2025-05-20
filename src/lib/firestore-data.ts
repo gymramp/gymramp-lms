@@ -333,13 +333,7 @@ export async function deleteQuiz(quizId: string): Promise<boolean> {
 
 // --- Question Management Functions (within a Quiz) ---
 
-export type QuestionPayload = {
-    type: QuestionType;
-    text: string;
-    options: string[];
-    correctAnswer?: string;     // for single answer types
-    correctAnswers?: string[];  // for 'multiple-select'
-};
+export type QuestionPayload = Omit<Question, 'id'>;
 
 
 export async function addQuestionToQuiz(quizId: string, questionData: QuestionPayload): Promise<Question | null> {
@@ -353,25 +347,23 @@ export async function addQuestionToQuiz(quizId: string, questionData: QuestionPa
 
         const questionId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         
-        const questionForFirestore: any = {
+        const questionForFirestore: Question = {
             id: questionId,
-            type: questionData.type, // Zod should ensure this is defined
-            text: questionData.text,   // Zod should ensure this is defined
-            options: questionData.options || [], // Zod should ensure this is string[]
+            type: questionData.type,
+            text: questionData.text,
+            options: questionData.options || [],
         };
 
         if (questionData.type === 'multiple-select') {
-            // Zod in dialog ensures questionData.correctAnswers is a non-empty array of strings
-            questionForFirestore.correctAnswers = questionData.correctAnswers;
-        } else { // 'multiple-choice' or 'true-false'
-            // Zod in dialog ensures questionData.correctAnswer is a non-empty string or ('True'/'False')
-            questionForFirestore.correctAnswer = questionData.correctAnswer;
+            questionForFirestore.correctAnswers = questionData.correctAnswers || [];
+        } else {
+            questionForFirestore.correctAnswer = questionData.correctAnswer || '';
         }
         
         console.log("[addQuestionToQuiz] Object to be added via arrayUnion:", JSON.stringify(questionForFirestore, null, 2));
 
         await updateDoc(quizRef, {
-            questions: arrayUnion(questionForFirestore as Question),
+            questions: arrayUnion(questionForFirestore),
             updatedAt: serverTimestamp(),
         });
 
@@ -396,21 +388,19 @@ export async function updateQuestion(quizId: string, questionId: string, questio
         const newQuestionsArray = currentQuestions.map(q => {
             if (q.id === questionId) {
                 questionFound = true;
-                const updatedQuestionData: any = {
+                const updatedQuestionData: Question = {
                     id: q.id, // Preserve existing ID
                     type: questionData.type,
                     text: questionData.text,
                     options: questionData.options || [],
                 };
                 if (questionData.type === 'multiple-select') {
-                    updatedQuestionData.correctAnswers = questionData.correctAnswers;
-                    //  delete updatedQuestionData.correctAnswer; // Ensure other type is not present
+                    updatedQuestionData.correctAnswers = questionData.correctAnswers || [];
                 } else {
-                    updatedQuestionData.correctAnswer = questionData.correctAnswer;
-                    // delete updatedQuestionData.correctAnswers; // Ensure other type is not present
+                    updatedQuestionData.correctAnswer = questionData.correctAnswer || '';
                 }
                  console.log("[updateQuestion] Object to replace item in array:", JSON.stringify(updatedQuestionData, null, 2));
-                return updatedQuestionData as Question;
+                return updatedQuestionData;
             }
             return q;
         });
@@ -492,7 +482,9 @@ export async function createProgram(programData: ProgramFormData): Promise<Progr
             description: programData.description,
             price: programData.price,
             firstSubscriptionPrice: programData.firstSubscriptionPrice || null,
+            stripeFirstPriceId: programData.stripeFirstPriceId || null,
             secondSubscriptionPrice: programData.secondSubscriptionPrice || null,
+            stripeSecondPriceId: programData.stripeSecondPriceId || null,
             courseIds: [], 
             isDeleted: false,
             deletedAt: null,
@@ -546,16 +538,20 @@ export async function updateProgram(programId: string, programData: Partial<Prog
         if (programData.title !== undefined) dataToUpdate.title = programData.title;
         if (programData.description !== undefined) dataToUpdate.description = programData.description;
         if (programData.price !== undefined) dataToUpdate.price = programData.price;
+        
         if (programData.firstSubscriptionPrice !== undefined) dataToUpdate.firstSubscriptionPrice = programData.firstSubscriptionPrice || null;
+        if (programData.stripeFirstPriceId !== undefined) dataToUpdate.stripeFirstPriceId = programData.stripeFirstPriceId || null;
         if (programData.secondSubscriptionPrice !== undefined) dataToUpdate.secondSubscriptionPrice = programData.secondSubscriptionPrice || null;
-
+        if (programData.stripeSecondPriceId !== undefined) dataToUpdate.stripeSecondPriceId = programData.stripeSecondPriceId || null;
 
         if (Object.keys(dataToUpdate).length <= 1 && 
             !dataToUpdate.title && 
             !dataToUpdate.description && 
             !dataToUpdate.price && 
             dataToUpdate.firstSubscriptionPrice === undefined && 
-            dataToUpdate.secondSubscriptionPrice === undefined
+            dataToUpdate.stripeFirstPriceId === undefined &&
+            dataToUpdate.secondSubscriptionPrice === undefined &&
+            dataToUpdate.stripeSecondPriceId === undefined
         ) { 
             const currentDoc = await getDoc(programRef);
             return currentDoc.exists() ? {id: currentDoc.id, ...currentDoc.data()} as Program : null;

@@ -82,8 +82,8 @@ export async function createDefaultCompany(): Promise<Company | null> {
                 primaryColor: null,
                 secondaryColor: null,
                 accentColor: null,
-                logoUrl: null,
-                stripeCustomerId: null, // Initialize Stripe Customer ID
+                stripeCustomerId: null,
+                stripeSubscriptionId: null,
             };
             const docRef = await addDoc(companiesRef, { ...newCompanyData, isDeleted: false, deletedAt: null, createdAt: serverTimestamp() });
             const newDocSnap = await getDoc(docRef);
@@ -186,7 +186,8 @@ export async function addCompany(companyData: CompanyFormData): Promise<Company 
             primaryColor: companyData.primaryColor || null,
             secondaryColor: companyData.secondaryColor || null,
             accentColor: companyData.accentColor || null,
-            stripeCustomerId: companyData.stripeCustomerId || null, // Initialize Stripe Customer ID
+            stripeCustomerId: companyData.stripeCustomerId || null,
+            stripeSubscriptionId: companyData.stripeSubscriptionId || null,
             isDeleted: false,
             deletedAt: null,
             createdAt: serverTimestamp(),
@@ -236,6 +237,7 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
         if (companyData.secondaryColor !== undefined) dataToUpdate.secondaryColor = companyData.secondaryColor;
         if (companyData.accentColor !== undefined) dataToUpdate.accentColor = companyData.accentColor;
         if (companyData.stripeCustomerId !== undefined) dataToUpdate.stripeCustomerId = companyData.stripeCustomerId || null;
+        if (companyData.stripeSubscriptionId !== undefined) dataToUpdate.stripeSubscriptionId = companyData.stripeSubscriptionId || null;
 
 
         if (Object.keys(dataToUpdate).length === 0) {
