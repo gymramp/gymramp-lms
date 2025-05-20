@@ -58,8 +58,8 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
       title: '',
       description: '',
       price: '',
-      firstSubscriptionPrice: '',
-      secondSubscriptionPrice: '',
+      firstSubscriptionPrice: '', // Ensure default is an empty string
+      secondSubscriptionPrice: '', // Ensure default is an empty string
     },
   });
 
@@ -67,14 +67,20 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
     if (isOpen) {
       if (initialData) {
         form.reset({
-          title: initialData.title,
-          description: initialData.description,
-          price: initialData.price,
-          firstSubscriptionPrice: initialData.firstSubscriptionPrice || '',
-          secondSubscriptionPrice: initialData.secondSubscriptionPrice || '',
+          title: initialData.title || '',
+          description: initialData.description || '',
+          price: initialData.price || '',
+          firstSubscriptionPrice: initialData.firstSubscriptionPrice || '', // Coalesce null/undefined to empty string
+          secondSubscriptionPrice: initialData.secondSubscriptionPrice || '', // Coalesce null/undefined to empty string
         });
       } else {
-        form.reset({ title: '', description: '', price: '', firstSubscriptionPrice: '', secondSubscriptionPrice: '' });
+        form.reset({ 
+            title: '', 
+            description: '', 
+            price: '', 
+            firstSubscriptionPrice: '', 
+            secondSubscriptionPrice: '' 
+        });
       }
     }
   }, [initialData, form, isOpen]);
@@ -179,7 +185,8 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
                 <FormItem>
                   <FormLabel>First Subscription Price (Months 4-12, Optional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., $29/mo or 29.99" {...field} value={field.value ?? ''} />
+                    {/* Rely on RHF to pass '' from defaultValues */}
+                    <Input placeholder="e.g., $29/mo or 29.99" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -192,7 +199,8 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
                 <FormItem>
                   <FormLabel>Second Subscription Price (Month 13+ onwards, Optional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., $19/mo or 19.99" {...field} value={field.value ?? ''} />
+                    {/* Rely on RHF to pass '' from defaultValues */}
+                    <Input placeholder="e.g., $19/mo or 19.99" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
