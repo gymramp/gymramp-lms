@@ -50,12 +50,12 @@ const checkoutSetupFormSchema = z.object({
 type CheckoutSetupFormValues = z.infer<typeof checkoutSetupFormSchema>;
 
 interface CheckoutSetupFormContentProps {
-  allPrograms: Program[]; // Changed from allCourses to allPrograms
+  allPrograms: Program[];
   maxUsers: number | null;
   setMaxUsers: React.Dispatch<React.SetStateAction<number | null>>;
-  selectedProgramId: string | null; // Added selectedProgramId state
-  setSelectedProgramId: React.Dispatch<React.SetStateAction<string | null>>; // Added setter
-  coursesInSelectedProgram: Course[]; // State for courses in the selected program
+  selectedProgramId: string | null;
+  setSelectedProgramId: React.Dispatch<React.SetStateAction<string | null>>;
+  coursesInSelectedProgram: Course[];
 }
 
 function CheckoutSetupFormContent({
@@ -94,7 +94,7 @@ function CheckoutSetupFormContent({
   
   const selectedProgram = allPrograms.find(p => p.id === selectedProgramId);
 
-  const subtotalAmount = selectedProgram ? parseFloat(selectedProgram.price.replace(/[$,/mo]/gi, '')) : 0;
+  const subtotalAmount = (selectedProgram && typeof selectedProgram.price === 'string') ? parseFloat(selectedProgram.price.replace(/[$,/mo]/gi, '')) : 0;
   const discountAmount = (subtotalAmount * (parseFloat(discountPercentInput) || 0)) / 100;
   const finalTotalAmount = subtotalAmount - discountAmount;
 
@@ -137,7 +137,6 @@ function CheckoutSetupFormContent({
   };
 
   useEffect(() => {
-    // Pre-select program if only one exists, or if a value is passed in
     if (selectedProgramId) {
       setupForm.setValue('selectedProgramId', selectedProgramId, { shouldValidate: true });
     } else if (allPrograms.length === 1) {
@@ -240,7 +239,7 @@ function CheckoutSetupFormContent({
                   control={setupForm.control}
                   name={`revenueSharePartners.${index}.shareBasis`}
                   render={({ field: formField }) => (
-                    <FormItem className="md:col-span-4 pt-2">
+                    <FormItem className="md:col-span-4 pt-2"> {/* Changed from col-span-1 to col-span-4 for full width */}
                       <FormLabel className="text-sm font-medium">Share Basis</FormLabel>
                       <FormControl>
                         <RadioGroup
@@ -459,7 +458,7 @@ export default function AdminCheckoutPage() {
           ]);
           setAllPrograms(programsData);
           setAllCourses(coursesData);
-          if (programsData.length === 1 && !selectedProgramId) { // Auto-select if only one program
+          if (programsData.length === 1 && !selectedProgramId) { 
              setSelectedProgramId(programsData[0].id);
           }
         } catch (error) {
@@ -474,7 +473,6 @@ export default function AdminCheckoutPage() {
     }
   }, [currentUser, isCheckingAuth, toast, selectedProgramId]);
 
-  // Effect to update coursesInSelectedProgram when selectedProgramId or allCourses changes
   useEffect(() => {
     if (selectedProgramId && allPrograms.length > 0 && allCourses.length > 0) {
       const program = allPrograms.find(p => p.id === selectedProgramId);
@@ -511,3 +509,4 @@ export default function AdminCheckoutPage() {
     </div>
   );
 }
+
