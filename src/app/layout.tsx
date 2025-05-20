@@ -7,7 +7,7 @@ import { Footer } from '@/components/layout/Footer';
 import { Toaster } from "@/components/ui/toaster";
 import { cn } from '@/lib/utils';
 import { Navbar } from '@/components/layout/Navbar';
-import { Sidebar } from '@/components/layout/Sidebar'; // Import the new Sidebar
+import { Sidebar } from '@/components/layout/Sidebar';
 
 export const metadata: Metadata = {
   title: 'GYMRAMP',
@@ -31,16 +31,16 @@ export default async function RootLayout({
   return (
     <html lang="en" className={cn("h-full", GeistSans.variable)}>
       <body
-        className={cn("relative h-full font-sans antialiased flex flex-col")}
+        className={cn("flex flex-col h-full font-sans antialiased")}
         style={{
           '--primary-color': primaryColor,
           '--secondary-color': secondaryColor,
           '--accent-color': accentColor,
         } as React.CSSProperties}>
-        <Navbar /> {/* This will be the fixed top bar */}
-        <div className="flex flex-1 pt-14"> {/* pt-14 to offset fixed Navbar height */}
-          <Sidebar /> {/* Sidebar for logged-in users */}
-          <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto bg-secondary/30 md:ml-64"> {/* Main content area with md:ml-64 */}
+        <Navbar />
+        <div className="flex flex-1 pt-14 overflow-hidden"> {/* flex-1 to take available space, overflow-hidden for child scrolling, pt-14 for navbar offset */}
+          <Sidebar /> {/* Sidebar is now a direct flex child */}
+          <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto bg-secondary/30"> {/* No md:ml-64 needed, main takes remaining space */}
             {children}
           </main>
         </div>

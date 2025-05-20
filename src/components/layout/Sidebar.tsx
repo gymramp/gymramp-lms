@@ -13,7 +13,7 @@ import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getUserByEmail } from '@/lib/user-data';
 import type { User } from '@/types/user';
-import { Skeleton } from '@/components/ui/skeleton'; // For loading state
+import { Skeleton } from '@/components/ui/skeleton';
 
 export function Sidebar() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -41,7 +41,7 @@ export function Sidebar() {
 
   if (isLoading) {
     return (
-      <aside className="fixed left-0 top-14 z-40 hidden h-[calc(100vh-theme(spacing.14))] w-64 flex-col border-r bg-background p-4 md:flex">
+      <aside className="hidden md:flex flex-col w-64 border-r bg-background p-4 h-full">
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
             <div key={i} className="space-y-2">
@@ -60,7 +60,7 @@ export function Sidebar() {
   }
 
   if (!currentUser) {
-    return null; // Don't render sidebar if no user is logged in
+    return null;
   }
 
   const navItems = getNavigationStructure(currentUser);
@@ -89,8 +89,8 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="fixed left-0 top-14 z-30 hidden h-[calc(100vh-theme(spacing.14))] w-64 flex-col border-r bg-background md:flex">
-      <ScrollArea className="flex-1 p-4">
+    <aside className="hidden md:flex flex-col w-64 border-r bg-background h-full"> {/* Removed fixed, top, z-index; set h-full */}
+      <ScrollArea className="flex-1 p-4"> {/* flex-1 helps ScrollArea fill the parent height */}
         <nav className="flex flex-col gap-1">
           {navItems.map((item) =>
             item.isDropdown && item.subItems ? (
