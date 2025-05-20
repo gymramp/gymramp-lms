@@ -13,7 +13,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { getAllPrograms, getCourseById } from '@/lib/firestore-data'; // Fetch programs
+import { getAllPrograms, getCourseById, getAllCourses } from '@/lib/firestore-data'; // Fetch programs
 import type { Program, Course } from '@/types/course'; // Import Program type
 import type { User, RevenueSharePartner } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
