@@ -83,7 +83,7 @@ function CheckoutSetupFormContent({
       zipCode: '',
       country: '',
       revenueSharePartners: [],
-      selectedProgramId: '',
+      selectedProgramId: selectedProgramId || '',
     },
   });
 
@@ -139,11 +139,8 @@ function CheckoutSetupFormContent({
   useEffect(() => {
     if (selectedProgramId) {
       setupForm.setValue('selectedProgramId', selectedProgramId, { shouldValidate: true });
-    } else if (allPrograms.length === 1) {
-        setSelectedProgramId(allPrograms[0].id);
-        setupForm.setValue('selectedProgramId', allPrograms[0].id, { shouldValidate: true });
     }
-  }, [selectedProgramId, allPrograms, setupForm, setSelectedProgramId]);
+  }, [selectedProgramId, setupForm]);
 
 
   return (
@@ -239,7 +236,7 @@ function CheckoutSetupFormContent({
                   control={setupForm.control}
                   name={`revenueSharePartners.${index}.shareBasis`}
                   render={({ field: formField }) => (
-                    <FormItem className="md:col-span-4 pt-2"> {/* Changed from col-span-1 to col-span-4 for full width */}
+                    <FormItem className="md:col-span-4 pt-2">
                       <FormLabel className="text-sm font-medium">Share Basis</FormLabel>
                       <FormControl>
                         <RadioGroup
@@ -303,7 +300,7 @@ function CheckoutSetupFormContent({
                   <FormLabel>Select Program</FormLabel>
                   <Select onValueChange={(value) => {
                     field.onChange(value);
-                    setSelectedProgramId(value); // Update parent state for dynamic pricing
+                    setSelectedProgramId(value);
                   }} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -411,7 +408,7 @@ function CheckoutSetupFormContent({
 
 export default function AdminCheckoutPage() {
   const [allPrograms, setAllPrograms] = useState<Program[]>([]);
-  const [allCourses, setAllCourses] = useState<Course[]>([]); // Still need all courses for lookup
+  const [allCourses, setAllCourses] = useState<Course[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -447,6 +444,7 @@ export default function AdminCheckoutPage() {
     return () => unsubscribe();
   }, [router, toast]);
 
+  // Effect for fetching programs and courses
   useEffect(() => {
     if (currentUser && !isCheckingAuth) {
       (async () => {
@@ -458,9 +456,6 @@ export default function AdminCheckoutPage() {
           ]);
           setAllPrograms(programsData);
           setAllCourses(coursesData);
-          if (programsData.length === 1 && !selectedProgramId) { 
-             setSelectedProgramId(programsData[0].id);
-          }
         } catch (error) {
           console.error("Error fetching programs/courses:", error);
           toast({ title: "Error", description: "Could not load programs or courses.", variant: "destructive" });
@@ -471,8 +466,17 @@ export default function AdminCheckoutPage() {
         }
       })();
     }
-  }, [currentUser, isCheckingAuth, toast, selectedProgramId]);
+  }, [currentUser, isCheckingAuth, toast]);
 
+  // Effect for auto-selecting program if only one exists
+  useEffect(() => {
+    if (!isLoadingData && allPrograms.length === 1 && !selectedProgramId) {
+      setSelectedProgramId(allPrograms[0].id);
+    }
+  }, [allPrograms, isLoadingData, selectedProgramId]);
+
+
+  // Effect for updating courses in selected program
   useEffect(() => {
     if (selectedProgramId && allPrograms.length > 0 && allCourses.length > 0) {
       const program = allPrograms.find(p => p.id === selectedProgramId);
@@ -509,4 +513,3 @@ export default function AdminCheckoutPage() {
     </div>
   );
 }
-
