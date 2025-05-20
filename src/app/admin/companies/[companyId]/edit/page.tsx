@@ -22,6 +22,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription, // Added FormDescription here
 } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -31,7 +32,7 @@ import { getCompanyById, updateCompany, updateCompanyCourseAssignments } from '@
 import { getAllCourses } from '@/lib/firestore-data';
 import type { Company, CompanyFormData, User } from '@/types/user';
 import type { Course } from '@/types/course';
-import { Loader2, Upload, ImageIcon, Trash2, BookCheck, ArrowLeft, Users, CalendarDays, Gift, Globe } from 'lucide-react'; // Added Globe
+import { Loader2, Upload, ImageIcon, Trash2, BookCheck, ArrowLeft, Users, CalendarDays, Gift, Globe } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
