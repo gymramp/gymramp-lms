@@ -10,7 +10,7 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Label } from '@/components/ui/label'; // Direct import of Label if used outside FormField
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -18,36 +18,34 @@ import {
   FormControl,
   FormField,
   FormItem,
-  FormLabel,
+  FormLabel, // Use FormLabel from ui/form
   FormMessage,
-  FormDescription as ShadFormDescription,
+  FormDescription, // Use FormDescription from ui/form
 } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { getCompanyById, updateCompany } from '@/lib/company-data';
-import { getAllCourses, getProgramById } from '@/lib/firestore-data';
-import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data';
 import type { Company, CompanyFormData, User } from '@/types/user';
-import type { Course, Program } from '@/types/course';
-import { Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, BookCheck, ArrowLeft, Users, CalendarDays, Gift, Globe, Layers } from 'lucide-react';
+import { Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, ArrowLeft, Users, CalendarDays, Gift, Globe, Palette } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
 import { Timestamp } from 'firebase/firestore';
-import { Badge } from '@/components/ui/badge';
 
+// Zod schema for form validation
 const companyFormSchema = z.object({
   name: z.string().min(2, { message: 'Brand name must be at least 2 characters.' }),
   subdomainSlug: z.string()
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$|^$/, { message: 'Slug can only contain lowercase letters, numbers, and hyphens. Leave blank if none.' })
+    .regex(/^(?:[a-z0-9]+(?:-[a-z0-9]+)*)?$/, { message: 'Slug can only contain lowercase letters, numbers, and hyphens. Leave blank if none.' })
     .max(63, { message: 'Subdomain slug cannot exceed 63 characters.' })
     .optional()
     .nullable(),
-  customDomain: z.string().regex(/^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}$|^$/, { message: 'Invalid custom domain format (e.g., learn.yourgym.com). Leave blank if none.' }).optional().nullable(),
+  customDomain: z.string().regex(/^(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}|)$/, { message: 'Invalid custom domain format (e.g., learn.yourgym.com). Leave blank if none.' })
+    .optional()
+    .nullable(),
   shortDescription: z.string().max(150, { message: 'Description must be 150 characters or less.' }).optional().nullable(),
   logoUrl: z.string().url({ message: 'Invalid URL format.' }).optional().nullable(),
   maxUsers: z.coerce
@@ -60,9 +58,9 @@ const companyFormSchema = z.object({
   isTrial: z.boolean().optional().default(false),
   trialEndsAt: z.date().nullable().optional(),
   whiteLabelEnabled: z.boolean().optional().default(false),
-  primaryColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$|^$/, { message: 'Invalid hex color. Leave blank if none.' }).optional().nullable(),
-  secondaryColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$|^$/, { message: 'Invalid hex color. Leave blank if none.' }).optional().nullable(),
-  accentColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$|^$/, { message: 'Invalid hex color. Leave blank if none.' }).optional().nullable(),
+  primaryColor: z.string().regex(/^(?:#(?:[0-9A-Fa-f]{3}){1,2}|)$/, { message: 'Invalid hex color (e.g. #RRGGBB). Leave blank if none.' }).optional().nullable(),
+  secondaryColor: z.string().regex(/^(?:#(?:[0-9A-Fa-f]{3}){1,2}|)$/, { message: 'Invalid hex color. Leave blank if none.' }).optional().nullable(),
+  accentColor: z.string().regex(/^(?:#(?:[0-9A-Fa-f]{3}){1,2}|)$/, { message: 'Invalid hex color. Leave blank if none.' }).optional().nullable(),
 });
 
 type CompanyFormValues = z.infer<typeof companyFormSchema>;
@@ -73,9 +71,7 @@ export default function EditCompanyPage() {
   const companyId = params.companyId as string;
 
   const [company, setCompany] = useState<Company | null>(null);
-  const [assignedProgram, setAssignedProgram] = useState<Program | null>(null);
-  const [coursesInProgram, setCoursesInProgram] = useState<Course[]>([]);
-  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -90,17 +86,17 @@ export default function EditCompanyPage() {
     resolver: zodResolver(companyFormSchema),
     defaultValues: {
       name: '',
-      subdomainSlug: '',
-      customDomain: '',
-      shortDescription: '',
-      logoUrl: '',
+      subdomainSlug: '', // Default to empty string
+      customDomain: '',  // Default to empty string
+      shortDescription: '', // Default to empty string
+      logoUrl: '', // Default to empty string
       maxUsers: null,
       isTrial: false,
       trialEndsAt: null,
       whiteLabelEnabled: false,
-      primaryColor: '',
-      secondaryColor: '',
-      accentColor: '',
+      primaryColor: '', // Default to empty string
+      secondaryColor: '', // Default to empty string
+      accentColor: '', // Default to empty string
     },
   });
 
@@ -128,20 +124,15 @@ export default function EditCompanyPage() {
         router.push('/login');
       }
     });
-    return () => {
-      unsubscribe();
-      setIsMounted(false);
-    };
+    return () => unsubscribe();
   }, [router, toast]);
 
-  const fetchCompanyAndRelatedData = useCallback(async () => {
+  const fetchCompanyData = useCallback(async () => {
     if (!companyId || !currentUser || currentUser.role !== 'Super Admin') {
-      setIsLoadingData(false);
+      setIsLoading(false);
       return;
     }
-    setIsLoadingData(true);
-    setAssignedProgram(null);
-    setCoursesInProgram([]);
+    setIsLoading(true);
     try {
       const companyData = await getCompanyById(companyId);
       if (!companyData) {
@@ -169,32 +160,20 @@ export default function EditCompanyPage() {
         secondaryColor: companyData.secondaryColor || '',
         accentColor: companyData.accentColor || '',
       });
-
-      const purchaseRecord = await getCustomerPurchaseRecordByBrandId(companyId);
-      if (purchaseRecord && purchaseRecord.selectedProgramId) {
-        const programData = await getProgramById(purchaseRecord.selectedProgramId);
-        setAssignedProgram(programData);
-        if (programData && programData.courseIds) {
-          const fetchedLibraryCourses = await getAllCourses();
-          const courses = programData.courseIds
-            .map(id => fetchedLibraryCourses.find(c => c.id === id))
-            .filter(Boolean) as Course[];
-          setCoursesInProgram(courses);
-        }
-      }
     } catch (error) {
-      console.error("Failed to fetch brand/related data:", error);
-      toast({ title: "Error", description: "Could not load brand or related program data.", variant: "destructive" });
+      console.error("Failed to fetch brand data:", error);
+      toast({ title: "Error", description: "Could not load brand data.", variant: "destructive" });
     } finally {
-      setIsLoadingData(false);
+      setIsLoading(false);
     }
   }, [companyId, router, toast, form, currentUser]);
 
   useEffect(() => {
     if (currentUser?.role === 'Super Admin' && companyId && isMounted) {
-      fetchCompanyAndRelatedData();
+      fetchCompanyData();
     }
-  }, [fetchCompanyAndRelatedData, currentUser, companyId, isMounted]);
+  }, [fetchCompanyData, currentUser, companyId, isMounted]);
+
 
   const handleLogoFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -239,11 +218,11 @@ export default function EditCompanyPage() {
         accentColor: data.whiteLabelEnabled ? (data.accentColor?.trim() ? data.accentColor.trim() : null) : null,
       };
 
-      const updatedCompanyMeta = await updateCompany(companyId, metadataToUpdate);
-      if (!updatedCompanyMeta) {
+      const updatedCompanyResult = await updateCompany(companyId, metadataToUpdate);
+      if (!updatedCompanyResult) {
         throw new Error("Failed to update brand metadata.");
       }
-      setCompany(updatedCompanyMeta); // Update local state
+      setCompany(updatedCompanyResult);
       toast({ title: "Brand Updated", description: `"${data.name}" updated successfully.` });
     } catch (error: any) {
       console.error("Failed to update brand:", error);
@@ -253,20 +232,18 @@ export default function EditCompanyPage() {
     }
   };
 
-
-  if (!isMounted || isLoadingData || !currentUser || currentUser.role !== 'Super Admin') {
+  if (!isMounted || isLoading || !currentUser || currentUser.role !== 'Super Admin') {
     return (
       <div className="container mx-auto py-12 md:py-16 lg:py-20">
         <Skeleton className="h-8 w-1/4 mb-6" />
         <Skeleton className="h-10 w-1/2 mb-8" />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="md:col-span-2 space-y-6">
-            <Skeleton className="h-10 w-1/3" /> <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-24 w-full" /> <Skeleton className="h-40 w-full" />
-            <Skeleton className="h-10 w-1/4" />
+            <Skeleton className="h-64 w-full" />
+            <Skeleton className="h-40 w-full" />
           </div>
           <div className="md:col-span-1 space-y-6">
-            <Skeleton className="h-10 w-2/3" /> <Skeleton className="h-64 w-full" />
+            <Skeleton className="h-64 w-full" />
             <Skeleton className="h-10 w-1/2" />
           </div>
         </div>
@@ -288,6 +265,7 @@ export default function EditCompanyPage() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="md:col-span-2 space-y-6">
+            {/* Brand Information Card */}
             <Card>
               <CardHeader>
                 <CardTitle>Brand Information</CardTitle>
@@ -295,11 +273,10 @@ export default function EditCompanyPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <FormField control={form.control} name="name" render={({ field }) => (<FormItem> <FormLabel>Brand Name</FormLabel> <FormControl> <Input placeholder="e.g., Global Fitness Inc." {...field} value={field.value ?? ''} /> </FormControl> <FormMessage /> </FormItem>)} />
-                <FormField control={form.control} name="subdomainSlug" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Subdomain Slug (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., global-fitness" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <ShadFormDescription> Used for branded login URL (e.g., global-fitness.yourdomain.com). Only lowercase letters, numbers, and hyphens. </ShadFormDescription> <FormMessage /> </FormItem>)} />
-                <FormField control={form.control} name="customDomain" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Custom Domain (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., learn.theirgym.com" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <ShadFormDescription> Requires DNS CNAME setup by the brand to point to your app. </ShadFormDescription> <FormMessage /> </FormItem>)} />
+                <FormField control={form.control} name="subdomainSlug" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Subdomain Slug (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., global-fitness" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <FormDescription> Used for branded login URL (e.g., global-fitness.yourdomain.com). Only lowercase letters, numbers, and hyphens. </FormDescription> <FormMessage /> </FormItem>)} />
+                <FormField control={form.control} name="customDomain" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Custom Domain (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., learn.theirgym.com" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <FormDescription> Requires DNS CNAME setup by the brand to point to your app. </FormDescription> <FormMessage /> </FormItem>)} />
                 <FormField control={form.control} name="shortDescription" render={({ field }) => (<FormItem> <FormLabel>Short Description (Optional)</FormLabel> <FormControl> <Textarea rows={3} placeholder="A brief description of the brand (max 150 characters)" {...field} value={field.value ?? ''} /> </FormControl> <FormMessage /> </FormItem>)} />
-                <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Users className="h-4 w-4" /> Maximum Users Allowed </FormLabel> <FormControl> <Input type="number" min="1" placeholder="Leave blank for unlimited" value={field.value === null || field.value === undefined ? '' : String(field.value)} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /> </FormControl> <ShadFormDescription> Set the maximum number of user accounts for this brand. Leave blank for no limit. </ShadFormDescription> <FormMessage /> </FormItem>)} />
-                
+                <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Users className="h-4 w-4" /> Maximum Users Allowed </FormLabel> <FormControl> <Input type="number" min="1" placeholder="Leave blank for unlimited" value={field.value === null || field.value === undefined ? '' : String(field.value)} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /> </FormControl> <FormDescription> Set the maximum number of user accounts for this brand. Leave blank for no limit. </FormDescription> <FormMessage /> </FormItem>)} />
                 <FormField control={form.control} name="logoUrl" render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-base font-semibold">Brand Logo (Optional)</FormLabel>
@@ -323,12 +300,16 @@ export default function EditCompanyPage() {
               </CardContent>
             </Card>
 
+            {/* White-Label Settings Card */}
             <Card>
-              <CardHeader> <CardTitle>White-Label Settings</CardTitle> <CardDescription>Customize the appearance of the platform for this brand.</CardDescription> </CardHeader>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5"/> White-Label Settings</CardTitle>
+                <FormDescription>Customize the appearance of the platform for this brand.</FormDescription>
+              </CardHeader>
               <CardContent className="space-y-6">
                 <FormField control={form.control} name="whiteLabelEnabled" render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5"> <FormLabel className="text-base">Enable White-Labeling</FormLabel> <ShadFormDescription> Allow this brand to use custom colors. Logo is set above. </ShadFormDescription> </div>
+                    <div className="space-y-0.5"> <FormLabel className="text-base">Enable White-Labeling</FormLabel> <FormDescription> Allow this brand to use custom colors. Logo is set above. </FormDescription> </div>
                     <FormControl> <Checkbox checked={field.value || false} onCheckedChange={field.onChange} /> </FormControl>
                   </FormItem>
                 )} />
@@ -343,9 +324,14 @@ export default function EditCompanyPage() {
             </Card>
           </div>
 
+          {/* Right Column (Trial Info, Program Access Placeholder, Save Button) */}
           <div className="md:col-span-1 space-y-6">
-            <Card className={company.isTrial ? "bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700" : ""}>
-              <CardHeader> <CardTitle className={company.isTrial ? "text-blue-700 dark:text-blue-300 flex items-center gap-2" : "flex items-center gap-2"}> {company.isTrial && <Gift className="h-5 w-5" />} Trial Information </CardTitle> </CardHeader>
+            <Card className={company?.isTrial ? "bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700" : ""}>
+              <CardHeader>
+                <CardTitle className={company?.isTrial ? "text-blue-700 dark:text-blue-300 flex items-center gap-2" : "flex items-center gap-2"}>
+                  {company?.isTrial && <Gift className="h-5 w-5" />} Trial Information
+                </CardTitle>
+              </CardHeader>
               <CardContent>
                 <FormField control={form.control} name="isTrial" render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 mb-4">
@@ -353,21 +339,20 @@ export default function EditCompanyPage() {
                     <FormControl> <Checkbox checked={field.value || false} onCheckedChange={field.onChange} /> </FormControl>
                   </FormItem>
                 )} />
-                
                 {isMounted && isTrialValue && (
                   <FormField control={form.control} name="trialEndsAt" render={({ field }) => (
                     <FormItem className="flex flex-col">
                       <FormLabel className="flex items-center gap-1 text-sm"> <CalendarDays className="h-4 w-4" /> Trial End Date </FormLabel>
-                      <FormControl>
-                        <div> {/* Wrapper div for DatePicker */}
-                          <DatePickerWithPresets
-                            date={field.value} 
-                            setDate={(date) => field.onChange(date || null)}
-                          />
-                        </div>
-                      </FormControl>
+                        <FormControl>
+                            <div> {/* Added div wrapper */}
+                                <DatePickerWithPresets
+                                    date={field.value}
+                                    setDate={(date) => field.onChange(date || null)}
+                                />
+                            </div>
+                        </FormControl>
+                      <FormDescription> Adjust to extend or shorten the trial. Clear to remove end date. </FormDescription>
                       <FormMessage />
-                      <ShadFormDescription> Adjust to extend or shorten the trial. Clear to remove end date. </ShadFormDescription>
                     </FormItem>
                   )} />
                 )}
@@ -375,28 +360,17 @@ export default function EditCompanyPage() {
               </CardContent>
             </Card>
 
+            {/* Program Access Placeholder Card */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Layers className="h-5 w-5" /> Program Access</CardTitle>
-                <CardDescription>Details of the program assigned to this brand during checkout.</CardDescription>
+                <CardTitle>Program Access (Placeholder)</CardTitle>
+                <CardDescription>Details of the program assigned to this brand.</CardDescription>
               </CardHeader>
               <CardContent>
-                {isLoadingData ? (
-                  <Skeleton className="h-20 w-full" />
-                ) : assignedProgram ? (
-                  <div className="space-y-3">
-                    <div> <Label className="text-xs text-muted-foreground">Assigned Program</Label> <p className="font-semibold text-primary">{assignedProgram.title}</p> <p className="text-sm text-muted-foreground">{assignedProgram.description}</p> </div>
-                    {coursesInProgram.length > 0 && (
-                      <div> <Label className="text-xs text-muted-foreground">Courses Included in Program:</Label>
-                        <ScrollArea className="h-40 w-full rounded-md border p-3 mt-1">
-                          <ul className="space-y-1.5"> {coursesInProgram.map(course => ( <li key={course.id} className="text-sm flex items-center gap-2"> <BookCheck className="h-4 w-4 text-muted-foreground flex-shrink-0" /> <span>{course.title} <Badge variant="outline" className="ml-1 text-xs">{course.level}</Badge></span> </li> ))} </ul>
-                        </ScrollArea>
-                      </div>
-                    )}
-                  </div>
-                ) : ( <p className="text-sm text-muted-foreground italic">No program assigned to this brand via checkout, or brand was created manually.</p> )}
+                <p className="text-sm text-muted-foreground italic">Program information will be displayed here once the data fetching logic is restored.</p>
               </CardContent>
             </Card>
+
             <Button type="submit" size="lg" className="w-full bg-primary hover:bg-primary/90" disabled={isSubmitting || isUploadingLogo}>
               {isSubmitting || isUploadingLogo ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Save Changes
@@ -407,4 +381,3 @@ export default function EditCompanyPage() {
     </div>
   );
 }
-    
