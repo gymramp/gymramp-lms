@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useForm, Controller } from 'react-hook-form';
@@ -10,14 +10,16 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label'; // Make sure Label is imported if used directly
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import type { Company, CompanyFormData, User } from '@/types/user';
+import type { Program, Course } from '@/types/course'; // Import Program and Course
 import { getCompanyById, updateCompany } from '@/lib/company-data';
+import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data'; // Import function to get purchase record
+import { getProgramById, getAllCourses } from '@/lib/firestore-data'; // Import functions to get program and courses
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Globe, Users, CalendarDays, Palette, BookOpen } from 'lucide-react';
 import { getUserByEmail } from '@/lib/user-data';
@@ -26,6 +28,8 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { Progress } from '@/components/ui/progress';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 
 const companyFormSchema = z.object({
   name: z.string().min(2, { message: 'Brand name must be at least 2 characters.' }),
@@ -40,11 +44,6 @@ const companyFormSchema = z.object({
   maxUsers: z.coerce.number({ invalid_type_error: "Must be a number" }).int().positive().min(1).optional().nullable(),
   isTrial: z.boolean().default(false),
   trialEndsAt: z.date().nullable().optional(),
-  // Placeholders for now - will be moved to separate form sections if needed
-  // whiteLabelEnabled: z.boolean().default(false),
-  // primaryColor: z.string().optional().nullable(),
-  // secondaryColor: z.string().optional().nullable(),
-  // accentColor: z.string().optional().nullable(),
 });
 
 type CompanyFormValues = z.infer<typeof companyFormSchema>;
@@ -56,6 +55,8 @@ export default function EditCompanyPage() {
   const { toast } = useToast();
 
   const [company, setCompany] = useState<Company | null>(null);
+  const [assignedProgram, setAssignedProgram] = useState<Program | null>(null);
+  const [coursesInProgram, setCoursesInProgram] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -98,12 +99,14 @@ export default function EditCompanyPage() {
     return () => unsubscribe();
   }, [router, toast]);
 
-  const fetchCompanyData = useCallback(async () => {
+  const fetchCompanyAndRelatedData = useCallback(async () => {
     if (!companyId || !currentUser || currentUser.role !== 'Super Admin') {
       setIsLoading(false);
       return;
     }
     setIsLoading(true);
+    setAssignedProgram(null);
+    setCoursesInProgram([]);
     try {
       const companyData = await getCompanyById(companyId);
       if (companyData) {
@@ -122,6 +125,19 @@ export default function EditCompanyPage() {
             ? companyData.trialEndsAt
             : null,
         });
+
+        // Fetch purchase record and then program details
+        const purchaseRecord = await getCustomerPurchaseRecordByBrandId(companyId);
+        if (purchaseRecord && purchaseRecord.selectedProgramId) {
+          const programData = await getProgramById(purchaseRecord.selectedProgramId);
+          setAssignedProgram(programData);
+          if (programData && programData.courseIds && programData.courseIds.length > 0) {
+            const allCourses = await getAllCourses();
+            const programCourses = allCourses.filter(course => programData.courseIds.includes(course.id));
+            setCoursesInProgram(programCourses);
+          }
+        }
+
       } else {
         toast({ title: "Error", description: "Brand not found.", variant: "destructive" });
         router.push('/admin/companies');
@@ -136,9 +152,9 @@ export default function EditCompanyPage() {
 
   useEffect(() => {
     if (currentUser?.role === 'Super Admin') {
-      fetchCompanyData();
+      fetchCompanyAndRelatedData();
     }
-  }, [currentUser, fetchCompanyData]);
+  }, [currentUser, fetchCompanyAndRelatedData]);
 
   const handleLogoFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -167,20 +183,21 @@ export default function EditCompanyPage() {
     try {
       const metadataToUpdate: Partial<CompanyFormData> = {
         name: data.name,
-        subdomainSlug: data.subdomainSlug?.trim() === '' ? null : data.subdomainSlug.toLowerCase(),
-        customDomain: data.customDomain?.trim() === '' ? null : data.customDomain.toLowerCase(),
+        subdomainSlug: data.subdomainSlug?.trim() === '' ? null : (data.subdomainSlug || '').toLowerCase(),
+        customDomain: data.customDomain?.trim() === '' ? null : (data.customDomain || '').toLowerCase(),
         shortDescription: data.shortDescription?.trim() === '' ? null : data.shortDescription,
         logoUrl: data.logoUrl?.trim() === '' ? null : data.logoUrl,
         maxUsers: data.maxUsers ?? null,
         isTrial: data.isTrial,
-        trialEndsAt: data.isTrial && data.trialEndsAt ? data.trialEndsAt : null,
+        trialEndsAt: data.isTrial && data.trialEndsAt ? Timestamp.fromDate(data.trialEndsAt) : null,
+        // White-label and other fields handled separately or not on this form directly
       };
 
       const updatedCompany = await updateCompany(companyId, metadataToUpdate);
       if (updatedCompany) {
-        setCompany(updatedCompany);
+        setCompany(updatedCompany); // Update local state
         toast({ title: "Brand Updated", description: `"${updatedCompany.name}" updated successfully.` });
-        fetchCompanyData(); // Re-fetch to ensure form is reset with latest, including potentially nulled trialEndsAt
+        fetchCompanyAndRelatedData(); // Re-fetch to ensure form is reset with latest data
       } else {
         throw new Error("Failed to update brand.");
       }
@@ -197,15 +214,23 @@ export default function EditCompanyPage() {
       <div className="container mx-auto py-12 md:py-16 lg:py-20">
         <Skeleton className="h-8 w-1/4 mb-6" />
         <Skeleton className="h-10 w-1/2 mb-8" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Skeleton className="md:col-span-2 h-96" />
-          <Skeleton className="md:col-span-1 h-64" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-6">
+            <Skeleton className="h-96" /> {/* Placeholder for Core Info Card */}
+            <Skeleton className="h-64" /> {/* Placeholder for Logo Card */}
+          </div>
+          <div className="lg:col-span-1 space-y-6">
+            <Skeleton className="h-64" /> {/* Placeholder for User & Trial Card */}
+            <Skeleton className="h-48" /> {/* Placeholder for White-Label Card */}
+            <Skeleton className="h-64" /> {/* Placeholder for Program Access Card */}
+          </div>
         </div>
       </div>
     );
   }
 
   if (currentUser.role !== 'Super Admin') {
+    // This should be caught by useEffect redirect, but as a fallback
     return <div className="container mx-auto py-12 text-center">Access Denied.</div>;
   }
 
@@ -222,18 +247,16 @@ export default function EditCompanyPage() {
         Edit Brand: {company.name}
       </h1>
       <p className="text-muted-foreground mb-8">
-        Manage core settings, trial status, and appearance for this brand.
+        Manage core settings, trial status, and other configurations for this brand.
       </p>
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Column 1 & 2: Core Info & Logo */}
             <div className="lg:col-span-2 space-y-6">
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" /> Core Brand Information</CardTitle>
-                  <CardDescription>Basic identification and descriptive details for the brand.</CardDescription>
-                </CardHeader>
+                <CardHeader><CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" /> Core Brand Information</CardTitle><CardDescription>Basic identification and descriptive details for the brand.</CardDescription></CardHeader>
                 <CardContent className="space-y-4">
                   <FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Brand Name</FormLabel><FormControl><Input placeholder="Brand Name" {...field} /></FormControl><FormMessage /></FormItem>)} />
                   <FormField control={form.control} name="subdomainSlug" render={({ field }) => (<FormItem><FormLabel>Subdomain Slug (Optional)</FormLabel><FormControl><Input placeholder="e.g., brand-slug" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /></FormControl><FormMessage /></FormItem>)} />
@@ -243,10 +266,7 @@ export default function EditCompanyPage() {
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><ImageIconLucide className="h-5 w-5" /> Brand Logo</CardTitle>
-                  <CardDescription>Upload or manage the brand's logo.</CardDescription>
-                </CardHeader>
+                <CardHeader><CardTitle className="flex items-center gap-2"><ImageIconLucide className="h-5 w-5" /> Brand Logo</CardTitle><CardDescription>Upload or manage the brand's logo.</CardDescription></CardHeader>
                 <CardContent>
                   <FormItem>
                     <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
@@ -256,13 +276,9 @@ export default function EditCompanyPage() {
                           <Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6 opacity-80 hover:opacity-100 z-10" onClick={() => form.setValue('logoUrl', '')}><Trash2 className="h-4 w-4" /></Button>
                         </div>
                       ) : isLogoUploading ? (
-                        <div className="flex flex-col items-center justify-center h-full py-8">
-                          <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" /><p className="text-sm text-muted-foreground mb-1">Uploading...</p><Progress value={logoUploadProgress} className="w-full max-w-xs h-2" />{logoUploadError && <p className="text-xs text-destructive mt-2">{logoUploadError}</p>}
-                        </div>
+                        <div className="flex flex-col items-center justify-center h-full py-8"><Loader2 className="h-8 w-8 animate-spin text-primary mb-2" /><p className="text-sm text-muted-foreground mb-1">Uploading...</p><Progress value={logoUploadProgress} className="w-full max-w-xs h-2" />{logoUploadError && <p className="text-xs text-destructive mt-2">{logoUploadError}</p>}</div>
                       ) : (
-                        <Label htmlFor="brand-logo-upload" className="cursor-pointer block">
-                          <ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Click to upload logo</p><Input id="brand-logo-upload" type="file" accept="image/*" className="hidden" onChange={handleLogoFileChange} disabled={isLogoUploading} />
-                        </Label>
+                        <Label htmlFor="brand-logo-upload" className="cursor-pointer block"><ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Click to upload logo</p><Input id="brand-logo-upload" type="file" accept="image/*" className="hidden" onChange={handleLogoFileChange} disabled={isLogoUploading} /></Label>
                       )}
                     </div>
                     <FormField control={form.control} name="logoUrl" render={({ field }) => (<FormItem className="hidden"><FormControl><Input type="url" {...field} value={field.value ?? ''} readOnly /></FormControl><FormMessage /></FormItem>)} />
@@ -271,9 +287,10 @@ export default function EditCompanyPage() {
               </Card>
             </div>
 
+            {/* Column 3: User/Trial, White-Label (Placeholder), Program Access */}
             <div className="lg:col-span-1 space-y-6">
               <Card>
-                <CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> User & Trial Settings</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> User &amp; Trial Settings</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem><FormLabel>Max Users</FormLabel><FormControl><Input type="number" min="1" placeholder="Leave blank for unlimited" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
                   <FormField control={form.control} name="isTrial" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Is Trial Account?</FormLabel></div><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormMessage /></FormItem>)} />
@@ -283,16 +300,45 @@ export default function EditCompanyPage() {
                 </CardContent>
               </Card>
 
-              {/* Placeholder for White-Label Settings */}
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings (Placeholder)</CardTitle></CardHeader>
                 <CardContent><p className="text-muted-foreground">White-labeling configuration will be here.</p></CardContent>
               </Card>
 
-              {/* Placeholder for Program Access */}
               <Card>
-                <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5" /> Program Access (Placeholder)</CardTitle></CardHeader>
-                <CardContent><p className="text-muted-foreground">Information about the program assigned to this brand will be displayed here.</p></CardContent>
+                <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5" /> Program Access</CardTitle></CardHeader>
+                <CardContent>
+                  {isLoading && !assignedProgram ? (
+                    <Skeleton className="h-20 w-full" />
+                  ) : assignedProgram ? (
+                    <div className="space-y-3">
+                      <div>
+                        <h4 className="font-semibold text-primary">{assignedProgram.title}</h4>
+                        <p className="text-xs text-muted-foreground">{assignedProgram.description}</p>
+                      </div>
+                      {coursesInProgram.length > 0 && (
+                        <div>
+                          <h5 className="text-sm font-medium text-muted-foreground mb-1">Included Courses:</h5>
+                          <ScrollArea className="h-32 w-full rounded-md border p-2">
+                            <ul className="space-y-1">
+                              {coursesInProgram.map(course => (
+                                <li key={course.id} className="text-xs flex items-center gap-1.5">
+                                  <BookOpen className="h-3 w-3 flex-shrink-0" />
+                                  {course.title} <Badge variant="outline" className="ml-auto text-xs">{course.level}</Badge>
+                                </li>
+                              ))}
+                            </ul>
+                          </ScrollArea>
+                        </div>
+                      )}
+                      {coursesInProgram.length === 0 && (
+                         <p className="text-xs text-muted-foreground italic">This program currently has no courses assigned to it in the library.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">No program information found for this brand (likely created manually or before program assignment at checkout).</p>
+                  )}
+                </CardContent>
               </Card>
             </div>
           </div>
@@ -307,5 +353,3 @@ export default function EditCompanyPage() {
     </div>
   );
 }
-
-    
