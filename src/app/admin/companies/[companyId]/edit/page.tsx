@@ -10,13 +10,13 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Label } from '@/components/ui/label'; // Ensured Label is imported
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
 import { Form, FormControl, FormDescription as ShadFormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import type { Company, CompanyFormData, User } from '@/types/user';
+import type { Company, CompanyFormData } from '@/types/user';
 import type { Program, Course } from '@/types/course';
 import { getCompanyById, updateCompany } from '@/lib/company-data';
 import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data';
@@ -49,7 +49,7 @@ const companyFormSchema = z.object({
   primaryColor: z.string().optional().or(z.literal('')).nullable(),
   secondaryColor: z.string().optional().or(z.literal('')).nullable(),
   accentColor: z.string().optional().or(z.literal('')).nullable(),
-  canManageCourses: z.boolean().default(false), // Added this field
+  canManageCourses: z.boolean().default(false),
 });
 
 type CompanyFormValues = z.infer<typeof companyFormSchema>;
@@ -63,7 +63,7 @@ export default function EditCompanyPage() {
   const [company, setCompany] = useState<Company | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<any | null>(null); // Using 'any' temporarily if User type is complex
   const [isMounted, setIsMounted] = useState(false);
 
   const [isLogoUploading, setIsLogoUploading] = useState(false);
@@ -154,7 +154,7 @@ export default function EditCompanyPage() {
           const programData = await getProgramById(purchaseRecord.selectedProgramId);
           setAssignedProgram(programData);
           if (programData && programData.courseIds && programData.courseIds.length > 0) {
-            const allCourses = await getAllCourses();
+            const allCourses = await getAllCourses(); // Assuming getAllCourses is available
             const programCourses = allCourses.filter(course => programData.courseIds.includes(course.id));
             setCoursesInProgram(programCourses);
           }
@@ -177,6 +177,7 @@ export default function EditCompanyPage() {
       fetchCompanyAndRelatedData();
     }
   }, [currentUser, fetchCompanyAndRelatedData]);
+
 
   const handleLogoFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -221,9 +222,9 @@ export default function EditCompanyPage() {
 
       const updatedCompany = await updateCompany(companyId, metadataToUpdate);
       if (updatedCompany) {
-        setCompany(updatedCompany);
+        setCompany(updatedCompany); // Update local state
         toast({ title: "Brand Updated", description: `"${updatedCompany.name}" updated successfully.` });
-        fetchCompanyAndRelatedData();
+        fetchCompanyAndRelatedData(); // Re-fetch data to ensure consistency
       } else {
         throw new Error("Failed to update brand.");
       }
@@ -267,7 +268,7 @@ export default function EditCompanyPage() {
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" /> Core Brand Information</CardTitle><CardDescription>Basic identification and descriptive details for the brand.</CardDescription></CardHeader>
                 <CardContent className="space-y-4">
-                  <FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Brand Name</FormLabel><FormControl><Input placeholder="Brand Name" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Brand Name</FormLabel><FormControl><Input placeholder="Brand Name" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                   <FormField control={form.control} name="subdomainSlug" render={({ field }) => (<FormItem><FormLabel>Subdomain Slug (Optional)</FormLabel><FormControl><Input placeholder="e.g., brand-slug" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /></FormControl><ShadFormDescription>Used for branded URLs like 'brand-slug.yourdomain.com'. Lowercase alphanumeric and hyphens only.</ShadFormDescription><FormMessage /></FormItem>)} />
                   <FormField control={form.control} name="customDomain" render={({ field }) => (<FormItem><FormLabel>Custom Domain (Optional)</FormLabel><FormControl><Input placeholder="e.g., learn.brand.com" {...field} value={field.value ?? ''} /></FormControl><ShadFormDescription>Requires DNS CNAME pointing to your platform. SSL managed separately.</ShadFormDescription><FormMessage /></FormItem>)} />
                   <FormField control={form.control} name="shortDescription" render={({ field }) => (<FormItem><FormLabel>Short Description (Optional)</FormLabel><FormControl><Textarea rows={3} placeholder="A brief description (max 150 chars)" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
@@ -298,56 +299,83 @@ export default function EditCompanyPage() {
                 <CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> User &amp; Trial Settings</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem><FormLabel>Max Users</FormLabel><FormControl><Input type="number" min="1" placeholder="Leave blank for unlimited" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="isTrial" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Is Trial Account?</FormLabel></div><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="isTrial" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Is Trial Account?</FormLabel></div><FormControl><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></FormControl><FormMessage /></FormItem>)} />
                   {isMounted && isTrialValue && (
-                    <FormField control={form.control} name="trialEndsAt" render={({ field }) => (<FormItem><FormLabel className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Trial End Date</FormLabel><FormControl><div><DatePickerWithPresets date={field.value} setDate={field.onChange} /></div></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="trialEndsAt" render={({ field }) => (
+                        <FormItem>
+                            <FormLabel className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Trial End Date</FormLabel>
+                            <FormControl>
+                                <div> {/* Ensure single child for FormControl */}
+                                    <DatePickerWithPresets date={field.value} setDate={field.onChange} />
+                                </div>
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )} />
                   )}
                 </CardContent>
               </Card>
-
+              
+              {/* White-Label Settings Placeholder */}
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="whiteLabelEnabled"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                        <div className="space-y-0.5"> <FormLabel className="text-base">Enable White-Labeling</FormLabel> <ShadFormDescription>Allow this brand to use custom colors. Logo is set above.</ShadFormDescription> </div>
-                        <FormControl> <Checkbox checked={field.value} onCheckedChange={field.onChange} /> </FormControl>
-                      </FormItem>
-                    )}
-                  />
+                <CardContent>
+                  {isMounted && (
+                    <FormField
+                      control={form.control}
+                      name="whiteLabelEnabled"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm mb-4">
+                          <div className="space-y-0.5"> <FormLabel className="text-base">Enable White-Labeling</FormLabel> <ShadFormDescription>Allow this brand to use custom colors. Logo is set above.</ShadFormDescription> </div>
+                          <FormControl> <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /> </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                  {!isMounted && <Skeleton className="h-20 w-full mb-4" />}
+
                   {isMounted && whiteLabelEnabledValue && (
-                    <>
+                    <div className="space-y-4">
                       <FormField control={form.control} name="primaryColor" render={({ field }) => (<FormItem><FormLabel>Primary Color (Hex)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="secondaryColor" render={({ field }) => (<FormItem><FormLabel>Secondary Color (Hex)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="accentColor" render={({ field }) => (<FormItem><FormLabel>Accent Color (Hex)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                    </>
+                    </div>
                   )}
+                  {isMounted && !whiteLabelEnabledValue && (
+                    <p className="text-sm text-muted-foreground italic">Enable white-labeling to set custom colors.</p>
+                  )}
+                  {!isMounted && <Skeleton className="h-32 w-full" />}
                 </CardContent>
               </Card>
 
-              <Card>
+             <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><PackageCheck className="h-5 w-5" /> Course Management Ability</CardTitle></CardHeader>
                 <CardContent>
-                  <FormField
-                    control={form.control}
-                    name="canManageCourses"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base">Enable Course Management</FormLabel>
-                          <ShadFormDescription>
-                            Allow Admins/Owners of this brand to create and manage their own courses, lessons, and quizzes.
-                          </ShadFormDescription>
-                        </div>
-                        <FormControl>
-                          <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
+                  {isMounted ? (
+                    <FormField
+                      control={form.control}
+                      name="canManageCourses"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base" id="canManageCourses-label">Enable Course Management</FormLabel>
+                            <ShadFormDescription>
+                              Allow Admins/Owners of this brand to create and manage their own courses, lessons, and quizzes.
+                            </ShadFormDescription>
+                          </div>
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value ?? false}
+                              onCheckedChange={field.onChange}
+                              aria-labelledby="canManageCourses-label"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  ) : (
+                    <Skeleton className="h-20 w-full" />
+                  )}
                 </CardContent>
               </Card>
 
@@ -383,3 +411,4 @@ export default function EditCompanyPage() {
     </div>
   );
 }
+
