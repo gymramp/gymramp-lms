@@ -30,7 +30,7 @@ import { useToast } from '@/hooks/use-toast';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { getCompanyById, updateCompany } from '@/lib/company-data';
 import { getAllCourses, getProgramById } from '@/lib/firestore-data';
-import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data';
+import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data'; // Import new function
 import type { Company, CompanyFormData, User } from '@/types/user';
 import type { Course, Program } from '@/types/course';
 import { Loader2, Upload, ImageIcon, Trash2, BookCheck, ArrowLeft, Users, CalendarDays, Gift, Globe, Layers } from 'lucide-react';
@@ -79,7 +79,7 @@ export default function EditCompanyPage() {
   const [company, setCompany] = useState<Company | null>(null);
   const [assignedProgram, setAssignedProgram] = useState<Program | null>(null);
   const [coursesInProgram, setCoursesInProgram] = useState<Course[]>([]);
-  const [allLibraryCourses, setAllLibraryCourses] = useState<Course[]>([]);
+  // const [allLibraryCourses, setAllLibraryCourses] = useState<Course[]>([]); // No longer needed here
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -92,10 +92,10 @@ export default function EditCompanyPage() {
     resolver: zodResolver(companyFormSchema),
     defaultValues: {
       name: '',
-      subdomainSlug: null,
+      subdomainSlug: '', // Changed from null to empty string
       shortDescription: '',
       logoUrl: '',
-      customDomain: null,
+      customDomain: '', // Changed from null to empty string
       maxUsers: null,
       isTrial: false,
       trialEndsAt: null,
@@ -143,10 +143,10 @@ export default function EditCompanyPage() {
       setCompany(companyData);
       form.reset({
         name: companyData.name,
-        subdomainSlug: companyData.subdomainSlug || null,
+        subdomainSlug: companyData.subdomainSlug || '', // Ensure empty string if null/undefined
         shortDescription: companyData.shortDescription || '',
         logoUrl: companyData.logoUrl || '',
-        customDomain: companyData.customDomain || null,
+        customDomain: companyData.customDomain || '', // Ensure empty string if null/undefined
         maxUsers: companyData.maxUsers ?? null,
         isTrial: companyData.isTrial || false,
         trialEndsAt: companyData.trialEndsAt instanceof Timestamp ? companyData.trialEndsAt.toDate() : null,
@@ -157,13 +157,11 @@ export default function EditCompanyPage() {
       });
 
       const purchaseRecord = await getCustomerPurchaseRecordByBrandId(companyId);
-      const fetchedLibraryCourses = await getAllCourses();
-      setAllLibraryCourses(fetchedLibraryCourses);
-
       if (purchaseRecord && purchaseRecord.selectedProgramId) {
         const programData = await getProgramById(purchaseRecord.selectedProgramId);
         setAssignedProgram(programData);
         if (programData && programData.courseIds) {
+          const fetchedLibraryCourses = await getAllCourses(); // Fetch all courses to map IDs
           const courses = programData.courseIds
             .map(id => fetchedLibraryCourses.find(c => c.id === id))
             .filter(Boolean) as Course[];
@@ -216,10 +214,10 @@ export default function EditCompanyPage() {
      try {
         const metadataToUpdate: Partial<CompanyFormData> = {
             name: data.name,
-            subdomainSlug: data.subdomainSlug?.trim().toLowerCase() || null,
+            subdomainSlug: data.subdomainSlug?.trim() ? data.subdomainSlug.trim().toLowerCase() : null,
             shortDescription: data.shortDescription?.trim() || null,
             logoUrl: data.logoUrl?.trim() || null,
-            customDomain: data.customDomain?.trim().toLowerCase() || null,
+            customDomain: data.customDomain?.trim() ? data.customDomain.trim().toLowerCase() : null,
             maxUsers: data.maxUsers ?? null,
             trialEndsAt: data.trialEndsAt ? Timestamp.fromDate(data.trialEndsAt) : null,
             isTrial: data.isTrial,
@@ -312,31 +310,44 @@ export default function EditCompanyPage() {
              </div>
 
               <div className="md:col-span-1 space-y-6">
-                 {isTrialValue && ( <Card className="bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700"> <CardHeader> <CardTitle className="text-blue-700 dark:text-blue-300 flex items-center gap-2"> <Gift className="h-5 w-5" /> Trial Information </CardTitle> </CardHeader> <CardContent> <FormField control={form.control} name="isTrial" render={({ field }) => ( <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 mb-4"> <FormLabel className="text-sm">Active Trial</FormLabel> <FormControl> <Checkbox checked={field.value} onCheckedChange={field.onChange} /> </FormControl> </FormItem> )} />
-                 <FormField
-                    control={form.control}
-                    name="trialEndsAt"
-                    render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                            <FormLabel className="flex items-center gap-1 text-sm">
-                                <CalendarDays className="h-4 w-4" /> Trial End Date
-                            </FormLabel>
-                            <FormControl>
-                                <div> {/* Wrap DatePickerWithPresets in a div */}
-                                    <DatePickerWithPresets
-                                        date={field.value}
-                                        setDate={(date) => field.onChange(date || null)}
-                                    />
-                                </div>
-                            </FormControl>
-                            <FormMessage />
-                            <p className="text-xs text-muted-foreground">
-                                Adjust to extend or shorten the trial. Clear to remove end date.
-                            </p>
+                 {company.isTrial && ( // Show trial info if isTrial is true on the fetched company data
+                 <Card className="bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700">
+                    <CardHeader> <CardTitle className="text-blue-700 dark:text-blue-300 flex items-center gap-2"> <Gift className="h-5 w-5" /> Trial Information </CardTitle> </CardHeader>
+                    <CardContent>
+                        <FormField control={form.control} name="isTrial" render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 mb-4">
+                            <FormLabel className="text-sm">Active Trial</FormLabel>
+                            <FormControl> <Checkbox checked={field.value} onCheckedChange={field.onChange} /> </FormControl>
                         </FormItem>
-                    )}
-                    />
-                  </CardContent> </Card> )}
+                        )} />
+                        {isTrialValue && ( // Only show date picker if isTrial from form is true
+                            <FormField
+                                control={form.control}
+                                name="trialEndsAt"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-col">
+                                        <FormLabel className="flex items-center gap-1 text-sm">
+                                            <CalendarDays className="h-4 w-4" /> Trial End Date
+                                        </FormLabel>
+                                        <FormControl>
+                                          <div>
+                                            <DatePickerWithPresets
+                                                date={field.value} // field.value will be Date | null
+                                                setDate={(date) => field.onChange(date || null)}
+                                            />
+                                          </div>
+                                        </FormControl>
+                                        <FormMessage />
+                                        <p className="text-xs text-muted-foreground">
+                                            Adjust to extend or shorten the trial. Clear to remove end date.
+                                        </p>
+                                    </FormItem>
+                                )}
+                            />
+                        )}
+                  </CardContent>
+                </Card>
+                )}
                  
                  <Card>
                     <CardHeader>
