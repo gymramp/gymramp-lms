@@ -1,12 +1,13 @@
 
 // src/lib/nav-config.ts
-import type { User, UserRole } from '@/types/user';
+import type { User, UserRole, Company } from '@/types/user';
 import {
     BarChartBig, Building, Layers, CreditCard, BookOpen, FileText,
     ListChecks, UserPlus, ShoppingCart, Gift, TestTube2, Percent,
-    LayoutDashboard, Users, MapPin, Settings, Award, HelpCircle, LogOut
+    LayoutDashboard, Users, MapPin, Settings, Award, HelpCircle, LogOut, Package // Added Package
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { getCompanyById } from '@/lib/company-data'; // Corrected import path
 
 export interface NavItemType {
   label: string;
@@ -14,12 +15,22 @@ export interface NavItemType {
   icon?: LucideIcon;
   isDropdown?: boolean;
   subItems?: NavItemType[];
-  requiresCompanyId?: boolean; // To conditionally show links like "Manage Locations"
+  requiresCompanyId?: boolean; 
+  requiresCanManageCourses?: boolean; // New flag
 }
 
-export function getNavigationStructure(user: User | null): NavItemType[] {
+export async function getNavigationStructure(user: User | null): Promise<NavItemType[]> {
   const baseItems: NavItemType[] = [];
   if (!user) return baseItems;
+
+  let userCompany: Company | null = null;
+  if (user.companyId) {
+      try {
+          userCompany = await getCompanyById(user.companyId);
+      } catch (error) {
+          console.error("Error fetching company details for nav config:", error);
+      }
+  }
 
   const roleSpecificItems: NavItemType[] = [];
 
@@ -50,13 +61,23 @@ export function getNavigationStructure(user: User | null): NavItemType[] {
         ],
       },
       { href: '/admin/revenue-share-report', label: 'Rev Share Report', icon: Percent }
-      // Users link is intentionally removed from main nav for Super Admin as per recent request
     );
   } else if (user.role === 'Admin' || user.role === 'Owner') {
     roleSpecificItems.push(
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/admin/users', label: 'Users', icon: Users },
       { href: `/admin/companies/${user.companyId}/locations`, label: 'Locations', icon: MapPin, requiresCompanyId: true },
+      {
+        label: 'Brand Content',
+        isDropdown: true,
+        icon: Package, // Using Package icon for Brand Content
+        requiresCanManageCourses: true, // This dropdown requires the flag
+        subItems: [
+            { href: '/brand-admin/courses', label: "My Brand's Courses", icon: BookOpen },
+            { href: '/brand-admin/lessons', label: "My Brand's Lessons", icon: FileText },
+            // { href: '/brand-admin/quizzes', label: "My Brand's Quizzes", icon: ListChecks }, // Placeholder for quizzes
+        ]
+      },
       { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },
     );
   } else if (user.role === 'Manager') {
@@ -71,15 +92,27 @@ export function getNavigationStructure(user: User | null): NavItemType[] {
     );
   }
 
-  // Filter out items that require a companyId if the user doesn't have one (relevant for Admin/Owner)
   const filteredRoleSpecificItems = roleSpecificItems.filter(item => {
-    if (item.requiresCompanyId) {
-      return !!user.companyId;
+    if (item.requiresCompanyId && !user.companyId) {
+      return false;
+    }
+    if (item.requiresCanManageCourses && !(userCompany?.canManageCourses === true)) {
+        return false;
+    }
+    // Filter subItems as well
+    if (item.subItems) {
+        item.subItems = item.subItems.filter(subItem => {
+             if (subItem.requiresCompanyId && !user.companyId) return false;
+             if (subItem.requiresCanManageCourses && !(userCompany?.canManageCourses === true)) return false;
+             return true;
+        });
+        // If all subItems are filtered out, don't show the parent dropdown if it's only purpose was the subItems
+        if (item.isDropdown && item.subItems.length === 0 && item.requiresCanManageCourses) return false;
     }
     return true;
   });
   
-  if (user.role !== 'Super Admin') { // Super Admin user menu is more extensive
+  if (user.role !== 'Super Admin') { 
     filteredRoleSpecificItems.push({ href: '/badges', label: 'My Badges', icon: Award });
   }
 
@@ -115,7 +148,6 @@ export function getUserDropdownItems(user: User | null): NavItemType[] {
          );
     }
     
-    // Common items for most logged-in users
     items.push(
         { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },
         { href: '/badges', label: 'My Badges', icon: Award }
@@ -123,7 +155,6 @@ export function getUserDropdownItems(user: User | null): NavItemType[] {
 
     items.push({ href: '/site-help', label: 'Site Help', icon: HelpCircle });
     
-    // Filter out items that require a companyId if the user doesn't have one
     return items.filter(item => {
         if (item.requiresCompanyId) {
             return !!user.companyId;
