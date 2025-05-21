@@ -28,21 +28,20 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
-import { getCompanyById, updateCompany } from '@/lib/company-data'; // Removed updateCompanyCourseAssignments
-import { getAllCourses, getProgramById } from '@/lib/firestore-data'; // Added getProgramById
-import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data'; // Import new function
+import { getCompanyById, updateCompany } from '@/lib/company-data';
+import { getAllCourses, getProgramById } from '@/lib/firestore-data';
+import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data';
 import type { Company, CompanyFormData, User } from '@/types/user';
-import type { Course, Program } from '@/types/course'; // Added Program type
-import { Loader2, Upload, ImageIcon, Trash2, BookCheck, ArrowLeft, Users, CalendarDays, Gift, Globe, Layers } from 'lucide-react'; // Added Layers
+import type { Course, Program } from '@/types/course';
+import { Loader2, Upload, ImageIcon, Trash2, BookCheck, ArrowLeft, Users, CalendarDays, Gift, Globe, Layers } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
 import { Timestamp } from 'firebase/firestore';
-import { Badge } from '@/components/ui/badge'; // Import Badge
+import { Badge } from '@/components/ui/badge';
 
-// Schema no longer includes assignedCourseIds directly editable here
 const companyFormSchema = z.object({
   name: z.string().min(2, { message: 'Brand name must be at least 2 characters.' }),
   subdomainSlug: z.string()
@@ -80,7 +79,7 @@ export default function EditCompanyPage() {
   const [company, setCompany] = useState<Company | null>(null);
   const [assignedProgram, setAssignedProgram] = useState<Program | null>(null);
   const [coursesInProgram, setCoursesInProgram] = useState<Course[]>([]);
-  const [allLibraryCourses, setAllLibraryCourses] = useState<Course[]>([]); // Still needed to resolve course titles
+  const [allLibraryCourses, setAllLibraryCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -101,9 +100,9 @@ export default function EditCompanyPage() {
       isTrial: false,
       trialEndsAt: null,
       whiteLabelEnabled: false,
-      primaryColor: null,
-      secondaryColor: null,
-      accentColor: null,
+      primaryColor: '',
+      secondaryColor: '',
+      accentColor: '',
     },
   });
 
@@ -152,13 +151,13 @@ export default function EditCompanyPage() {
         isTrial: companyData.isTrial || false,
         trialEndsAt: companyData.trialEndsAt instanceof Timestamp ? companyData.trialEndsAt.toDate() : null,
         whiteLabelEnabled: companyData.whiteLabelEnabled || false,
-        primaryColor: companyData.primaryColor || null,
-        secondaryColor: companyData.secondaryColor || null,
-        accentColor: companyData.accentColor || null,
+        primaryColor: companyData.primaryColor || '',
+        secondaryColor: companyData.secondaryColor || '',
+        accentColor: companyData.accentColor || '',
       });
 
       const purchaseRecord = await getCustomerPurchaseRecordByBrandId(companyId);
-      const fetchedLibraryCourses = await getAllCourses(); // Fetch all courses to resolve titles
+      const fetchedLibraryCourses = await getAllCourses();
       setAllLibraryCourses(fetchedLibraryCourses);
 
       if (purchaseRecord && purchaseRecord.selectedProgramId) {
@@ -213,30 +212,29 @@ export default function EditCompanyPage() {
         toast({ title: "Upload in Progress", description: "Please wait for the logo upload to complete.", variant: "destructive" });
         return;
      }
-     setIsLoading(true); // Indicate saving process
+     setIsLoading(true);
      try {
         const metadataToUpdate: Partial<CompanyFormData> = {
             name: data.name,
             subdomainSlug: data.subdomainSlug?.trim().toLowerCase() || null,
-            shortDescription: data.shortDescription || null,
-            logoUrl: data.logoUrl || null,
+            shortDescription: data.shortDescription?.trim() || null,
+            logoUrl: data.logoUrl?.trim() || null,
             customDomain: data.customDomain?.trim().toLowerCase() || null,
             maxUsers: data.maxUsers ?? null,
             trialEndsAt: data.trialEndsAt ? Timestamp.fromDate(data.trialEndsAt) : null,
             isTrial: data.isTrial,
             whiteLabelEnabled: data.whiteLabelEnabled,
-            primaryColor: data.whiteLabelEnabled ? (data.primaryColor || null) : null,
-            secondaryColor: data.whiteLabelEnabled ? (data.secondaryColor || null) : null,
-            accentColor: data.whiteLabelEnabled ? (data.accentColor || null) : null,
+            primaryColor: data.whiteLabelEnabled ? (data.primaryColor?.trim() || null) : null,
+            secondaryColor: data.whiteLabelEnabled ? (data.secondaryColor?.trim() || null) : null,
+            accentColor: data.whiteLabelEnabled ? (data.accentColor?.trim() || null) : null,
         };
 
         const updatedCompanyMeta = await updateCompany(companyId, metadataToUpdate);
         if (!updatedCompanyMeta) {
             throw new Error("Failed to update brand metadata.");
         }
-        // Removed direct course assignment update logic
         toast({ title: "Brand Updated", description: `"${data.name}" updated successfully.` });
-        fetchCompanyAndRelatedData(); // Re-fetch to reflect changes
+        fetchCompanyAndRelatedData();
 
      } catch (error: any)         {
          console.error("Failed to update brand:", error);
@@ -314,7 +312,31 @@ export default function EditCompanyPage() {
              </div>
 
               <div className="md:col-span-1 space-y-6">
-                 {isTrialValue && ( <Card className="bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700"> <CardHeader> <CardTitle className="text-blue-700 dark:text-blue-300 flex items-center gap-2"> <Gift className="h-5 w-5" /> Trial Information </CardTitle> </CardHeader> <CardContent> <FormField control={form.control} name="isTrial" render={({ field }) => ( <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 mb-4"> <FormLabel className="text-sm">Active Trial</FormLabel> <FormControl> <Checkbox checked={field.value} onCheckedChange={field.onChange} /> </FormControl> </FormItem> )} /> <FormField control={form.control} name="trialEndsAt" render={({ field }) => ( <FormItem className="flex flex-col"> <FormLabel className="flex items-center gap-1 text-sm"> <CalendarDays className="h-4 w-4" /> Trial End Date </FormLabel> <FormControl> <DatePickerWithPresets date={field.value} setDate={(date) => field.onChange(date || null)} /> </FormControl> <FormMessage /> <p className="text-xs text-muted-foreground"> Adjust to extend or shorten the trial. Clear to remove end date. </p> </FormItem> )} /> </CardContent> </Card> )}
+                 {isTrialValue && ( <Card className="bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700"> <CardHeader> <CardTitle className="text-blue-700 dark:text-blue-300 flex items-center gap-2"> <Gift className="h-5 w-5" /> Trial Information </CardTitle> </CardHeader> <CardContent> <FormField control={form.control} name="isTrial" render={({ field }) => ( <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 mb-4"> <FormLabel className="text-sm">Active Trial</FormLabel> <FormControl> <Checkbox checked={field.value} onCheckedChange={field.onChange} /> </FormControl> </FormItem> )} />
+                 <FormField
+                    control={form.control}
+                    name="trialEndsAt"
+                    render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                            <FormLabel className="flex items-center gap-1 text-sm">
+                                <CalendarDays className="h-4 w-4" /> Trial End Date
+                            </FormLabel>
+                            <FormControl>
+                                <div> {/* Wrap DatePickerWithPresets in a div */}
+                                    <DatePickerWithPresets
+                                        date={field.value}
+                                        setDate={(date) => field.onChange(date || null)}
+                                    />
+                                </div>
+                            </FormControl>
+                            <FormMessage />
+                            <p className="text-xs text-muted-foreground">
+                                Adjust to extend or shorten the trial. Clear to remove end date.
+                            </p>
+                        </FormItem>
+                    )}
+                    />
+                  </CardContent> </Card> )}
                  
                  <Card>
                     <CardHeader>
