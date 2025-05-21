@@ -89,36 +89,29 @@ export async function getUserByEmail(email: string): Promise<User | null> {
         return null;
     }
     const lowercasedEmail = email.toLowerCase();
-    // console.log(`[getUserByEmail] Attempting to find user with lowercase email: '${lowercasedEmail}'`);
+    console.log(`[getUserByEmail] Attempting to find user with lowercase email: '${lowercasedEmail}'`);
 
     return retryOperation(async () => {
         const usersRef = collection(db, USERS_COLLECTION);
+        // Updated query to be more specific
         const q = query(usersRef, where("email", "==", lowercasedEmail), where("isDeleted", "==", false));
 
         try {
             const querySnapshot = await getDocs(q);
-            // console.log(`[getUserByEmail] Query for '${lowercasedEmail}' (and isDeleted:false) executed. Snapshot empty: ${querySnapshot.empty}. Docs count: ${querySnapshot.docs.length}`);
+            console.log(`[getUserByEmail] Query for '${lowercasedEmail}' (and isDeleted:false) executed. Snapshot empty: ${querySnapshot.empty}. Docs count: ${querySnapshot.docs.length}`);
 
             if (querySnapshot.empty) {
-                // console.log(`[getUserByEmail] No user document found for email: '${lowercasedEmail}' with isDeleted:false in collection '${USERS_COLLECTION}'.`);
-                // const qAll = query(usersRef, where("email", "==", lowercasedEmail));
-                // const allSnapshot = await getDocs(qAll);
-                // if (!allSnapshot.empty) {
-                //     const foundDoc = allSnapshot.docs[0];
-                //     console.log(`[getUserByEmail] Fallback check: Found document for '${lowercasedEmail}'. ID: ${foundDoc.id}. isDeleted status: ${foundDoc.data().isDeleted}`);
-                // }
+                console.log(`[getUserByEmail] No user document found for email: '${lowercasedEmail}' with isDeleted:false in collection '${USERS_COLLECTION}'.`);
                 return null;
             }
 
             const docSnap = querySnapshot.docs[0];
             const userData = docSnap.data();
-            // console.log(`[getUserByEmail] Document found for '${lowercasedEmail}' with isDeleted:false. ID: ${docSnap.id}. Data (first 500 chars):`, JSON.stringify(userData).substring(0, 500) + (JSON.stringify(userData).length > 500 ? '...' : ''));
+            console.log(`[getUserByEmail] Document found for '${lowercasedEmail}' with isDeleted:false. ID: ${docSnap.id}.`); // Simplified log
 
             if (docSnap.exists()) {
-                // console.log(`[getUserByEmail] User '${lowercasedEmail}' is valid and not soft-deleted (verified by query). Returning user object.`);
                 return { id: docSnap.id, ...userData } as User;
             } else {
-                // console.warn(`[getUserByEmail] Document for '${lowercasedEmail}' was found in query but docSnap.exists() is false. This is unexpected.`);
                 return null;
             }
         } catch (error) {
@@ -165,20 +158,24 @@ export async function getUserCountByCompanyId(companyId: string): Promise<number
 }
 
 
-export async function addUser(userData: Omit<UserFormData, 'password'>): Promise<User | null> {
+export async function addUser(userData: Omit<UserFormData, 'password'> & { requiresPasswordChange?: boolean }): Promise<User | null> {
     return retryOperation(async () => {
         const usersRef = collection(db, USERS_COLLECTION);
-        const newUserDoc = {
-            ...userData,
+        const newUserDoc: Partial<User> = {
+            name: userData.name,
             email: userData.email.toLowerCase(),
+            role: userData.role,
+            companyId: userData.companyId || '',
+            assignedLocationIds: userData.assignedLocationIds || [],
             isActive: true,
             isDeleted: false,
             deletedAt: null,
-            createdAt: serverTimestamp(),
+            createdAt: serverTimestamp() as Timestamp,
             lastLogin: null,
             assignedCourseIds: userData.assignedCourseIds || [],
             courseProgress: {},
             profileImageUrl: userData.profileImageUrl || null,
+            requiresPasswordChange: userData.requiresPasswordChange === true, // Ensure it's explicitly true or false
         };
         const docRef = await addDoc(usersRef, newUserDoc);
         const newDocSnap = await getDoc(docRef);
@@ -191,7 +188,7 @@ export async function addUser(userData: Omit<UserFormData, 'password'>): Promise
     });
 }
 
-export async function updateUser(userId: string, userData: Partial<UserFormData>): Promise<User | null> {
+export async function updateUser(userId: string, userData: Partial<UserFormData & { requiresPasswordChange?: boolean }>): Promise<User | null> {
     if (!userId) {
         console.warn("updateUser called with empty ID.");
         return null;
@@ -200,22 +197,28 @@ export async function updateUser(userId: string, userData: Partial<UserFormData>
         const userRef = doc(db, USERS_COLLECTION, userId);
         const { password, ...dataToUpdate } = userData;
 
-        const updatePayload: Partial<User> = { ...dataToUpdate };
-        if (dataToUpdate.email) {
-            updatePayload.email = dataToUpdate.email.toLowerCase();
-        }
-        if (dataToUpdate.companyId === null) { // Handle explicit unassignment from company
-            updatePayload.companyId = ''; // Store as empty string or handle as needed
-        } else if (dataToUpdate.companyId !== undefined) {
-            updatePayload.companyId = dataToUpdate.companyId;
-        }
+        const updatePayload: Partial<User> = {};
 
-        if (dataToUpdate.profileImageUrl === null) { // Handle explicit removal of profile image
-            updatePayload.profileImageUrl = null;
-        } else if (dataToUpdate.profileImageUrl !== undefined) {
-            updatePayload.profileImageUrl = dataToUpdate.profileImageUrl;
-        }
+        // Only include fields that are actually provided in userData
+        if (dataToUpdate.name !== undefined) updatePayload.name = dataToUpdate.name;
+        if (dataToUpdate.email !== undefined) updatePayload.email = dataToUpdate.email.toLowerCase();
+        if (dataToUpdate.role !== undefined) updatePayload.role = dataToUpdate.role;
+        if (dataToUpdate.companyId !== undefined) updatePayload.companyId = dataToUpdate.companyId || '';
+        if (dataToUpdate.assignedLocationIds !== undefined) updatePayload.assignedLocationIds = dataToUpdate.assignedLocationIds;
+        if (dataToUpdate.assignedCourseIds !== undefined) updatePayload.assignedCourseIds = dataToUpdate.assignedCourseIds;
+        if (dataToUpdate.isActive !== undefined) updatePayload.isActive = dataToUpdate.isActive;
+        if (dataToUpdate.profileImageUrl !== undefined) updatePayload.profileImageUrl = dataToUpdate.profileImageUrl === '' ? null : dataToUpdate.profileImageUrl;
+        if (dataToUpdate.requiresPasswordChange !== undefined) updatePayload.requiresPasswordChange = dataToUpdate.requiresPasswordChange;
 
+
+        if (Object.keys(updatePayload).length === 0) {
+            console.warn("updateUser called with no data to update for user:", userId);
+            const currentUserDocSnap = await getDoc(userRef);
+            if (currentUserDocSnap.exists() && currentUserDocSnap.data().isDeleted !== true) {
+                return { id: userId, ...currentUserDocSnap.data() } as User;
+            }
+            return null;
+        }
 
         await updateDoc(userRef, updatePayload);
         const updatedDocSnap = await getDoc(userRef);
@@ -304,7 +307,7 @@ export const toggleUserCourseAssignments = async (userId: string, courseIds: str
                     }
                 });
             }
-        } else {
+        } else { // unassign
             const coursesToRemove = courseIds.filter(id => currentAssignedIds.includes(id));
             if (coursesToRemove.length > 0) {
                 updateData.assignedCourseIds = arrayRemove(...coursesToRemove);
@@ -563,24 +566,36 @@ export const updateEmployeeProgress = async (userId: string, courseId: string, c
     });
 };
 
-// Placeholder for server-side brand identification.
-// In a real scenario, this would take a hostname or slug from request headers.
+
 export async function getUserCompany(identifier: string | null): Promise<Company | null> {
   console.warn(
-    "getUserCompany in user-data.ts is being called. If identifier is null or this is for RootLayout initial load, it will return null. For true dynamic branding, this needs a valid identifier (e.g., subdomain slug from request headers) and server-side context."
+    "getUserCompany in user-data.ts is called. This function attempts to resolve a brand by customDomain or subdomainSlug. For RootLayout theming, reliable server-side host identification is complex and depends on deployment."
   );
   if (!identifier) {
     return null;
   }
-  // This is a conceptual lookup. In a real app, you might check if identifier is a full hostname
-  // and extract a slug, or directly use it as a slug.
   try {
-    const company = await getCompanyBySubdomainSlug(identifier);
+    // Attempt to find by custom domain first
+    let company = await getCompanyByCustomDomain(identifier);
     if (company) {
-        console.log(`[getUserCompany] Found brand for identifier "${identifier}": ${company.name}`);
-        return company;
+      console.log(`[getUserCompany] Found brand by customDomain "${identifier}": ${company.name}`);
+      return company;
     }
-    console.log(`[getUserCompany] No brand found for identifier "${identifier}"`);
+
+    // If not found by custom domain, try by subdomain slug
+    // This basic parsing assumes identifier might be "slug.yourmainapp.com"
+    // More robust parsing might be needed in a real scenario.
+    const parts = identifier.split('.');
+    if (parts.length > 1 && parts[0] !== 'www' && parts[0] !== 'localhost') {
+      const slug = parts[0];
+      company = await getCompanyBySubdomainSlug(slug);
+      if (company) {
+        console.log(`[getUserCompany] Found brand by subdomainSlug "${slug}" (from host "${identifier}"): ${company.name}`);
+        return company;
+      }
+    }
+    
+    console.log(`[getUserCompany] No brand found for identifier "${identifier}" as custom domain or subdomain slug.`);
     return null;
   } catch (error) {
     console.error(`[getUserCompany] Error fetching brand by identifier "${identifier}":`, error);
