@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Form,
   FormControl,
@@ -92,10 +92,10 @@ export default function EditCompanyPage() {
     resolver: zodResolver(companyFormSchema),
     defaultValues: {
       name: '',
-      subdomainSlug: '', // Default to empty string for controlled input
+      subdomainSlug: '',
       shortDescription: '',
       logoUrl: '',
-      customDomain: '', // Default to empty string
+      customDomain: '',
       maxUsers: null,
       isTrial: false,
       trialEndsAt: null,
@@ -111,7 +111,7 @@ export default function EditCompanyPage() {
    const whiteLabelEnabledValue = form.watch('whiteLabelEnabled');
 
   useEffect(() => {
-    setIsMounted(true);
+    setIsMounted(true); // Set isMounted to true after initial mount
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
         const userDetails = await getUserByEmail(firebaseUser.email);
@@ -144,15 +144,20 @@ export default function EditCompanyPage() {
         return;
       }
       setCompany(companyData);
+
       form.reset({
         name: companyData.name || '',
         subdomainSlug: companyData.subdomainSlug || '',
         shortDescription: companyData.shortDescription || '',
         logoUrl: companyData.logoUrl || '',
         customDomain: companyData.customDomain || '',
-        maxUsers: companyData.maxUsers ?? null,
+        maxUsers: companyData.maxUsers ?? null, // Use ?? to default to null if undefined
         isTrial: companyData.isTrial || false,
-        trialEndsAt: companyData.trialEndsAt instanceof Timestamp ? companyData.trialEndsAt.toDate() : (companyData.trialEndsAt instanceof Date ? companyData.trialEndsAt : null),
+        trialEndsAt: companyData.trialEndsAt instanceof Timestamp
+          ? companyData.trialEndsAt.toDate()
+          : companyData.trialEndsAt instanceof Date
+          ? companyData.trialEndsAt
+          : null,
         whiteLabelEnabled: companyData.whiteLabelEnabled || false,
         primaryColor: companyData.primaryColor || '',
         secondaryColor: companyData.secondaryColor || '',
@@ -164,7 +169,7 @@ export default function EditCompanyPage() {
         const programData = await getProgramById(purchaseRecord.selectedProgramId);
         setAssignedProgram(programData);
         if (programData && programData.courseIds) {
-          const fetchedLibraryCourses = await getAllCourses();
+          const fetchedLibraryCourses = await getAllCourses(); // Make sure getAllCourses is imported
           const courses = programData.courseIds
             .map(id => fetchedLibraryCourses.find(c => c.id === id))
             .filter(Boolean) as Course[];
@@ -213,7 +218,7 @@ export default function EditCompanyPage() {
         toast({ title: "Upload in Progress", description: "Please wait for the logo upload to complete.", variant: "destructive" });
         return;
      }
-     setIsLoading(true);
+     setIsLoading(true); // Use the main isLoading for submission
      try {
         const metadataToUpdate: Partial<CompanyFormData> = {
             name: data.name,
@@ -222,8 +227,8 @@ export default function EditCompanyPage() {
             logoUrl: data.logoUrl?.trim() ? data.logoUrl.trim() : null,
             customDomain: data.customDomain?.trim() ? data.customDomain.trim().toLowerCase() : null,
             maxUsers: data.maxUsers ?? null,
-            trialEndsAt: data.trialEndsAt ? Timestamp.fromDate(data.trialEndsAt) : null,
             isTrial: data.isTrial,
+            trialEndsAt: data.trialEndsAt ? Timestamp.fromDate(data.trialEndsAt) : null,
             whiteLabelEnabled: data.whiteLabelEnabled,
             primaryColor: data.whiteLabelEnabled ? (data.primaryColor?.trim() || null) : null,
             secondaryColor: data.whiteLabelEnabled ? (data.secondaryColor?.trim() || null) : null,
@@ -236,8 +241,6 @@ export default function EditCompanyPage() {
         }
         setCompany(updatedCompanyMeta); // Update local company state
         toast({ title: "Brand Updated", description: `"${data.name}" updated successfully.` });
-        // No need to call fetchCompanyAndRelatedData here if setCompany updates the local state sufficiently for UI
-        // fetchCompanyAndRelatedData(); // Re-fetch if there are other derived states not updated by setCompany
 
      } catch (error: any)         {
          console.error("Failed to update brand:", error);
@@ -309,7 +312,11 @@ export default function EditCompanyPage() {
                     <CardHeader> <CardTitle>White-Label Settings</CardTitle> <CardDescription>Customize the appearance of the platform for this brand.</CardDescription> </CardHeader>
                     <CardContent className="space-y-6">
                         <FormField control={form.control} name="whiteLabelEnabled" render={({ field }) => ( <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"> <div className="space-y-0.5"> <FormLabel className="text-base">Enable White-Labeling</FormLabel> <FormDescription> Allow this brand to use custom colors. Logo is set above. </FormDescription> </div> <FormControl> <Checkbox checked={field.value} onCheckedChange={field.onChange} /> </FormControl> </FormItem> )} />
-                        {isMounted && whiteLabelEnabledValue && ( <> <FormField control={form.control} name="primaryColor" render={({ field }) => ( <FormItem> <FormLabel>Primary Color (Hex)</FormLabel> <FormControl><Input type="text" placeholder="#3498db" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} /> <FormField control={form.control} name="secondaryColor" render={({ field }) => ( <FormItem> <FormLabel>Secondary Color (Hex)</FormLabel> <FormControl><Input type="text" placeholder="#ecf0f1" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} /> <FormField control={form.control} name="accentColor" render={({ field }) => ( <FormItem> <FormLabel>Accent Color (Hex)</FormLabel> <FormControl><Input type="text" placeholder="#2ecc71" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} /> </> )}
+                        {isMounted && whiteLabelEnabledValue && ( <>
+                            <FormField control={form.control} name="primaryColor" render={({ field }) => ( <FormItem> <FormLabel>Primary Color (Hex)</FormLabel> <FormControl><Input type="text" placeholder="#3498db" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} />
+                            <FormField control={form.control} name="secondaryColor" render={({ field }) => ( <FormItem> <FormLabel>Secondary Color (Hex)</FormLabel> <FormControl><Input type="text" placeholder="#ecf0f1" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} />
+                            <FormField control={form.control} name="accentColor" render={({ field }) => ( <FormItem> <FormLabel>Accent Color (Hex)</FormLabel> <FormControl><Input type="text" placeholder="#2ecc71" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} />
+                         </> )}
                     </CardContent>
                 </Card>
              </div>
@@ -324,32 +331,33 @@ export default function EditCompanyPage() {
                             <FormControl> <Checkbox checked={field.value} onCheckedChange={field.onChange} /> </FormControl>
                         </FormItem>
                         )} />
-                        {isMounted && isTrialValue && (
-                            <FormField
-                                control={form.control}
-                                name="trialEndsAt"
-                                render={({ field }) => (
-                                    <FormItem className="flex flex-col">
-                                        <FormLabel className="flex items-center gap-1 text-sm">
-                                            <CalendarDays className="h-4 w-4" /> Trial End Date
-                                        </FormLabel>
-                                        <FormControl>
-                                          {/* Ensures the component only renders on client after mount */}
-                                          <div>
-                                            <DatePickerWithPresets
-                                                date={field.value}
-                                                setDate={(date) => field.onChange(date || null)}
-                                            />
-                                          </div>
-                                        </FormControl>
-                                        <FormMessage />
+                        <FormField
+                            control={form.control}
+                            name="trialEndsAt"
+                            render={({ field }) => (
+                                <FormItem className="flex flex-col">
+                                    <FormLabel className="flex items-center gap-1 text-sm">
+                                        <CalendarDays className="h-4 w-4" /> Trial End Date
+                                    </FormLabel>
+                                    <FormControl>
+                                        {isMounted && isTrialValue ? (
+                                            <div> {/* Wrapper div */}
+                                                <DatePickerWithPresets
+                                                    date={field.value}
+                                                    setDate={(date) => field.onChange(date || null)}
+                                                />
+                                            </div>
+                                        ) : null}
+                                    </FormControl>
+                                    <FormMessage />
+                                    {isMounted && isTrialValue && (
                                         <p className="text-xs text-muted-foreground">
                                             Adjust to extend or shorten the trial. Clear to remove end date.
                                         </p>
-                                    </FormItem>
-                                )}
-                            />
-                        )}
+                                    )}
+                                </FormItem>
+                            )}
+                        />
                         {!company.isTrial && !isTrialValue && (
                             <p className="text-sm text-muted-foreground italic">This brand is not currently on a trial.</p>
                         )}
@@ -403,3 +411,5 @@ export default function EditCompanyPage() {
     </div>
   );
 }
+
+    
