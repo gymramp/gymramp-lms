@@ -22,7 +22,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-  FormDescription as ShadFormDescription, // Renamed to avoid conflict if FormDescription from ui/form is used
+  FormDescription as ShadFormDescription,
 } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -45,15 +45,12 @@ import { Badge } from '@/components/ui/badge';
 const companyFormSchema = z.object({
   name: z.string().min(2, { message: 'Brand name must be at least 2 characters.' }),
   subdomainSlug: z.string()
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug can only contain lowercase letters, numbers, and hyphens, and cannot start/end with a hyphen.' })
-    .min(3, { message: 'Subdomain slug must be at least 3 characters.'})
-    .max(63, { message: 'Subdomain slug cannot exceed 63 characters.'})
-    .optional()
-    .or(z.literal(''))
-    .nullable(),
-  customDomain: z.string().regex(/^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}$|^$/, { message: 'Invalid custom domain format (e.g., learn.yourgym.com). Leave blank if none.'}).optional().or(z.literal('')).nullable(),
-  shortDescription: z.string().max(150, { message: 'Description must be 150 characters or less.' }).optional().or(z.literal('')).nullable(),
-  logoUrl: z.string().url({ message: 'Invalid URL format.' }).optional().or(z.literal('')).nullable(),
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$|^$/, { message: 'Slug can only contain lowercase letters, numbers, and hyphens. Leave blank if none.' })
+    .max(63, { message: 'Subdomain slug cannot exceed 63 characters.' })
+    .optional(), // Optional at schema level, form handles empty string
+  customDomain: z.string().regex(/^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}$|^$/, { message: 'Invalid custom domain format (e.g., learn.yourgym.com). Leave blank if none.'}).optional(),
+  shortDescription: z.string().max(150, { message: 'Description must be 150 characters or less.' }).optional(),
+  logoUrl: z.string().url({ message: 'Invalid URL format.' }).optional().or(z.literal('')),
   maxUsers: z.coerce
     .number({ invalid_type_error: "Must be a number" })
     .int({ message: "Must be a whole number" })
@@ -64,9 +61,9 @@ const companyFormSchema = z.object({
   isTrial: z.boolean().optional().default(false),
   trialEndsAt: z.date().nullable().optional(),
   whiteLabelEnabled: z.boolean().optional().default(false),
-  primaryColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$|^$/, { message: 'Invalid hex color. Leave blank if none.' }).optional().or(z.literal('')).nullable(),
-  secondaryColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$|^$/, { message: 'Invalid hex color. Leave blank if none.' }).optional().or(z.literal('')).nullable(),
-  accentColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$|^$/, { message: 'Invalid hex color. Leave blank if none.' }).optional().or(z.literal('')).nullable(),
+  primaryColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$|^$/, { message: 'Invalid hex color. Leave blank if none.' }).optional(),
+  secondaryColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$|^$/, { message: 'Invalid hex color. Leave blank if none.' }).optional(),
+  accentColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$|^$/, { message: 'Invalid hex color. Leave blank if none.' }).optional(),
 });
 
 type CompanyFormValues = z.infer<typeof companyFormSchema>;
@@ -209,7 +206,7 @@ export default function EditCompanyPage() {
       const uniqueFileName = `${companyId}-logo-${Date.now()}-${file.name}`;
       const storagePath = `${STORAGE_PATHS.COMPANY_LOGOS}/${uniqueFileName}`;
       const downloadURL = await uploadImage(file, storagePath, setUploadProgress);
-      form.setValue('logoUrl', downloadURL, { shouldValidate: true });
+      form.setValue('logoUrl', downloadURL, { shouldValidate: true, shouldDirty: true });
       toast({ title: "Logo Uploaded", description: "Brand logo successfully uploaded." });
     } catch (error: any) {
       setUploadError(error.message || "Failed to upload logo.");
@@ -293,24 +290,24 @@ export default function EditCompanyPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Brand Information</CardTitle>
-                <CardDescription>Update the name, description, logo, and user limit for {company.name}.</CardDescription>
+                <CardDescription>Update the name, description, logo, domain, and user limit for {company.name}.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <FormField control={form.control} name="name" render={({ field }) => (<FormItem> <FormLabel>Brand Name</FormLabel> <FormControl> <Input placeholder="e.g., Global Fitness Inc." {...field} value={field.value ?? ''} /> </FormControl> <FormMessage /> </FormItem>)} />
-                <FormField control={form.control} name="subdomainSlug" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Subdomain Slug (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., global-fitness" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <ShadFormDescription> Used for branded login URL. Only lowercase letters, numbers, and hyphens. </ShadFormDescription> <FormMessage /> </FormItem>)} />
-                <FormField control={form.control} name="customDomain" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Custom Domain (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., learn.yourgym.com" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <ShadFormDescription> Requires DNS CNAME setup by the brand to point to your app. </ShadFormDescription> <FormMessage /> </FormItem>)} />
+                <FormField control={form.control} name="subdomainSlug" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Subdomain Slug (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., global-fitness" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <ShadFormDescription> Used for branded login URL (e.g., global-fitness.yourdomain.com). Only lowercase letters, numbers, and hyphens. </ShadFormDescription> <FormMessage /> </FormItem>)} />
+                <FormField control={form.control} name="customDomain" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Custom Domain (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., learn.theirgym.com" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <ShadFormDescription> Requires DNS CNAME setup by the brand to point to your app. </ShadFormDescription> <FormMessage /> </FormItem>)} />
                 <FormField control={form.control} name="shortDescription" render={({ field }) => (<FormItem> <FormLabel>Short Description (Optional)</FormLabel> <FormControl> <Textarea rows={3} placeholder="A brief description of the brand (max 150 characters)" {...field} value={field.value ?? ''} /> </FormControl> <FormMessage /> </FormItem>)} />
-                <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Users className="h-4 w-4" /> Maximum Users Allowed </FormLabel> <FormControl> <Input type="number" min="1" placeholder="Leave blank for unlimited" value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /> </FormControl> <ShadFormDescription> Set the maximum number of user accounts for this brand. Leave blank for no limit. </ShadFormDescription> <FormMessage /> </FormItem>)} />
+                <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Users className="h-4 w-4" /> Maximum Users Allowed </FormLabel> <FormControl> <Input type="number" min="1" placeholder="Leave blank for unlimited" value={field.value === null || field.value === undefined ? '' : String(field.value)} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /> </FormControl> <ShadFormDescription> Set the maximum number of user accounts for this brand. Leave blank for no limit. </ShadFormDescription> <FormMessage /> </FormItem>)} />
                 
                 <FormField control={form.control} name="logoUrl" render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-base font-semibold">Brand Logo (Optional)</FormLabel>
                     <FormControl>
                         <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
-                        {field.value && !isUploading ? (
+                        {logoUrlValue && !isUploading ? (
                             <div className="relative w-32 h-32 mx-auto mb-2">
-                            <Image src={field.value} alt="Brand logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" data-ai-hint="logo business" onError={() => form.setValue('logoUrl', '')} />
-                            <Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6 opacity-80 hover:opacity-100 z-10" onClick={() => form.setValue('logoUrl', '')} aria-label="Remove Logo"> <Trash2 className="h-4 w-4" /> </Button>
+                            <Image src={logoUrlValue} alt="Brand logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" data-ai-hint="logo business" onError={() => form.setValue('logoUrl', '')} />
+                            <Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6 opacity-80 hover:opacity-100 z-10" onClick={() => form.setValue('logoUrl', '', {shouldDirty: true})} aria-label="Remove Logo"> <Trash2 className="h-4 w-4" /> </Button>
                             </div>
                         ) : isUploading ? (
                             <div className="flex flex-col items-center justify-center h-full py-8"> <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" /> <p className="text-sm text-muted-foreground mb-1">Uploading...</p> <Progress value={uploadProgress} className="w-full max-w-xs h-2" /> {uploadError && <p className="text-xs text-destructive mt-2">{uploadError}</p>} </div>
@@ -331,7 +328,7 @@ export default function EditCompanyPage() {
                 <FormField control={form.control} name="whiteLabelEnabled" render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5"> <FormLabel className="text-base">Enable White-Labeling</FormLabel> <ShadFormDescription> Allow this brand to use custom colors. Logo is set above. </ShadFormDescription> </div>
-                    <FormControl> <Checkbox checked={field.value} onCheckedChange={field.onChange} /> </FormControl>
+                    <FormControl> <Checkbox checked={field.value || false} onCheckedChange={field.onChange} /> </FormControl>
                   </FormItem>
                 )} />
                 {isMounted && whiteLabelEnabledValue && (
@@ -352,7 +349,7 @@ export default function EditCompanyPage() {
                 <FormField control={form.control} name="isTrial" render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 mb-4">
                     <FormLabel className="text-sm">Active Trial</FormLabel>
-                    <FormControl> <Checkbox checked={field.value} onCheckedChange={field.onChange} /> </FormControl>
+                    <FormControl> <Checkbox checked={field.value || false} onCheckedChange={field.onChange} /> </FormControl>
                   </FormItem>
                 )} />
                 
@@ -410,3 +407,5 @@ export default function EditCompanyPage() {
     </div>
   );
 }
+      
+    
