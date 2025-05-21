@@ -8,7 +8,9 @@ import {
     addDoc,
     serverTimestamp,
     query,
-    orderBy
+    orderBy,
+    where, // Added where for querying by brandId
+    limit // Added limit for querying by brandId
 } from 'firebase/firestore';
 import type { CustomerPurchaseRecord, CustomerPurchaseRecordFormData } from '@/types/customer';
 
@@ -44,16 +46,17 @@ export async function addCustomerPurchaseRecord(data: CustomerPurchaseRecordForm
             purchaseDate: serverTimestamp(),
         };
         const docRef = await addDoc(purchaseRecordRef, docData);
-        // No need to fetch the doc again, as we have all data + serverTimestamp handles date
         console.log(`Customer purchase record added with ID: ${docRef.id} for brand ${data.brandName}`);
-        return { ...docData, id: docRef.id, purchaseDate: docData.purchaseDate } as CustomerPurchaseRecord; // purchaseDate is already a serverTimestamp placeholder
+        // For consistency and to ensure we return a full CustomerPurchaseRecord type,
+        // it's good practice to fetch the document or construct it carefully.
+        // For now, we construct it, assuming serverTimestamp will resolve correctly on read.
+        return { ...docData, id: docRef.id, purchaseDate: docData.purchaseDate } as CustomerPurchaseRecord;
     });
 }
 
 export async function getAllCustomerPurchaseRecords(): Promise<CustomerPurchaseRecord[]> {
     return retryOperation(async () => {
         const purchasesRef = collection(db, CUSTOMER_PURCHASES_COLLECTION);
-        // Order by purchaseDate descending to show most recent first
         const q = query(purchasesRef, orderBy("purchaseDate", "desc"));
         const querySnapshot = await getDocs(q);
         const records: CustomerPurchaseRecord[] = [];
@@ -65,4 +68,27 @@ export async function getAllCustomerPurchaseRecords(): Promise<CustomerPurchaseR
     });
 }
 
-// Future functions like getCustomerPurchaseRecordById or update can be added here.
+export async function getCustomerPurchaseRecordByBrandId(brandId: string): Promise<CustomerPurchaseRecord | null> {
+    if (!brandId) {
+        console.warn("getCustomerPurchaseRecordByBrandId called with empty brandId.");
+        return null;
+    }
+    return retryOperation(async () => {
+        const purchasesRef = collection(db, CUSTOMER_PURCHASES_COLLECTION);
+        const q = query(
+            purchasesRef,
+            where("brandId", "==", brandId),
+            orderBy("purchaseDate", "desc"), // Get the latest purchase record if multiple exist
+            limit(1)
+        );
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+            const docSnap = querySnapshot.docs[0];
+            if (docSnap.exists()) {
+                return { id: docSnap.id, ...docSnap.data() } as CustomerPurchaseRecord;
+            }
+        }
+        console.log(`No customer purchase record found for brand ID: ${brandId}`);
+        return null;
+    });
+}
