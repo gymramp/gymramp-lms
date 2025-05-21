@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,7 +22,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-  FormDescription,
+  FormDescription as ShadFormDescription, // Renamed to avoid conflict if FormDescription from ui/form is used
 } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -52,8 +52,8 @@ const companyFormSchema = z.object({
     .or(z.literal(''))
     .nullable(),
   customDomain: z.string().regex(/^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}$|^$/, { message: 'Invalid custom domain format (e.g., learn.yourgym.com). Leave blank if none.'}).optional().or(z.literal('')).nullable(),
-  shortDescription: z.string().max(150, { message: 'Description must be 150 characters or less.' }).optional().or(z.literal('')),
-  logoUrl: z.string().url({ message: 'Invalid URL format.' }).optional().or(z.literal('')),
+  shortDescription: z.string().max(150, { message: 'Description must be 150 characters or less.' }).optional().or(z.literal('')).nullable(),
+  logoUrl: z.string().url({ message: 'Invalid URL format.' }).optional().or(z.literal('')).nullable(),
   maxUsers: z.coerce
     .number({ invalid_type_error: "Must be a number" })
     .int({ message: "Must be a whole number" })
@@ -85,6 +85,7 @@ export default function EditCompanyPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { toast } = useToast();
 
@@ -114,11 +115,16 @@ export default function EditCompanyPage() {
     setIsMounted(true);
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
-        const userDetails = await getUserByEmail(firebaseUser.email);
-        setCurrentUser(userDetails);
-        if (userDetails?.role !== 'Super Admin') {
-          toast({ title: "Access Denied", description: "You do not have permission to edit brands.", variant: "destructive" });
-          router.push('/admin/companies');
+        try {
+            const userDetails = await getUserByEmail(firebaseUser.email);
+            setCurrentUser(userDetails);
+            if (userDetails?.role !== 'Super Admin') {
+              toast({ title: "Access Denied", description: "You do not have permission to edit brands.", variant: "destructive" });
+              router.push('/admin/companies');
+            }
+        } catch (error) {
+            toast({ title: "Authentication Error", description: "Failed to verify user.", variant: "destructive" });
+            router.push('/login');
         }
       } else {
         setCurrentUser(null);
@@ -132,7 +138,10 @@ export default function EditCompanyPage() {
   }, [router, toast]);
 
   const fetchCompanyAndRelatedData = useCallback(async () => {
-    if (!companyId || !currentUser || currentUser.role !== 'Super Admin') return;
+    if (!companyId || !currentUser || currentUser.role !== 'Super Admin') {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     setAssignedProgram(null);
     setCoursesInProgram([]);
@@ -176,7 +185,6 @@ export default function EditCompanyPage() {
           setCoursesInProgram(courses);
         }
       }
-
     } catch (error) {
       console.error("Failed to fetch brand/related data:", error);
       toast({ title: "Error", description: "Could not load brand or related program data.", variant: "destructive" });
@@ -240,7 +248,6 @@ export default function EditCompanyPage() {
       }
       setCompany(updatedCompanyMeta); // Update local state
       toast({ title: "Brand Updated", description: `"${data.name}" updated successfully.` });
-
     } catch (error: any) {
       console.error("Failed to update brand:", error);
       toast({ title: "Error", description: error.message || "Could not update brand.", variant: "destructive" });
@@ -290,26 +297,28 @@ export default function EditCompanyPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <FormField control={form.control} name="name" render={({ field }) => (<FormItem> <FormLabel>Brand Name</FormLabel> <FormControl> <Input placeholder="e.g., Global Fitness Inc." {...field} value={field.value ?? ''} /> </FormControl> <FormMessage /> </FormItem>)} />
-                <FormField control={form.control} name="subdomainSlug" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Subdomain Slug (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., global-fitness" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <p className="text-xs text-muted-foreground"> Used for branded login URL. Only lowercase letters, numbers, and hyphens. </p> <FormMessage /> </FormItem>)} />
-                <FormField control={form.control} name="customDomain" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Custom Domain (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., learn.yourgym.com" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <p className="text-xs text-muted-foreground"> Requires DNS CNAME setup by the brand to point to your app. </p> <FormMessage /> </FormItem>)} />
+                <FormField control={form.control} name="subdomainSlug" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Subdomain Slug (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., global-fitness" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <ShadFormDescription> Used for branded login URL. Only lowercase letters, numbers, and hyphens. </ShadFormDescription> <FormMessage /> </FormItem>)} />
+                <FormField control={form.control} name="customDomain" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Custom Domain (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., learn.yourgym.com" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <ShadFormDescription> Requires DNS CNAME setup by the brand to point to your app. </ShadFormDescription> <FormMessage /> </FormItem>)} />
                 <FormField control={form.control} name="shortDescription" render={({ field }) => (<FormItem> <FormLabel>Short Description (Optional)</FormLabel> <FormControl> <Textarea rows={3} placeholder="A brief description of the brand (max 150 characters)" {...field} value={field.value ?? ''} /> </FormControl> <FormMessage /> </FormItem>)} />
-                <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Users className="h-4 w-4" /> Maximum Users Allowed </FormLabel> <FormControl> <Input type="number" min="1" placeholder="Leave blank for unlimited" value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /> </FormControl> <FormMessage /> <p className="text-xs text-muted-foreground"> Set the maximum number of user accounts for this brand. Leave blank for no limit. </p> </FormItem>)} />
+                <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Users className="h-4 w-4" /> Maximum Users Allowed </FormLabel> <FormControl> <Input type="number" min="1" placeholder="Leave blank for unlimited" value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /> </FormControl> <ShadFormDescription> Set the maximum number of user accounts for this brand. Leave blank for no limit. </ShadFormDescription> <FormMessage /> </FormItem>)} />
                 
                 <FormField control={form.control} name="logoUrl" render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-base font-semibold">Brand Logo (Optional)</FormLabel>
-                    <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
-                      {field.value && !isUploading ? (
-                        <div className="relative w-32 h-32 mx-auto mb-2">
-                          <Image src={field.value} alt="Brand logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" data-ai-hint="logo business" onError={() => form.setValue('logoUrl', '')} />
-                          <Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6 opacity-80 hover:opacity-100 z-10" onClick={() => form.setValue('logoUrl', '')} aria-label="Remove Logo"> <Trash2 className="h-4 w-4" /> </Button>
+                    <FormControl>
+                        <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
+                        {field.value && !isUploading ? (
+                            <div className="relative w-32 h-32 mx-auto mb-2">
+                            <Image src={field.value} alt="Brand logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" data-ai-hint="logo business" onError={() => form.setValue('logoUrl', '')} />
+                            <Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6 opacity-80 hover:opacity-100 z-10" onClick={() => form.setValue('logoUrl', '')} aria-label="Remove Logo"> <Trash2 className="h-4 w-4" /> </Button>
+                            </div>
+                        ) : isUploading ? (
+                            <div className="flex flex-col items-center justify-center h-full py-8"> <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" /> <p className="text-sm text-muted-foreground mb-1">Uploading...</p> <Progress value={uploadProgress} className="w-full max-w-xs h-2" /> {uploadError && <p className="text-xs text-destructive mt-2">{uploadError}</p>} </div>
+                        ) : (
+                            <Label htmlFor="logo-upload-edit-page" className="cursor-pointer block"> <ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /> <p className="text-sm text-muted-foreground">Click to upload logo</p> <Input id="logo-upload-edit-page" type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleLogoFileChange} disabled={isUploading} /> </Label>
+                        )}
                         </div>
-                      ) : isUploading ? (
-                        <div className="flex flex-col items-center justify-center h-full py-8"> <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" /> <p className="text-sm text-muted-foreground mb-1">Uploading...</p> <Progress value={uploadProgress} className="w-full max-w-xs h-2" /> {uploadError && <p className="text-xs text-destructive mt-2">{uploadError}</p>} </div>
-                      ) : (
-                        <Label htmlFor="logo-upload" className="cursor-pointer block"> <ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /> <p className="text-sm text-muted-foreground">Click to upload logo</p> <Input id="logo-upload" type="file" accept="image/*" className="hidden" onChange={handleLogoFileChange} disabled={isUploading} /> </Label>
-                      )}
-                    </div>
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -321,8 +330,8 @@ export default function EditCompanyPage() {
               <CardContent className="space-y-6">
                 <FormField control={form.control} name="whiteLabelEnabled" render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5"> <FormLabel className="text-base">Enable White-Labeling</FormLabel> <FormDescription> Allow this brand to use custom colors. Logo is set above. </FormDescription> </div>
-                    <FormControl> <Checkbox checked={field.value || false} onCheckedChange={field.onChange} /> </FormControl>
+                    <div className="space-y-0.5"> <FormLabel className="text-base">Enable White-Labeling</FormLabel> <ShadFormDescription> Allow this brand to use custom colors. Logo is set above. </ShadFormDescription> </div>
+                    <FormControl> <Checkbox checked={field.value} onCheckedChange={field.onChange} /> </FormControl>
                   </FormItem>
                 )} />
                 {isMounted && whiteLabelEnabledValue && (
@@ -343,28 +352,28 @@ export default function EditCompanyPage() {
                 <FormField control={form.control} name="isTrial" render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 mb-4">
                     <FormLabel className="text-sm">Active Trial</FormLabel>
-                    <FormControl> <Checkbox checked={field.value || false} onCheckedChange={field.onChange} /> </FormControl>
+                    <FormControl> <Checkbox checked={field.value} onCheckedChange={field.onChange} /> </FormControl>
                   </FormItem>
                 )} />
                 
-                <FormField control={form.control} name="trialEndsAt" render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel className="flex items-center gap-1 text-sm"> <CalendarDays className="h-4 w-4" /> Trial End Date </FormLabel>
-                    <FormControl>
-                      {isMounted && isTrialValue ? (
-                        <div> {/* Wrapper div */}
-                          <DatePickerWithPresets
-                            date={field.value}
-                            setDate={(date) => field.onChange(date || null)}
-                          />
-                        </div>
-                      ) : null }
-                    </FormControl>
-                    <FormMessage />
-                    {isMounted && isTrialValue && ( <p className="text-xs text-muted-foreground"> Adjust to extend or shorten the trial. Clear to remove end date. </p> )}
-                  </FormItem>
+                {isMounted && isTrialValue && (
+                  <FormField control={form.control} name="trialEndsAt" render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel className="flex items-center gap-1 text-sm"> <CalendarDays className="h-4 w-4" /> Trial End Date </FormLabel>
+                        <FormControl>
+                            <div> {/* Wrapper div for DatePicker */}
+                                <DatePickerWithPresets
+                                date={field.value} 
+                                setDate={(date) => field.onChange(date || null)}
+                                />
+                            </div>
+                        </FormControl>
+                      <FormMessage />
+                      <ShadFormDescription> Adjust to extend or shorten the trial. Clear to remove end date. </ShadFormDescription>
+                    </FormItem>
+                  )}
+                  />
                 )}
-                />
                 {isMounted && !isTrialValue && ( <p className="text-sm text-muted-foreground italic">This brand is not currently on a trial.</p> )}
               </CardContent>
             </Card>
@@ -375,7 +384,9 @@ export default function EditCompanyPage() {
                 <CardDescription>Details of the program assigned to this brand during checkout.</CardDescription>
               </CardHeader>
               <CardContent>
-                {assignedProgram ? (
+                {isLoading ? (
+                  <Skeleton className="h-20 w-full" />
+                ) : assignedProgram ? (
                   <div className="space-y-3">
                     <div> <Label className="text-xs text-muted-foreground">Assigned Program</Label> <p className="font-semibold text-primary">{assignedProgram.title}</p> <p className="text-sm text-muted-foreground">{assignedProgram.description}</p> </div>
                     {coursesInProgram.length > 0 && (
