@@ -19,8 +19,8 @@ import Image from 'next/image';
 import { useState, useEffect, Suspense } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from 'next/navigation';
-import { getCompanyById, getCompanyBySubdomainSlug } from '@/lib/company-data'; // Imports for company data
-import { getUserByEmail } from '@/lib/user-data'; // Corrected import for user data
+import { getCompanyById, getCompanyBySubdomainSlug } from '@/lib/company-data';
+import { getUserByEmail } from '@/lib/user-data';
 import { Loader2 } from "lucide-react";
 import { Timestamp } from "firebase/firestore";
 
@@ -36,23 +36,17 @@ function LoginPageContent({ brandName: initialBrandName, brandLogoUrl: initialBr
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [displayBrandName, setDisplayBrandName] = useState(initialBrandName || "GYMRAMP");
-  const [displayBrandLogoUrl, setDisplayBrandLogoUrl] = useState(initialBrandLogoUrl || "/images/newlogo.png"); // Default GYMRAMP logo
+  const [displayBrandLogoUrl, setDisplayBrandLogoUrl] = useState(initialBrandLogoUrl || "/images/newlogo.png");
   const { toast } = useToast();
   const router = useRouter();
-  const [isClientLoadingBrand, setIsClientLoadingBrand] = useState(true); // Manage loading state for client-side brand fetching
+  const [isClientLoadingBrand, setIsClientLoadingBrand] = useState(true);
 
-  // This effect attempts to derive brand from subdomain if running client-side
   useEffect(() => {
-    // Only run if no initial brand name (meaning not from server prop)
-    // and if window is defined (client-side)
     if (typeof window !== 'undefined' && !initialBrandName) {
       const hostnameParts = window.location.hostname.split('.');
-      // Basic check for subdomain (e.g., brand.example.com, not www.example.com or example.com or localhost)
-      // Adjust this condition based on your actual domain structure and needs.
-      // This check ensures it doesn't run for 'localhost' or simple TLDs without clear subdomains.
       if (hostnameParts.length > 2 && hostnameParts[0] !== 'www' && hostnameParts[0] !== 'localhost' && !hostnameParts[0].startsWith('gymramp-lms')) {
         const slug = hostnameParts[0];
-        setIsClientLoadingBrand(true); // Start loading brand info
+        setIsClientLoadingBrand(true);
         getCompanyBySubdomainSlug(slug).then(company => {
           if (company) {
             setDisplayBrandName(company.name);
@@ -61,12 +55,12 @@ function LoginPageContent({ brandName: initialBrandName, brandLogoUrl: initialBr
             }
           }
         }).catch(err => console.error("Error fetching brand by subdomain:", err))
-        .finally(() => setIsClientLoadingBrand(false)); // Finish loading
+        .finally(() => setIsClientLoadingBrand(false));
       } else {
-        setIsClientLoadingBrand(false); // No relevant subdomain found, finish loading
+        setIsClientLoadingBrand(false);
       }
     } else {
-        setIsClientLoadingBrand(false); // Already has initial props or not client-side, finish loading
+        setIsClientLoadingBrand(false);
     }
   }, [initialBrandName]);
 
@@ -118,7 +112,6 @@ function LoginPageContent({ brandName: initialBrandName, brandLogoUrl: initialBr
             }
         }
 
-
         if (typeof window !== 'undefined') {
           localStorage.setItem('isLoggedIn', 'true');
           localStorage.setItem('userEmail', user.email);
@@ -126,6 +119,18 @@ function LoginPageContent({ brandName: initialBrandName, brandLogoUrl: initialBr
 
         let redirectPath = '/';
         if (userDetails) {
+            if (userDetails.requiresPasswordChange === true) {
+                toast({
+                    title: "Password Change Required",
+                    description: "For your security, please update your temporary password.",
+                    variant: "default",
+                    duration: 7000,
+                });
+                router.push('/account/force-reset-password');
+                setIsLoading(false); // Stop loading indicator
+                return; // Important: stop further execution of this function
+            }
+
             switch (userDetails.role) {
                 case 'Super Admin': redirectPath = '/admin/dashboard'; break;
                 case 'Admin':
@@ -162,8 +167,6 @@ function LoginPageContent({ brandName: initialBrandName, brandLogoUrl: initialBr
       }
   };
 
-  // Show loading state for brand logo only during client-side fetching.
-  // isLoading covers the login process itself.
   if (isClientLoadingBrand && !initialBrandName && typeof window !== 'undefined') {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-theme(spacing.14)*2)] py-12 px-4 sm:px-6 lg:px-8">
@@ -174,15 +177,15 @@ function LoginPageContent({ brandName: initialBrandName, brandLogoUrl: initialBr
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-theme(spacing.14)*2)] py-12 px-4 sm:px-6 lg:px-8">
-       <div className="mb-8 h-[45px] flex items-center justify-center"> {/* Added fixed height for logo area to prevent layout shift */}
+       <div className="mb-8 h-[45px] flex items-center justify-center">
          <Image
             src={displayBrandLogoUrl}
             alt={`${displayBrandName} Logo`}
             width={150}
             height={45}
             priority
-            className="max-h-[45px] object-contain" // Ensure image respects height
-            onError={(e) => { (e.target as HTMLImageElement).src = '/images/newlogo.png'; }} // Fallback to default logo
+            className="max-h-[45px] object-contain"
+            onError={(e) => { (e.target as HTMLImageElement).src = '/images/newlogo.png'; }}
         />
        </div>
       <Card className="w-full max-w-md shadow-lg">
@@ -214,13 +217,7 @@ function LoginPageContent({ brandName: initialBrandName, brandLogoUrl: initialBr
   );
 }
 
-// New default export that wraps content in Suspense
 export default function LoginPage() {
-  // For a true SSR white-labeling solution, brandName and brandLogoUrl
-  // would be fetched server-side (e.g., in a parent Server Component or layout
-  // based on hostname) and passed as props to LoginPageContent.
-  // Since this page is a client component and `useSearchParams` for brandId was removed,
-  // we'll rely on client-side detection or pass nulls.
   return (
     <Suspense fallback={<div className="flex flex-col items-center justify-center min-h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>}>
       <LoginPageContent brandName={null} brandLogoUrl={null} />
