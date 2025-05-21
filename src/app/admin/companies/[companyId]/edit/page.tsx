@@ -10,7 +10,6 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label'; // Direct import of Label if used outside FormField
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -18,16 +17,15 @@ import {
   FormControl,
   FormField,
   FormItem,
-  FormLabel, // Use FormLabel from ui/form
+  FormLabel,
   FormMessage,
-  FormDescription, // Use FormDescription from ui/form
 } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { getCompanyById, updateCompany } from '@/lib/company-data';
 import type { Company, CompanyFormData, User } from '@/types/user';
-import { Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, ArrowLeft, Users, CalendarDays, Gift, Globe, Palette } from 'lucide-react';
+import { Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, ArrowLeft, Users, CalendarDays, Gift, Globe, Palette, BookOpen } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
@@ -35,7 +33,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
 import { Timestamp } from 'firebase/firestore';
 
-// Zod schema for form validation
+// Simplified Zod schema for core and trial information only
 const companyFormSchema = z.object({
   name: z.string().min(2, { message: 'Brand name must be at least 2 characters.' }),
   subdomainSlug: z.string()
@@ -57,10 +55,7 @@ const companyFormSchema = z.object({
     .nullable(),
   isTrial: z.boolean().optional().default(false),
   trialEndsAt: z.date().nullable().optional(),
-  whiteLabelEnabled: z.boolean().optional().default(false),
-  primaryColor: z.string().regex(/^(?:#(?:[0-9A-Fa-f]{3}){1,2}|)$/, { message: 'Invalid hex color (e.g. #RRGGBB). Leave blank if none.' }).optional().nullable(),
-  secondaryColor: z.string().regex(/^(?:#(?:[0-9A-Fa-f]{3}){1,2}|)$/, { message: 'Invalid hex color. Leave blank if none.' }).optional().nullable(),
-  accentColor: z.string().regex(/^(?:#(?:[0-9A-Fa-f]{3}){1,2}|)$/, { message: 'Invalid hex color. Leave blank if none.' }).optional().nullable(),
+  // White-label and program fields are removed from the schema for now
 });
 
 type CompanyFormValues = z.infer<typeof companyFormSchema>;
@@ -86,23 +81,17 @@ export default function EditCompanyPage() {
     resolver: zodResolver(companyFormSchema),
     defaultValues: {
       name: '',
-      subdomainSlug: '', // Default to empty string
-      customDomain: '',  // Default to empty string
-      shortDescription: '', // Default to empty string
-      logoUrl: '', // Default to empty string
+      subdomainSlug: '',
+      customDomain: '',
+      shortDescription: '',
+      logoUrl: '',
       maxUsers: null,
       isTrial: false,
       trialEndsAt: null,
-      whiteLabelEnabled: false,
-      primaryColor: '', // Default to empty string
-      secondaryColor: '', // Default to empty string
-      accentColor: '', // Default to empty string
     },
   });
 
-  const logoUrlValue = form.watch('logoUrl');
   const isTrialValue = form.watch('isTrial');
-  const whiteLabelEnabledValue = form.watch('whiteLabelEnabled');
 
   useEffect(() => {
     setIsMounted(true);
@@ -155,10 +144,6 @@ export default function EditCompanyPage() {
           : companyData.trialEndsAt instanceof Date
             ? companyData.trialEndsAt
             : null,
-        whiteLabelEnabled: companyData.whiteLabelEnabled || false,
-        primaryColor: companyData.primaryColor || '',
-        secondaryColor: companyData.secondaryColor || '',
-        accentColor: companyData.accentColor || '',
       });
     } catch (error) {
       console.error("Failed to fetch brand data:", error);
@@ -212,17 +197,14 @@ export default function EditCompanyPage() {
         maxUsers: data.maxUsers ?? null,
         isTrial: data.isTrial,
         trialEndsAt: data.trialEndsAt ? Timestamp.fromDate(data.trialEndsAt) : null,
-        whiteLabelEnabled: data.whiteLabelEnabled,
-        primaryColor: data.whiteLabelEnabled ? (data.primaryColor?.trim() ? data.primaryColor.trim() : null) : null,
-        secondaryColor: data.whiteLabelEnabled ? (data.secondaryColor?.trim() ? data.secondaryColor.trim() : null) : null,
-        accentColor: data.whiteLabelEnabled ? (data.accentColor?.trim() ? data.accentColor.trim() : null) : null,
+        // whiteLabelEnabled and color fields are not part of this simplified form's data
       };
 
       const updatedCompanyResult = await updateCompany(companyId, metadataToUpdate);
       if (!updatedCompanyResult) {
         throw new Error("Failed to update brand metadata.");
       }
-      setCompany(updatedCompanyResult);
+      setCompany(updatedCompanyResult); // Update local state with potentially stripped data
       toast({ title: "Brand Updated", description: `"${data.name}" updated successfully.` });
     } catch (error: any) {
       console.error("Failed to update brand:", error);
@@ -265,7 +247,6 @@ export default function EditCompanyPage() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="md:col-span-2 space-y-6">
-            {/* Brand Information Card */}
             <Card>
               <CardHeader>
                 <CardTitle>Brand Information</CardTitle>
@@ -300,31 +281,20 @@ export default function EditCompanyPage() {
               </CardContent>
             </Card>
 
-            {/* White-Label Settings Card */}
+            {/* White-Label Settings Placeholder Card */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5"/> White-Label Settings</CardTitle>
-                <FormDescription>Customize the appearance of the platform for this brand.</FormDescription>
+                <CardDescription>Customize the appearance of the platform for this brand.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <FormField control={form.control} name="whiteLabelEnabled" render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5"> <FormLabel className="text-base">Enable White-Labeling</FormLabel> <FormDescription> Allow this brand to use custom colors. Logo is set above. </FormDescription> </div>
-                    <FormControl> <Checkbox checked={field.value || false} onCheckedChange={field.onChange} /> </FormControl>
-                  </FormItem>
-                )} />
-                {isMounted && whiteLabelEnabledValue && (
-                  <>
-                    <FormField control={form.control} name="primaryColor" render={({ field }) => (<FormItem> <FormLabel>Primary Color (Hex)</FormLabel> <FormControl><Input type="text" placeholder="#3498db" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem>)} />
-                    <FormField control={form.control} name="secondaryColor" render={({ field }) => (<FormItem> <FormLabel>Secondary Color (Hex)</FormLabel> <FormControl><Input type="text" placeholder="#ecf0f1" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem>)} />
-                    <FormField control={form.control} name="accentColor" render={({ field }) => (<FormItem> <FormLabel>Accent Color (Hex)</FormLabel> <FormControl><Input type="text" placeholder="#2ecc71" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem>)} />
-                  </>
-                )}
+              <CardContent>
+                <p className="text-sm text-muted-foreground italic">White-label settings (colors, etc.) will be managed here in a future update.</p>
+                {/* Placeholder for FormField for whiteLabelEnabled if needed for future logic */}
+                {/* <FormField control={form.control} name="whiteLabelEnabled" render={({ field }) => (...)} /> */}
               </CardContent>
             </Card>
           </div>
 
-          {/* Right Column (Trial Info, Program Access Placeholder, Save Button) */}
           <div className="md:col-span-1 space-y-6">
             <Card className={company?.isTrial ? "bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700" : ""}>
               <CardHeader>
@@ -363,11 +333,11 @@ export default function EditCompanyPage() {
             {/* Program Access Placeholder Card */}
             <Card>
               <CardHeader>
-                <CardTitle>Program Access (Placeholder)</CardTitle>
+                <CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5" /> Program Access</CardTitle>
                 <CardDescription>Details of the program assigned to this brand.</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground italic">Program information will be displayed here once the data fetching logic is restored.</p>
+                <p className="text-sm text-muted-foreground italic">Assigned program information will be displayed here once data fetching logic is restored.</p>
               </CardContent>
             </Card>
 
@@ -381,3 +351,4 @@ export default function EditCompanyPage() {
     </div>
   );
 }
+    
