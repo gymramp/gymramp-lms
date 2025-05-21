@@ -33,7 +33,7 @@ import { getAllCourses, getProgramById } from '@/lib/firestore-data';
 import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data';
 import type { Company, CompanyFormData, User } from '@/types/user';
 import type { Course, Program } from '@/types/course';
-import { Loader2, Upload, ImageIcon, Trash2, BookCheck, ArrowLeft, Users, CalendarDays, Gift, Globe, Layers } from 'lucide-react';
+import { Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, BookCheck, ArrowLeft, Users, CalendarDays, Gift, Globe, Layers } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
@@ -49,7 +49,7 @@ const companyFormSchema = z.object({
     .min(3, { message: 'Subdomain slug must be at least 3 characters.'})
     .max(63, { message: 'Subdomain slug cannot exceed 63 characters.'})
     .optional()
-    .or(z.literal('')) // Allow empty string
+    .or(z.literal(''))
     .nullable(),
   shortDescription: z.string().max(150, { message: 'Description must be 150 characters or less.' }).optional().or(z.literal('')),
   logoUrl: z.string().url({ message: 'Invalid URL format.' }).optional().or(z.literal('')),
@@ -84,6 +84,7 @@ export default function EditCompanyPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isMounted, setIsMounted] = useState(false); // For hydration fix
 
   const { toast } = useToast();
 
@@ -110,6 +111,7 @@ export default function EditCompanyPage() {
    const whiteLabelEnabledValue = form.watch('whiteLabelEnabled');
 
   useEffect(() => {
+    setIsMounted(true); // Component has mounted
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
         const userDetails = await getUserByEmail(firebaseUser.email);
@@ -123,7 +125,10 @@ export default function EditCompanyPage() {
         router.push('/login');
       }
     });
-    return () => unsubscribe();
+    return () => {
+        unsubscribe();
+        setIsMounted(false); // Cleanup on unmount
+    }
   }, [router, toast]);
 
   const fetchCompanyAndRelatedData = useCallback(async () => {
@@ -208,22 +213,23 @@ export default function EditCompanyPage() {
         toast({ title: "Upload in Progress", description: "Please wait for the logo upload to complete.", variant: "destructive" });
         return;
      }
-     setIsLoading(true); // Use a different state for saving indication if needed
+     // Use a different state for saving indication if needed, for now using isLoading which might be okay if fetchCompanyAndRelatedData is quick.
+     // Or add a new state e.g. setIsSaving(true)
+     setIsLoading(true); 
      try {
         const metadataToUpdate: Partial<CompanyFormData> = {
             name: data.name,
             subdomainSlug: data.subdomainSlug?.trim() ? data.subdomainSlug.trim().toLowerCase() : null,
-            shortDescription: data.shortDescription?.trim() || null,
-            logoUrl: data.logoUrl?.trim() || null,
+            shortDescription: data.shortDescription?.trim() ? data.shortDescription.trim() : null,
+            logoUrl: data.logoUrl?.trim() ? data.logoUrl.trim() : null,
             customDomain: data.customDomain?.trim() ? data.customDomain.trim().toLowerCase() : null,
-            maxUsers: data.maxUsers ?? null, // Coerce to null if empty or invalid
+            maxUsers: data.maxUsers ?? null,
             trialEndsAt: data.trialEndsAt ? Timestamp.fromDate(data.trialEndsAt) : null,
             isTrial: data.isTrial,
             whiteLabelEnabled: data.whiteLabelEnabled,
             primaryColor: data.whiteLabelEnabled ? (data.primaryColor?.trim() || null) : null,
             secondaryColor: data.whiteLabelEnabled ? (data.secondaryColor?.trim() || null) : null,
             accentColor: data.whiteLabelEnabled ? (data.accentColor?.trim() || null) : null,
-            // assignedCourseIds is no longer managed here
         };
 
         const updatedCompanyMeta = await updateCompany(companyId, metadataToUpdate);
@@ -231,7 +237,6 @@ export default function EditCompanyPage() {
             throw new Error("Failed to update brand metadata.");
         }
         toast({ title: "Brand Updated", description: `"${data.name}" updated successfully.` });
-        // Re-fetch company data to reflect changes, especially if trialEndsAt was stringified/parsed
         fetchCompanyAndRelatedData();
 
      } catch (error: any)         {
@@ -292,7 +297,7 @@ export default function EditCompanyPage() {
                              <FormLabel className="text-base font-semibold">Brand Logo (Optional)</FormLabel>
                              <FormControl>
                                <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
-                                 {logoUrlValue && !isUploading ? ( <div className="relative w-32 h-32 mx-auto mb-2"> <Image src={logoUrlValue} alt="Brand logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" onError={() => form.setValue('logoUrl', '')} /> <Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6 opacity-80 hover:opacity-100 z-10" onClick={() => form.setValue('logoUrl', '')} aria-label="Remove Logo" > <Trash2 className="h-4 w-4" /> </Button> </div> ) : isUploading ? ( <div className="flex flex-col items-center justify-center h-full py-8"> <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" /> <p className="text-sm text-muted-foreground mb-1">Uploading...</p> <Progress value={uploadProgress} className="w-full max-w-xs h-2" /> {uploadError && <p className="text-xs text-destructive mt-2">{uploadError}</p>} </div> ) : ( <Label htmlFor="logo-upload" className="cursor-pointer block"> <ImageIcon className="h-10 w-10 mx-auto text-muted-foreground mb-2" /> <p className="text-sm text-muted-foreground">Click to upload logo</p> <Input id="logo-upload" type="file" accept="image/*" className="hidden" onChange={handleLogoFileChange} disabled={isUploading} /> </Label> )}
+                                 {logoUrlValue && !isUploading ? ( <div className="relative w-32 h-32 mx-auto mb-2"> <Image src={logoUrlValue} alt="Brand logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" data-ai-hint="logo business" onError={() => form.setValue('logoUrl', '')} /> <Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6 opacity-80 hover:opacity-100 z-10" onClick={() => form.setValue('logoUrl', '')} aria-label="Remove Logo" > <Trash2 className="h-4 w-4" /> </Button> </div> ) : isUploading ? ( <div className="flex flex-col items-center justify-center h-full py-8"> <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" /> <p className="text-sm text-muted-foreground mb-1">Uploading...</p> <Progress value={uploadProgress} className="w-full max-w-xs h-2" /> {uploadError && <p className="text-xs text-destructive mt-2">{uploadError}</p>} </div> ) : ( <Label htmlFor="logo-upload" className="cursor-pointer block"> <ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /> <p className="text-sm text-muted-foreground">Click to upload logo</p> <Input id="logo-upload" type="file" accept="image/*" className="hidden" onChange={handleLogoFileChange} disabled={isUploading} /> </Label> )}
                                </div>
                              </FormControl>
                              <FormField control={form.control} name="logoUrl" render={({ field }) => ( <FormItem className="hidden"> <FormControl> <Input type="url" {...field} value={field.value ?? ''} readOnly /> </FormControl> <FormMessage /> </FormItem> )} />
@@ -304,13 +309,13 @@ export default function EditCompanyPage() {
                     <CardHeader> <CardTitle>White-Label Settings</CardTitle> <CardDescription>Customize the appearance of the platform for this brand.</CardDescription> </CardHeader>
                     <CardContent className="space-y-6">
                         <FormField control={form.control} name="whiteLabelEnabled" render={({ field }) => ( <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"> <div className="space-y-0.5"> <FormLabel className="text-base">Enable White-Labeling</FormLabel> <FormDescription> Allow this brand to use custom colors. Logo is set above. </FormDescription> </div> <FormControl> <Checkbox checked={field.value} onCheckedChange={field.onChange} /> </FormControl> </FormItem> )} />
-                        {whiteLabelEnabledValue && ( <> <FormField control={form.control} name="primaryColor" render={({ field }) => ( <FormItem> <FormLabel>Primary Color (Hex)</FormLabel> <FormControl><Input type="text" placeholder="#3498db" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} /> <FormField control={form.control} name="secondaryColor" render={({ field }) => ( <FormItem> <FormLabel>Secondary Color (Hex)</FormLabel> <FormControl><Input type="text" placeholder="#ecf0f1" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} /> <FormField control={form.control} name="accentColor" render={({ field }) => ( <FormItem> <FormLabel>Accent Color (Hex)</FormLabel> <FormControl><Input type="text" placeholder="#2ecc71" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} /> </> )}
+                        {whiteLabelEnabledValue && isMounted && ( <> <FormField control={form.control} name="primaryColor" render={({ field }) => ( <FormItem> <FormLabel>Primary Color (Hex)</FormLabel> <FormControl><Input type="text" placeholder="#3498db" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} /> <FormField control={form.control} name="secondaryColor" render={({ field }) => ( <FormItem> <FormLabel>Secondary Color (Hex)</FormLabel> <FormControl><Input type="text" placeholder="#ecf0f1" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} /> <FormField control={form.control} name="accentColor" render={({ field }) => ( <FormItem> <FormLabel>Accent Color (Hex)</FormLabel> <FormControl><Input type="text" placeholder="#2ecc71" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} /> </> )}
                     </CardContent>
                 </Card>
              </div>
 
               <div className="md:col-span-1 space-y-6">
-                 {company.isTrial && ( // Show trial info if isTrial is true on the fetched company data
+                 {company.isTrial && (
                  <Card className="bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700">
                     <CardHeader> <CardTitle className="text-blue-700 dark:text-blue-300 flex items-center gap-2"> <Gift className="h-5 w-5" /> Trial Information </CardTitle> </CardHeader>
                     <CardContent>
@@ -320,7 +325,7 @@ export default function EditCompanyPage() {
                             <FormControl> <Checkbox checked={field.value} onCheckedChange={field.onChange} /> </FormControl>
                         </FormItem>
                         )} />
-                        {isTrialValue && ( // Only show date picker if isTrial from form is true
+                        {isMounted && isTrialValue && ( 
                             <FormField
                                 control={form.control}
                                 name="trialEndsAt"
@@ -330,7 +335,7 @@ export default function EditCompanyPage() {
                                             <CalendarDays className="h-4 w-4" /> Trial End Date
                                         </FormLabel>
                                         <FormControl>
-                                          <div> {/* Added div wrapper */}
+                                          <div>
                                             <DatePickerWithPresets
                                                 date={field.value}
                                                 setDate={(date) => field.onChange(date || null)}
@@ -396,3 +401,5 @@ export default function EditCompanyPage() {
     </div>
   );
 }
+
+    
