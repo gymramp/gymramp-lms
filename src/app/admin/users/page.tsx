@@ -18,8 +18,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@/components/ui/dialog';
-import { PlusCircle, MoreHorizontal, Trash2, Edit, ShieldCheck, Users, Archive, Undo, KeyRound, Building, MapPin, AlertCircle, Loader2 } from 'lucide-react';
+} from '@/components/ui/dialog'; // Keep these if used elsewhere, though not primary for AddUserDialog itself
+import { PlusCircle, MoreHorizontal, Trash2, Edit, ShieldCheck, Users, Archive, Undo, KeyRound, Building, MapPin, AlertCircle, Loader2, Info } from 'lucide-react'; // Added Info
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,8 +41,9 @@ import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useRouter } from 'next/navigation'; // Import useRouter
-import { Timestamp } from 'firebase/firestore'; // Import Timestamp
+import { useRouter } from 'next/navigation';
+import { Timestamp } from 'firebase/firestore';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'; // For displaying password
 
 const ROLE_HIERARCHY: Record<UserRole, number> = {
   'Super Admin': 5,
@@ -51,7 +52,6 @@ const ROLE_HIERARCHY: Record<UserRole, number> = {
   'Manager': 2,
   'Staff': 1,
 };
-
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -67,8 +67,8 @@ export default function AdminUsersPage() {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('all');
   const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
   const [currentUserName, setCurrentUserName] = useState<string>('');
+  const [lastGeneratedPasswordForNewUser, setLastGeneratedPasswordForNewUser] = useState<string | null>(null); // State for new user's password
   const router = useRouter();
-
 
   const { toast } = useToast();
 
@@ -106,6 +106,7 @@ export default function AdminUsersPage() {
    const fetchDataBasedOnRole = useCallback(async () => {
         if (!currentUser) return;
         setIsLoading(true);
+        setLastGeneratedPasswordForNewUser(null); // Clear password when data reloads
         try {
             let fetchedCompanies: Company[] = [];
             let fetchedLocations: Location[] = [];
@@ -165,7 +166,6 @@ export default function AdminUsersPage() {
       fetchDataBasedOnRole();
    }, [fetchDataBasedOnRole]);
 
-
     const filterUsers = useCallback(() => {
         let tempUsers = users;
         if (selectedCompanyId && selectedCompanyId !== 'all') {
@@ -205,11 +205,12 @@ export default function AdminUsersPage() {
         setSelectedLocationId('all');
     }, [selectedCompanyId, allLocations, currentUser]);
 
-
-   const refreshUsers = () => {
+   const refreshUsersAndShowPassword = (user: User, tempPassword?: string) => {
        fetchDataBasedOnRole();
+       if (tempPassword) {
+           setLastGeneratedPasswordForNewUser(tempPassword);
+       }
    };
-
 
   const handleAddUserClick = () => {
      if (!currentUser || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role)) {
@@ -224,13 +225,14 @@ export default function AdminUsersPage() {
         toast({ title: "No Brands Exist", description: "Please add a brand before adding users.", variant: "destructive"});
         return;
      }
+    setLastGeneratedPasswordForNewUser(null); // Clear any previous password
     setIsAddUserDialogOpen(true);
   };
 
   const handleDeleteUser = async (userId: string, userName: string) => {
     const success = await deleteUser(userId);
     if (success) {
-        refreshUsers();
+        fetchDataBasedOnRole();
         toast({ title: 'User Deleted', description: `"${userName}" has been removed.`, });
     } else {
          toast({ title: 'Error', description: `Failed to delete user "${userName}".`, variant: 'destructive' });
@@ -255,7 +257,7 @@ export default function AdminUsersPage() {
 
     const updatedUser = await toggleUserStatus(userId);
     if (updatedUser) {
-      refreshUsers();
+      fetchDataBasedOnRole();
       toast({
           title: currentStatus ? "User Deactivated" : "User Reactivated",
           description: `${userName}'s status has been updated.`,
@@ -276,10 +278,9 @@ export default function AdminUsersPage() {
   };
 
   const handleUserUpdated = () => {
-    refreshUsers();
+    fetchDataBasedOnRole();
     setIsEditUserDialogOpen(false);
   };
-
 
   const canPerformAction = (targetUser: User): boolean => {
     if (!currentUser) return false;
@@ -342,19 +343,12 @@ export default function AdminUsersPage() {
      return <div className="container mx-auto py-12 text-center">Access Denied. Redirecting...</div>;
   }
 
-
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20">
        <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-primary">User Management</h1>
          <div className="flex items-center gap-2">
             <Dialog open={isAddUserDialogOpen} onOpenChange={setIsAddUserDialogOpen} >
-              <DialogHeader>
-                <DialogTitle>Add New User</DialogTitle>
-                 <DialogDescription>
-                    Enter the details of the new user. They will be added to the selected brand and locations.
-                 </DialogDescription>
-               </DialogHeader>
                   <Button
                     onClick={handleAddUserClick}
                     className="bg-accent text-accent-foreground hover:bg-accent/90"
@@ -366,14 +360,26 @@ export default function AdminUsersPage() {
                  <AddUserDialog
                     isOpen={isAddUserDialogOpen}
                     setIsOpen={setIsAddUserDialogOpen}
-                    onUserAdded={refreshUsers}
+                    onUserAdded={refreshUsersAndShowPassword} // Use new handler
                     companies={companies}
                     locations={allLocations}
                     currentUser={currentUser}
                  />
             </Dialog>
          </div>
-          </div>
+        </div>
+
+        {lastGeneratedPasswordForNewUser && (
+            <Alert variant="success" className="mb-6 border-green-300 bg-green-50 dark:bg-green-900/30">
+              <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <AlertTitle className="text-green-800 dark:text-green-300">New User Added!</AlertTitle>
+              <AlertDescription className="text-green-700 dark:text-green-400">
+                The temporary password for the new user is: <strong className="font-bold">{lastGeneratedPasswordForNewUser}</strong><br/>
+                They will be required to change this on their first login.
+                <Button variant="ghost" size="sm" onClick={() => setLastGeneratedPasswordForNewUser(null)} className="ml-4 text-green-700 hover:text-green-800">Dismiss</Button>
+              </AlertDescription>
+            </Alert>
+        )}
 
        <div className="flex flex-wrap items-center gap-4 mb-6 p-4 bg-secondary rounded-lg shadow-sm">
          <h2 className="text-lg font-semibold mr-4">Filters:</h2>
@@ -577,7 +583,7 @@ export default function AdminUsersPage() {
             isOpen={isEditUserDialogOpen}
             setIsOpen={setIsEditUserDialogOpen}
             user={userToEdit}
-            onUserUpdated={handleUserUpdated}
+            onUserUpdated={fetchDataBasedOnRole} // Use fetchDataBasedOnRole for refreshing after edit
             currentUser={currentUser}
             companies={companies}
             locations={allLocations}
@@ -586,3 +592,5 @@ export default function AdminUsersPage() {
     </div>
   );
 }
+
+    

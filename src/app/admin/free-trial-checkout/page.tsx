@@ -6,17 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-// import { Checkbox } from "@/components/ui/checkbox"; // No longer selecting individual courses
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, Users, Gift, BookOpen, Layers } from 'lucide-react'; // Added Layers
+import { Loader2, Users, Gift, BookOpen, Layers, Info, ShieldCheck } from 'lucide-react'; // Added Info, ShieldCheck
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { getAllPrograms, getCourseById } from '@/lib/firestore-data'; // Fetch programs
-import { processFreeTrialCheckout } from '@/actions/checkout'; // Corrected import
-import type { Program, Course } from '@/types/course'; // Import Program
+import { getAllPrograms, getCourseById, getAllCourses } from '@/lib/firestore-data';
+import { processFreeTrialCheckout } from '@/actions/checkout';
+import type { Program, Course } from '@/types/course';
 import type { User } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
@@ -24,7 +23,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Import Select
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const freeTrialCheckoutFormSchema = z.object({
   customerName: z.string().min(2, { message: 'Customer name is required.' }),
@@ -35,19 +34,20 @@ const freeTrialCheckoutFormSchema = z.object({
   zipCode: z.string().min(5, { message: 'Zip code is required.' }),
   country: z.string().min(2, { message: 'Country is required.' }),
   adminEmail: z.string().email({ message: 'Please enter a valid email address.' }),
-  selectedProgramId: z.string().min(1, { message: 'Please select a Program for the trial.' }), // Changed to selectedProgramId
+  selectedProgramId: z.string().min(1, { message: 'Please select a Program for the trial.' }),
   trialDurationDays: z.coerce.number().int().min(1, { message: "Trial duration must be at least 1 day."}).default(7),
 });
 type FreeTrialCheckoutFormValues = z.infer<typeof freeTrialCheckoutFormSchema>;
 
 interface FreeTrialFormContentProps {
-  allPrograms: Program[]; // Changed from allCourses
+  allPrograms: Program[];
   formRef: React.RefObject<HTMLFormElement>;
   maxUsers: number | null;
   setMaxUsers: React.Dispatch<React.SetStateAction<number | null>>;
-  selectedProgramId: string | null; // Added selectedProgramId state
-  setSelectedProgramId: React.Dispatch<React.SetStateAction<string | null>>; // Added setter
+  selectedProgramId: string | null;
+  setSelectedProgramId: React.Dispatch<React.SetStateAction<string | null>>;
   coursesInSelectedProgram: Course[];
+  onTrialSetupComplete: (password: string) => void; // Callback to pass password
 }
 
 function FreeTrialFormContent({
@@ -58,6 +58,7 @@ function FreeTrialFormContent({
   selectedProgramId,
   setSelectedProgramId,
   coursesInSelectedProgram,
+  onTrialSetupComplete,
 }: FreeTrialFormContentProps) {
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -77,16 +78,15 @@ function FreeTrialFormContent({
       trialDurationDays: 7,
     },
   });
-  
+
   useEffect(() => {
     if (selectedProgramId) {
       form.setValue('selectedProgramId', selectedProgramId, { shouldValidate: true });
-    } else if (allPrograms.length === 1) { // Auto-select if only one program
+    } else if (allPrograms.length === 1) {
         setSelectedProgramId(allPrograms[0].id);
         form.setValue('selectedProgramId', allPrograms[0].id, { shouldValidate: true });
     }
   }, [selectedProgramId, allPrograms, form, setSelectedProgramId]);
-
 
   const onSubmit = async (data: FreeTrialCheckoutFormValues) => {
     setIsProcessing(true);
@@ -95,14 +95,14 @@ function FreeTrialFormContent({
         ...data,
         maxUsers,
         isTrial: true,
-        // selectedCourseIds will be derived in the server action based on selectedProgramId
       };
 
-      const result = await processFreeTrialCheckout(checkoutData as any); // Cast to any due to selectedCourseIds mismatch
+      const result = await processFreeTrialCheckout(checkoutData as any);
 
-      if (result.success) {
+      if (result.success && result.tempPassword) {
         toast({ title: "Free Trial Started!", description: "Brand and admin created for the trial." });
-        form.reset({ // Reset with new defaults if needed
+        onTrialSetupComplete(result.tempPassword); // Pass generated password
+        form.reset({
              customerName: '', companyName: '', streetAddress: '', city: '', state: '', zipCode: '', country: '', adminEmail: '',
              selectedProgramId: allPrograms.length === 1 ? allPrograms[0].id : '', trialDurationDays: 7,
         });
@@ -122,6 +122,15 @@ function FreeTrialFormContent({
   return (
     <Form {...form}>
       <form ref={formRef} onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <Alert variant="default" className="mb-6 border-blue-300 bg-blue-50 dark:bg-blue-900/30">
+            <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <AlertTitle className="text-blue-800 dark:text-blue-300">Admin Password</AlertTitle>
+            <AlertDescription className="text-blue-700 dark:text-blue-400">
+                A temporary password for the new admin user will be auto-generated.
+                The user will be prompted to change this password upon their first login.
+                This password will be displayed above the form upon successful trial setup.
+            </AlertDescription>
+        </Alert>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
             <CardHeader><CardTitle>Customer & Brand Information</CardTitle></CardHeader>
@@ -200,7 +209,7 @@ function FreeTrialFormContent({
                 <FormLabel>Select Program</FormLabel>
                 <Select onValueChange={(value) => {
                     field.onChange(value);
-                    setSelectedProgramId(value); // Update parent state
+                    setSelectedProgramId(value);
                 }} value={field.value}>
                     <FormControl>
                         <SelectTrigger>
@@ -246,7 +255,6 @@ function FreeTrialFormContent({
             </Card>
         )}
 
-
         <Card>
           <CardHeader><CardTitle>Trial Summary</CardTitle></CardHeader>
           <CardContent>
@@ -280,6 +288,7 @@ export default function FreeTrialCheckoutPage() {
   const [selectedProgramId, setSelectedProgramId] = useState<string | null>(null);
   const [maxUsers, setMaxUsers] = useState<number | null>(5);
   const [coursesInSelectedProgram, setCoursesInSelectedProgram] = useState<Course[]>([]);
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null); // State for password
   const router = useRouter();
   const { toast } = useToast();
   const formRef = useRef<HTMLFormElement>(null);
@@ -313,6 +322,7 @@ export default function FreeTrialCheckoutPage() {
     if (currentUser && !isCheckingAuth) {
       (async () => {
         setIsLoadingData(true);
+        setGeneratedPassword(null); // Clear password on new load
         try {
           const [programsData, coursesData] = await Promise.all([
              getAllPrograms(),
@@ -349,6 +359,11 @@ export default function FreeTrialCheckoutPage() {
     }
   }, [selectedProgramId, allPrograms, allCourses]);
 
+  const handleTrialSetupComplete = (password: string) => {
+    setGeneratedPassword(password);
+  };
+
+
   if (isCheckingAuth || !currentUser) {
     return (
       <div className="container mx-auto py-12 text-center">
@@ -370,6 +385,16 @@ export default function FreeTrialCheckoutPage() {
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20">
       <h1 className="text-3xl font-bold tracking-tight text-primary mb-8">New Customer - Free Trial Checkout</h1>
+       {generatedPassword && (
+        <Alert variant="success" className="mb-6 border-green-300 bg-green-50 dark:bg-green-900/30">
+          <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <AlertTitle className="text-green-800 dark:text-green-300">Trial Setup Successful!</AlertTitle>
+          <AlertDescription className="text-green-700 dark:text-green-400">
+            The new admin user's temporary password is: <strong className="font-bold">{generatedPassword}</strong><br/>
+            They will be required to change this on their first login.
+          </AlertDescription>
+        </Alert>
+      )}
       <FreeTrialFormContent
         allPrograms={allPrograms}
         formRef={formRef}
@@ -378,6 +403,7 @@ export default function FreeTrialCheckoutPage() {
         selectedProgramId={selectedProgramId}
         setSelectedProgramId={setSelectedProgramId}
         coursesInSelectedProgram={coursesInSelectedProgram}
+        onTrialSetupComplete={handleTrialSetupComplete}
       />
     </div>
   );

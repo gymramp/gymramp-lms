@@ -11,12 +11,11 @@ import {
   DialogContent,
   DialogDescription,
   DialogFooter,
-  DialogHeader, // Added DialogHeader
+  DialogHeader,
   DialogTitle,
   DialogClose
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-// import { Label } from '@/components/ui/label'; // Not directly used, FormLabel is used
 import {
   Form,
   FormControl,
@@ -32,20 +31,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox"; // Import Checkbox
-import { ScrollArea } from "@/components/ui/scroll-area"; // Import ScrollArea
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from '@/hooks/use-toast';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-// import { addDoc, collection, serverTimestamp } from 'firebase/firestore'; // No longer directly used
-// import { db } from '@/lib/firebase'; // No longer directly used
 import type { UserRole, User, Company, Location } from '@/types/user';
 import { addUser as addUserToFirestore, getUserCountByCompanyId } from '@/lib/user-data';
 import { getCompanyById } from '@/lib/company-data';
-import { AlertCircle, Loader2 } from 'lucide-react';
-// import { sendWelcomeEmail } from '@/actions/checkout'; // Removed import, email handled by Cloud Function
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert components
+import { AlertCircle, Loader2, Info, ShieldCheck } from 'lucide-react'; // Import Info, ShieldCheck
+import { generateRandomPassword } from '@/lib/utils'; // Import password generator
 
-// Update Zod schema to include all fields
 const userFormSchema = z.object({
   name: z
     .string()
@@ -53,9 +50,6 @@ const userFormSchema = z.object({
   email: z
     .string()
     .email({ message: 'Please enter a valid email address.' }),
-  password: z
-    .string()
-    .min(6, { message: 'Password must be at least 6 characters long.' }),
   role: z
     .string()
     .min(1, { message: 'Please select a user role' }) as z.ZodType<UserRole>,
@@ -68,7 +62,7 @@ const userFormSchema = z.object({
 type UserFormValues = z.infer<typeof userFormSchema>;
 
 interface AddUserDialogProps {
-  onUserAdded: (user: User) => void;
+  onUserAdded: (user: User, tempPassword?: string) => void; // Updated signature
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
   companies: Company[];
@@ -94,13 +88,11 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
   const [currentUserCount, setCurrentUserCount] = useState<number>(0);
   const [isLoadingCompanyData, setIsLoadingCompanyData] = useState(false);
 
-
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userFormSchema),
     defaultValues: {
       name: '',
       email: '',
-      password: '',
       role: currentUser?.role === 'Manager' ? 'Staff' : 'Staff',
       companyId: currentUser?.role !== 'Super Admin' ? currentUser?.companyId || '' : '',
       assignedLocationIds: [],
@@ -148,41 +140,25 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
     }
   }, [selectedCompanyId, locations, form, toast, isOpen, currentUser]);
 
-
   useEffect(() => {
      const initialCompanyId = currentUser?.role !== 'Super Admin' ? currentUser?.companyId || '' : '';
      const initialRole = currentUser?.role === 'Manager' ? 'Staff' : 'Staff';
      form.reset({
         name: '',
         email: '',
-        password: '',
+        // password: '', // Password removed from form
         role: initialRole,
         companyId: initialCompanyId,
         assignedLocationIds: [],
      });
    }, [isOpen, currentUser, form]);
 
-
   const onSubmit = async (data: UserFormValues) => {
-      // REMOVED: Insecure re-authentication logic with hardcoded/env password.
-      // The admin user might be signed out after this operation if the Firebase client SDK's
-      // auth state changes due to createUserWithEmailAndPassword. They will need to log back in manually.
-      // This is a safer approach than exposing admin credentials or using insecure workarounds.
-      // A robust solution would involve backend functions or a secure re-authentication prompt.
-      // const originalAdminEmail = auth.currentUser?.email;
-      // const originalAdminPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "password"; // CRITICAL SECURITY ISSUE
-
-      // if (!originalAdminEmail /*|| !originalAdminPassword*/) { // Original password check removed
-      //      toast({ title: "Admin Session Error", description: "Could not verify admin session. Please log in again.", variant: "destructive" });
-      //      return;
-      //  }
-
       startTransition(async () => {
           if (!currentUser) {
               toast({ title: "Permission Denied", description: "You must be logged in to add users.", variant: "destructive"});
               return;
           }
-
           if (currentUser.role === 'Manager' && data.role !== 'Staff') {
             toast({ title: "Permission Denied", description: "Managers can only create Staff users.", variant: "destructive"});
             return;
@@ -191,12 +167,10 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
               toast({ title: "Permission Denied", description: "You cannot create a user with a role higher than or equal to your own.", variant: "destructive"});
               return;
           }
-
            if (!data.companyId) {
                 form.setError("companyId", { type: "manual", message: "Company selection is required." });
                 return;
            }
-
            if (selectedCompanyDetails?.maxUsers !== null &&
                selectedCompanyDetails?.maxUsers !== undefined &&
                currentUserCount >= selectedCompanyDetails.maxUsers) {
@@ -209,31 +183,33 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
                    return;
            }
 
-
         let authUserUid: string | undefined;
+        const tempPassword = generateRandomPassword(); // Generate password
+
         try {
             const userCredential = await createUserWithEmailAndPassword(
             auth,
             data.email,
-            data.password
+            tempPassword // Use generated password
             );
             const authUser = userCredential.user;
             authUserUid = authUser.uid;
 
             const newUser = await addUserToFirestore({
-            name: data.name,
-            email: data.email,
-            role: data.role,
-            companyId: data.companyId,
-            assignedLocationIds: data.assignedLocationIds || [],
+              name: data.name,
+              email: data.email,
+              role: data.role,
+              companyId: data.companyId,
+              assignedLocationIds: data.assignedLocationIds || [],
+              requiresPasswordChange: true, // Mark for password change
             });
 
             if (newUser) {
                 toast({
                     title: 'User Added',
-                    description: `${data.name} has been successfully added. Note: You may need to log back in if your session changed.`,
+                    description: `${data.name} has been successfully added.`,
                 });
-                onUserAdded(newUser);
+                onUserAdded(newUser, tempPassword); // Pass password to callback
                 setIsOpen(false);
             } else {
                  if (authUserUid) {
@@ -245,7 +221,6 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
                  }
                  throw new Error("Failed to add user details to database. Auth user cleanup attempted if possible.");
             }
-
         } catch (error: any) {
             console.error('Error creating user:', error);
             let description = 'There was a problem adding the user.';
@@ -254,15 +229,13 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
             } else if (error.code === 'auth/weak-password') {
                 description = 'The password is too weak.';
             }
-
             toast({
-            title: 'User Creation Error',
-            description: description,
-            variant: 'destructive',
+              title: 'User Creation Error',
+              description: description,
+              variant: 'destructive',
             });
-            // REMOVED: Attempt to sign back in as admin - this part was problematic
         }
-        });
+      });
     };
 
     const assignableRoles = ALL_POSSIBLE_ROLES_TO_ASSIGN.filter(role =>
@@ -278,14 +251,13 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
                             selectedCompanyDetails?.maxUsers !== undefined &&
                             currentUserCount >= selectedCompanyDetails.maxUsers;
 
-
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Add New User</DialogTitle>
           <DialogDescription>
-            Enter the details of the new user. They will be added to the selected brand and locations.
+            Enter the details of the new user. A temporary password will be auto-generated, and the user will be prompted to change it on their first login.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -316,20 +288,7 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="Min. 6 characters" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
+            {/* Password field removed */}
             <FormField
               control={form.control}
               name="companyId"
@@ -372,7 +331,6 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
                 </FormItem>
               )}
             />
-
             <FormField
               control={form.control}
               name="assignedLocationIds"
@@ -425,8 +383,6 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
                 </FormItem>
               )}
             />
-
-
             <FormField
                 control={form.control}
                 name="role"
@@ -460,7 +416,6 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
                   <FormMessage />
                 </FormItem>
               )} />
-
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
@@ -480,6 +435,5 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
     </Dialog>
   );
 }
-
 
     

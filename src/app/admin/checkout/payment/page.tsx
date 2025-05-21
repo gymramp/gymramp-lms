@@ -8,10 +8,7 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, CreditCard, ShieldCheck, AlertCircle, Layers, Info } from 'lucide-react'; // Added Layers, Info
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import { Loader2, CreditCard, ShieldCheck, AlertCircle, Layers, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { processCheckout } from '@/actions/checkout';
 import { createPaymentIntent } from '@/actions/stripe';
@@ -21,10 +18,6 @@ import { getProgramById } from '@/lib/firestore-data';
 import type { Program } from '@/types/course';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
-
-// Zod schema no longer needs adminPassword
-const paymentFormSchema = z.object({}); // Empty schema if no other fields are needed for this step
-type PaymentFormValues = z.infer<typeof paymentFormSchema>;
 
 interface OrderDetails {
   customerName: string;
@@ -44,7 +37,7 @@ interface OrderDetails {
   appliedDiscountAmount: number;
 }
 
-function PaymentFormElements({ orderDetails, programTitle }: { orderDetails: OrderDetails, programTitle?: string }) {
+function PaymentFormElements({ orderDetails, programTitle, onCheckoutComplete }: { orderDetails: OrderDetails, programTitle?: string, onCheckoutComplete: (password: string) => void }) {
   const stripe = useStripe();
   const elements = useElements();
   const { toast } = useToast();
@@ -52,14 +45,7 @@ function PaymentFormElements({ orderDetails, programTitle }: { orderDetails: Ord
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentErrorMessage, setPaymentErrorMessage] = useState<string | null>(null);
 
-  // Form no longer needs password
-  const paymentForm = useForm<PaymentFormValues>({
-    resolver: zodResolver(paymentFormSchema),
-    defaultValues: {},
-  });
-
-  // formData no longer contains adminPassword
-  const handlePaymentSubmit = async (formData: PaymentFormValues) => {
+  const handlePaymentSubmit = async () => {
     setPaymentErrorMessage(null);
     setIsProcessingPayment(true);
 
@@ -121,7 +107,6 @@ function PaymentFormElements({ orderDetails, programTitle }: { orderDetails: Ord
         revenueSharePartners: orderDetails.revenueSharePartners,
         selectedProgramId: orderDetails.selectedProgramId,
         maxUsers: orderDetails.maxUsers,
-        // password field removed from here
         paymentIntentId: paymentIntentId,
         subtotalAmount: orderDetails.subtotalAmount,
         appliedDiscountPercent: orderDetails.appliedDiscountPercent,
@@ -131,8 +116,9 @@ function PaymentFormElements({ orderDetails, programTitle }: { orderDetails: Ord
 
       const result = await processCheckout(checkoutData);
 
-      if (result.success) {
+      if (result.success && result.tempPassword) {
         toast({ title: "Checkout Complete!", description: `Brand "${orderDetails.companyName}" and admin user created.` });
+        onCheckoutComplete(result.tempPassword); // Pass password to parent
         router.push(`/admin/companies/${result.companyId}/edit`);
       } else {
         throw new Error(result.error || "Checkout failed after payment/finalization.");
@@ -146,47 +132,44 @@ function PaymentFormElements({ orderDetails, programTitle }: { orderDetails: Ord
   };
 
   return (
-    <Form {...paymentForm}>
-      <form onSubmit={paymentForm.handleSubmit(handlePaymentSubmit)} className="space-y-6">
-        <Card>
-          <CardHeader><CardTitle>Step 2: Payment & Account Finalization</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <h3 className="font-semibold">Order Summary:</h3>
-              <p className="text-sm">Brand: {orderDetails.companyName}</p>
-              <p className="text-sm">Admin Email: {orderDetails.adminEmail}</p>
-              {programTitle && <p className="text-sm flex items-center gap-1"><Layers className="h-4 w-4 text-muted-foreground" /> Program: {programTitle}</p>}
-              <p className="text-lg font-bold mt-2">Total Due: ${(orderDetails.finalTotalAmountCents / 100).toFixed(2)}</p>
-            </div>
-            <hr/>
-            <Alert variant="default" className="border-blue-300 bg-blue-50 dark:bg-blue-900/30">
-                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <AlertTitle className="text-blue-800 dark:text-blue-300">Admin Password</AlertTitle>
-                <AlertDescription className="text-blue-700 dark:text-blue-400">
-                    A temporary password for the new admin user will be auto-generated.
-                    The user will be prompted to change this password upon their first login.
-                </AlertDescription>
-            </Alert>
-            
-            {/* Removed Admin Password Field */}
+    // No <Form> needed here as we're not using react-hook-form for this simple payment button
+    <form onSubmit={(e) => { e.preventDefault(); handlePaymentSubmit(); }} className="space-y-6">
+      <Card>
+        <CardHeader><CardTitle>Step 2: Payment & Account Finalization</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <h3 className="font-semibold">Order Summary:</h3>
+            <p className="text-sm">Brand: {orderDetails.companyName}</p>
+            <p className="text-sm">Admin Email: {orderDetails.adminEmail}</p>
+            {programTitle && <p className="text-sm flex items-center gap-1"><Layers className="h-4 w-4 text-muted-foreground" /> Program: {programTitle}</p>}
+            <p className="text-lg font-bold mt-2">Total Due: ${(orderDetails.finalTotalAmountCents / 100).toFixed(2)}</p>
+          </div>
+          <hr/>
+          <Alert variant="default" className="border-blue-300 bg-blue-50 dark:bg-blue-900/30">
+              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <AlertTitle className="text-blue-800 dark:text-blue-300">Admin Password</AlertTitle>
+              <AlertDescription className="text-blue-700 dark:text-blue-400">
+                  A temporary password for the new admin user will be auto-generated.
+                  The user will be prompted to change this password upon their first login.
+              </AlertDescription>
+          </Alert>
 
-            {orderDetails.finalTotalAmountCents > 0 && (
-              <>
-                <FormLabel>Payment Details</FormLabel>
-                <PaymentElement id="payment-element" options={{ layout: "tabs" }} />
-              </>
-            )}
-             {paymentErrorMessage && <p className="text-xs text-destructive mt-2 text-center">{paymentErrorMessage}</p>}
-          </CardContent>
-          <CardFooter>
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isProcessingPayment}>
-              {isProcessingPayment ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
-              {isProcessingPayment ? 'Processing...' : `Pay ${(orderDetails.finalTotalAmountCents / 100).toFixed(2)} & Create Account`}
-            </Button>
-          </CardFooter>
-        </Card>
-      </form>
-    </Form>
+          {orderDetails.finalTotalAmountCents > 0 && (
+            <>
+              <Label>Payment Details</Label>
+              <PaymentElement id="payment-element" options={{ layout: "tabs" }} />
+            </>
+          )}
+           {paymentErrorMessage && <p className="text-xs text-destructive mt-2 text-center">{paymentErrorMessage}</p>}
+        </CardContent>
+        <CardFooter>
+          <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isProcessingPayment}>
+            {isProcessingPayment ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
+            {isProcessingPayment ? 'Processing...' : `Pay ${(orderDetails.finalTotalAmountCents / 100).toFixed(2)} & Create Account`}
+          </Button>
+        </CardFooter>
+      </Card>
+    </form>
   );
 }
 
@@ -198,12 +181,14 @@ function PaymentPageContent() {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null); // State for password
   const { toast } = useToast();
 
   useEffect(() => {
     const loadOrderDetails = async () => {
       setIsLoading(true);
       setError(null);
+      setGeneratedPassword(null);
       try {
         const customerName = searchParams.get('customerName');
         const companyName = searchParams.get('companyName');
@@ -215,7 +200,7 @@ function PaymentPageContent() {
         if (!customerName || !companyName || !adminEmail || !selectedProgramId || !finalTotalAmountCentsString) {
           throw new Error("Required checkout information is missing from URL.");
         }
-        
+
         let parsedRevSharePartners: RevenueSharePartner[] | undefined = undefined;
         if (revSharePartnersString) {
             try {
@@ -255,7 +240,7 @@ function PaymentPageContent() {
             throw new Error(paymentIntentResult.error || "Failed to initialize payment.");
           }
         } else {
-          setClientSecret('pi_0_free_checkout');
+          setClientSecret('pi_0_free_checkout'); // Placeholder for $0 amounts
         }
       } catch (e: any) {
         console.error("Error loading payment page:", e);
@@ -267,6 +252,10 @@ function PaymentPageContent() {
     };
     loadOrderDetails();
   }, [searchParams, router, toast]);
+
+  const handleCheckoutCompletion = (password: string) => {
+    setGeneratedPassword(password);
+  };
 
   if (isLoading) {
     return (
@@ -298,24 +287,36 @@ function PaymentPageContent() {
       : undefined;
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20 flex justify-center">
-      {stripeElementsOptions && orderDetails.finalTotalAmountCents > 0 ? (
-        <Elements stripe={stripePromise} options={stripeElementsOptions} key={clientSecret}>
-          <PaymentFormElements orderDetails={orderDetails} programTitle={programTitle} />
-        </Elements>
-      ) : orderDetails.finalTotalAmountCents <= 0 ? (
-        <PaymentFormElements orderDetails={orderDetails} programTitle={programTitle} />
-      ) : ( 
-        <Alert variant="destructive" className="max-w-md mx-auto">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Payment Initialization Error</AlertTitle>
-          <AlertDescription>Could not initialize payment form for a non-zero amount. Please try again or contact support.</AlertDescription>
+    <div className="container mx-auto py-12 md:py-16 lg:py-20 flex flex-col items-center gap-6">
+      {generatedPassword && (
+        <Alert variant="success" className="max-w-md w-full border-green-300 bg-green-50 dark:bg-green-900/30">
+          <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <AlertTitle className="text-green-800 dark:text-green-300">Account Created Successfully!</AlertTitle>
+          <AlertDescription className="text-green-700 dark:text-green-400">
+            The new admin user's temporary password is: <strong className="font-bold">{generatedPassword}</strong><br/>
+            They will be required to change this on their first login.
+          </AlertDescription>
         </Alert>
       )}
+      <div className="w-full max-w-md">
+        {stripeElementsOptions && orderDetails.finalTotalAmountCents > 0 ? (
+          <Elements stripe={stripePromise} options={stripeElementsOptions} key={clientSecret}>
+            <PaymentFormElements orderDetails={orderDetails} programTitle={programTitle} onCheckoutComplete={handleCheckoutCompletion} />
+          </Elements>
+        ) : orderDetails.finalTotalAmountCents <= 0 ? (
+          // Render form for $0 checkout (no Stripe elements needed, but keeps structure)
+          <PaymentFormElements orderDetails={orderDetails} programTitle={programTitle} onCheckoutComplete={handleCheckoutCompletion} />
+        ) : (
+          <Alert variant="destructive" className="max-w-md mx-auto">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Payment Initialization Error</AlertTitle>
+            <AlertDescription>Could not initialize payment form for a non-zero amount. Please try again or contact support.</AlertDescription>
+          </Alert>
+        )}
+      </div>
     </div>
   );
 }
-
 
 export default function AdminCheckoutPaymentPage() {
   return (

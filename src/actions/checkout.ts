@@ -5,15 +5,14 @@ import type { CheckoutFormData } from '@/types/user';
 import { addCompany, updateCompany, createDefaultLocation } from '@/lib/company-data';
 import { addUser } from '@/lib/user-data';
 import { addCustomerPurchaseRecord } from '@/lib/customer-data';
-import { getProgramById, getCourseById } from '@/lib/firestore-data'; 
-import { db } from '@/lib/firebase';
-import { stripe } from '@/lib/stripe'; 
-
-import { initializeApp, deleteApp, getApps, FirebaseApp } from 'firebase/app'; // Import FirebaseApp
-import { getAuth, createUserWithEmailAndPassword, Auth } from 'firebase/auth'; // Import Auth
+import { getProgramById, getCourseById } from '@/lib/firestore-data';
+import { stripe } from '@/lib/stripe';
+import { initializeApp, deleteApp, getApps, FirebaseApp } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword, Auth } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
 import type { CustomerPurchaseRecordFormData } from '@/types/customer';
-import type { Program } from '@/types/course'; // Import Program type
+import type { Program } from '@/types/course';
+import { generateRandomPassword } from '@/lib/utils'; // Import password generator
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -45,10 +44,9 @@ const cleanupFirebaseApp = async (appName: string): Promise<void> => {
     }
 };
 
-
 export async function processCheckout(data: CheckoutFormData): Promise<
-  { success: boolean; companyId?: string; adminUserId?: string; customerPurchaseId?: string; error?: undefined }
-| { success: boolean; error: string }
+  { success: boolean; companyId?: string; adminUserId?: string; customerPurchaseId?: string; tempPassword?: string; error?: undefined }
+| { success: boolean; error: string; tempPassword?: undefined }
 > {
   console.log("[Server Action] Starting processCheckout (Paid) for brand:", data.companyName);
   if (data.paymentIntentId) {
@@ -59,8 +57,9 @@ export async function processCheckout(data: CheckoutFormData): Promise<
 
   const localAuthAppName = `checkoutAuthApp-${Date.now()}`;
   let localAuthInstance: Auth | undefined;
-  let newCompanyId: string | undefined; 
+  let newCompanyId: string | undefined;
   let newAdminUserId: string | undefined;
+  const tempPassword = generateRandomPassword(); // Generate password
 
   try {
     const selectedProgram: Program | null = await getProgramById(data.selectedProgramId);
@@ -75,28 +74,28 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         maxUsers: data.maxUsers ?? null,
         isTrial: false,
         trialEndsAt: null,
-        saleAmount: data.finalTotalAmount ?? 0, 
+        saleAmount: data.finalTotalAmount ?? 0,
         revenueSharePartners: data.revenueSharePartners || null,
         whiteLabelEnabled: false,
         primaryColor: null,
         secondaryColor: null,
+        accentColor: null,
         logoUrl: null,
         shortDescription: null,
         createdAt: Timestamp.now(),
-        stripeCustomerId: null, 
-        stripeSubscriptionId: null, // Initialize stripeSubscriptionId
+        stripeCustomerId: null,
+        stripeSubscriptionId: null,
     };
     const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
       throw new Error("Failed to create the brand in the database.");
     }
-    newCompanyId = newCompany.id; 
+    newCompanyId = newCompany.id;
     console.log(`[Server Action] Brand "${newCompany.name}" (Paid Program) created with ID: ${newCompany.id}`);
 
     const defaultLocation = await createDefaultLocation(newCompany.id);
     const defaultLocationId = defaultLocation ? [defaultLocation.id] : [];
 
-    const tempPassword = data.password || "password"; 
     let authUserUid: string;
     try {
         localAuthInstance = getFirebaseAuthInstance(localAuthAppName);
@@ -114,6 +113,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         role: 'Admin' as const,
         companyId: newCompany.id,
         assignedLocationIds: defaultLocationId,
+        requiresPasswordChange: true, // Mark for password change
     };
     const newAdminUser = await addUser(newAdminUserData);
     if (!newAdminUser) {
@@ -122,7 +122,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
     }
     newAdminUserId = newAdminUser.id;
     console.log(`[Server Action] Admin user "${newAdminUser.name}" (Paid Program) created in Firestore with ID: ${newAdminUser.id}`);
-    
+
     let stripeCustomerId: string | null = null;
     let stripeSubscriptionId: string | null = null;
 
@@ -131,7 +131,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
             console.log(`[Server Action] Creating Stripe Customer for ${data.adminEmail}, Brand: ${newCompany.name}`);
             const customer = await stripe.customers.create({
                 email: data.adminEmail,
-                name: newCompany.name, 
+                name: newCompany.name,
                 metadata: {
                     brandId: newCompany.id,
                     adminUserId: newAdminUser.id,
@@ -139,17 +139,13 @@ export async function processCheckout(data: CheckoutFormData): Promise<
             });
             stripeCustomerId = customer.id;
             console.log(`[Server Action] Stripe Customer created with ID: ${stripeCustomerId}`);
-            
-            // Create Stripe Subscription if a Stripe Price ID for the first tier is available on the Program
+
             if (selectedProgram.stripeFirstPriceId && stripeCustomerId) {
                 console.log(`[Server Action] Creating Stripe Subscription for Program "${selectedProgram.title}" (Price ID: ${selectedProgram.stripeFirstPriceId}) for Customer ${stripeCustomerId}`);
                 const subscription = await stripe.subscriptions.create({
                     customer: stripeCustomerId,
                     items: [{ price: selectedProgram.stripeFirstPriceId }],
-                    trial_period_days: 30, // Placeholder: 30-day trial. Adjust as needed.
-                    // Consider payment_behavior: 'default_incomplete' if payment isn't captured immediately
-                    // or if you want to manage payment collection for the subscription separately.
-                    // For now, let's assume the subscription starts after the trial.
+                    trial_period_days: 30,
                 });
                 stripeSubscriptionId = subscription.id;
                 console.log(`[Server Action] Stripe Subscription created with ID: ${stripeSubscriptionId}`);
@@ -162,10 +158,8 @@ export async function processCheckout(data: CheckoutFormData): Promise<
 
         } catch (stripeError: any) {
             console.error("[Server Action] Error creating Stripe Customer/Subscription or updating Brand:", stripeError);
-            // Decide if this is a critical failure. For now, log and continue.
         }
     }
-
 
     const programCourseTitles = [];
     if (coursesToAssignToBrand.length > 0) {
@@ -184,11 +178,11 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         brandName: newCompany.name,
         adminUserId: newAdminUser.id,
         adminUserEmail: newAdminUser.email,
-        totalAmountPaid: data.finalTotalAmount ?? 0, 
+        totalAmountPaid: data.finalTotalAmount ?? 0,
         paymentIntentId: data.paymentIntentId || null,
         selectedProgramId: data.selectedProgramId,
         selectedProgramTitle: selectedProgram.title,
-        selectedCourseIds: coursesToAssignToBrand, 
+        selectedCourseIds: coursesToAssignToBrand,
         selectedCourseTitles: programCourseTitles,
         revenueSharePartners: data.revenueSharePartners || null,
         maxUsersConfigured: data.maxUsers ?? null,
@@ -201,7 +195,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
     }
 
     await cleanupFirebaseApp(localAuthAppName);
-    return { success: true, companyId: newCompany.id, adminUserId: newAdminUser.id, customerPurchaseId: customerPurchaseRecord?.id };
+    return { success: true, companyId: newCompany.id, adminUserId: newAdminUser.id, customerPurchaseId: customerPurchaseRecord?.id, tempPassword };
 
   } catch (error: any) {
     console.error("[Server Action] Error during paid checkout processing (Program):", error);
@@ -210,15 +204,15 @@ export async function processCheckout(data: CheckoutFormData): Promise<
   }
 }
 
-
 export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
-  { success: boolean; companyId?: string; adminUserId?: string; error?: undefined }
-| { success: boolean; error: string }
+  { success: boolean; companyId?: string; adminUserId?: string; tempPassword?: string; error?: undefined }
+| { success: boolean; error: string; tempPassword?: undefined }
 > {
   console.log("[Server Action] Starting processFreeTrialCheckout for brand:", data.companyName);
 
   const localAuthAppName = `freeTrialAuthApp-${Date.now()}`;
   let localAuthInstance: Auth | undefined;
+  const tempPassword = generateRandomPassword(); // Generate password
 
   try {
     const selectedProgram: Program | null = await getProgramById(data.selectedProgramId);
@@ -227,7 +221,6 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
     }
     const coursesToAssignToBrand = selectedProgram.courseIds || [];
 
-
     const trialDurationDays = data.trialDurationDays || 7;
     const trialEndsDate = new Date();
     trialEndsDate.setDate(trialEndsDate.getDate() + trialDurationDays);
@@ -235,20 +228,21 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
 
     const newCompanyData = {
         name: data.companyName,
-        assignedCourseIds: coursesToAssignToBrand, 
+        assignedCourseIds: coursesToAssignToBrand,
         maxUsers: data.maxUsers ?? null,
         isTrial: true,
         trialEndsAt: trialEndsAtTimestamp,
         saleAmount: 0,
-        revenueSharePartners: null, 
+        revenueSharePartners: null,
         whiteLabelEnabled: false,
         primaryColor: null,
         secondaryColor: null,
+        accentColor: null,
         logoUrl: null,
         shortDescription: null,
         createdAt: Timestamp.now(),
-        stripeCustomerId: null, // Trials don't need a Stripe Customer ID initially
-        stripeSubscriptionId: null, // No subscription for trials
+        stripeCustomerId: null,
+        stripeSubscriptionId: null,
     };
     const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
@@ -259,7 +253,6 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
     const defaultLocation = await createDefaultLocation(newCompany.id);
     const defaultLocationId = defaultLocation ? [defaultLocation.id] : [];
 
-    const tempPassword = data.password || "password"; 
     let authUserUid: string;
     try {
         localAuthInstance = getFirebaseAuthInstance(localAuthAppName);
@@ -277,6 +270,7 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
         role: 'Admin' as const,
         companyId: newCompany.id,
         assignedLocationIds: defaultLocationId,
+        requiresPasswordChange: true, // Mark for password change
     };
     const newAdminUser = await addUser(newAdminUserData);
     if (!newAdminUser) {
@@ -285,14 +279,14 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
     }
     console.log(`[Server Action] Trial Admin user "${newAdminUser.name}" created in Firestore`);
 
-
     await cleanupFirebaseApp(localAuthAppName);
-    return { success: true, companyId: newCompany.id, adminUserId: newAdminUser.id };
+    return { success: true, companyId: newCompany.id, adminUserId: newAdminUser.id, tempPassword };
 
-  } catch (error: any)
-{
+  } catch (error: any) {
     console.error("[Server Action] Error during free trial checkout processing:", error);
     await cleanupFirebaseApp(localAuthAppName);
     return { success: false, error: error.message || "An unexpected error occurred during free trial checkout." };
   }
 }
+
+    
