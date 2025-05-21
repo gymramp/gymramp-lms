@@ -17,53 +17,38 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export function Sidebar() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [navItems, setNavItems] = useState<NavItemType[]>([]); // State for nav items
   const [isLoading, setIsLoading] = useState(true);
   const pathname = usePathname();
 
   useEffect(() => {
     setIsLoading(true);
+    setNavItems([]); // Reset nav items on each auth state change or initial load
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
         try {
           const userDetails = await getUserByEmail(firebaseUser.email);
           setCurrentUser(userDetails);
+          if (userDetails) {
+            const fetchedNavItems = await getNavigationStructure(userDetails);
+            setNavItems(fetchedNavItems);
+          } else {
+            // No userDetails, so no specific nav items
+            setNavItems([]);
+          }
         } catch (error) {
-          console.error("Error fetching user data for sidebar:", error);
+          console.error("Error fetching user data or nav items for sidebar:", error);
           setCurrentUser(null);
+          setNavItems([]);
         }
       } else {
         setCurrentUser(null);
+        setNavItems([]);
       }
       setIsLoading(false);
     });
     return () => unsubscribe();
   }, []);
-
-  if (isLoading) {
-    return (
-      <aside className="hidden md:flex flex-col w-64 border-r bg-background p-4 h-full">
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="space-y-2">
-              <Skeleton className="h-8 w-full" />
-              {i % 2 === 0 && (
-                <div className="pl-4 space-y-1">
-                  <Skeleton className="h-6 w-5/6" />
-                  <Skeleton className="h-6 w-4/6" />
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </aside>
-    );
-  }
-
-  if (!currentUser) {
-    return null;
-  }
-
-  const navItems = getNavigationStructure(currentUser);
 
   const renderNavItem = (item: NavItemType, isSubItem = false) => {
     const isActive = item.href && pathname === item.href;
@@ -88,9 +73,33 @@ export function Sidebar() {
     );
   };
 
+  if (isLoading) {
+    return (
+      <aside className="hidden md:flex flex-col w-64 border-r bg-background p-4 h-full">
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="space-y-2">
+              <Skeleton className="h-8 w-full" />
+              {i % 2 === 0 && (
+                <div className="pl-4 space-y-1">
+                  <Skeleton className="h-6 w-5/6" />
+                  <Skeleton className="h-6 w-4/6" />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </aside>
+    );
+  }
+
+  if (!currentUser) {
+    return null; // Don't render sidebar if no user is logged in
+  }
+
   return (
-    <aside className="hidden md:flex flex-col w-64 border-r bg-background h-full"> {/* Removed fixed, top, z-index; set h-full */}
-      <ScrollArea className="flex-1 p-4"> {/* flex-1 helps ScrollArea fill the parent height */}
+    <aside className="hidden md:flex flex-col w-64 border-r bg-background h-full">
+      <ScrollArea className="flex-1 p-4">
         <nav className="flex flex-col gap-1">
           {navItems.map((item) =>
             item.isDropdown && item.subItems ? (
