@@ -14,6 +14,7 @@ import { processCheckout } from '@/actions/checkout';
 import { createPaymentIntent } from '@/actions/stripe';
 import type { CheckoutFormData, RevenueSharePartner } from '@/types/user';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Label } from "@/components/ui/label"; // Added Label import
 import { getProgramById } from '@/lib/firestore-data';
 import type { Program } from '@/types/course';
 
@@ -151,6 +152,7 @@ function PaymentFormElements({ orderDetails, programTitle, onCheckoutComplete }:
               <AlertDescription className="text-blue-700 dark:text-blue-400">
                   A temporary password for the new admin user will be auto-generated.
                   The user will be prompted to change this password upon their first login.
+                  You will see the temporary password on this page after successful checkout.
               </AlertDescription>
           </Alert>
 
@@ -325,5 +327,3 @@ export default function AdminCheckoutPaymentPage() {
     </Suspense>
   );
 }
-
-    
