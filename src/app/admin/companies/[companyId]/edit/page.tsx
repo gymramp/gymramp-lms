@@ -33,7 +33,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
 import { Timestamp } from 'firebase/firestore';
 
-// Simplified Zod schema for core and trial information only
+// Simplified Zod schema focusing on core fields and trial info
 const companyFormSchema = z.object({
   name: z.string().min(2, { message: 'Brand name must be at least 2 characters.' }),
   subdomainSlug: z.string()
@@ -55,7 +55,6 @@ const companyFormSchema = z.object({
     .nullable(),
   isTrial: z.boolean().optional().default(false),
   trialEndsAt: z.date().nullable().optional(),
-  // White-label and program fields are removed from the schema for now
 });
 
 type CompanyFormValues = z.infer<typeof companyFormSchema>;
@@ -181,7 +180,7 @@ export default function EditCompanyPage() {
   };
 
   const onSubmit = async (data: CompanyFormValues) => {
-    if (!companyId) return;
+    if (!companyId || !company) return; // Ensure company is loaded
     if (isUploadingLogo) {
       toast({ title: "Upload in Progress", description: "Please wait for the logo upload to complete.", variant: "destructive" });
       return;
@@ -197,14 +196,19 @@ export default function EditCompanyPage() {
         maxUsers: data.maxUsers ?? null,
         isTrial: data.isTrial,
         trialEndsAt: data.trialEndsAt ? Timestamp.fromDate(data.trialEndsAt) : null,
-        // whiteLabelEnabled and color fields are not part of this simplified form's data
+        // Keep existing values for fields not in this simplified form
+        whiteLabelEnabled: company.whiteLabelEnabled || false,
+        primaryColor: company.primaryColor || null,
+        secondaryColor: company.secondaryColor || null,
+        accentColor: company.accentColor || null,
+        assignedCourseIds: company.assignedCourseIds || [],
       };
 
       const updatedCompanyResult = await updateCompany(companyId, metadataToUpdate);
       if (!updatedCompanyResult) {
         throw new Error("Failed to update brand metadata.");
       }
-      setCompany(updatedCompanyResult); // Update local state with potentially stripped data
+      setCompany(updatedCompanyResult);
       toast({ title: "Brand Updated", description: `"${data.name}" updated successfully.` });
     } catch (error: any) {
       console.error("Failed to update brand:", error);
@@ -247,17 +251,18 @@ export default function EditCompanyPage() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="md:col-span-2 space-y-6">
+            {/* Brand Information Card */}
             <Card>
               <CardHeader>
                 <CardTitle>Brand Information</CardTitle>
-                <CardDescription>Update the name, description, logo, domain, and user limit for {company.name}.</CardDescription>
+                <CardDescription>Update the core details for {company.name}.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <FormField control={form.control} name="name" render={({ field }) => (<FormItem> <FormLabel>Brand Name</FormLabel> <FormControl> <Input placeholder="e.g., Global Fitness Inc." {...field} value={field.value ?? ''} /> </FormControl> <FormMessage /> </FormItem>)} />
-                <FormField control={form.control} name="subdomainSlug" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Subdomain Slug (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., global-fitness" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <FormDescription> Used for branded login URL (e.g., global-fitness.yourdomain.com). Only lowercase letters, numbers, and hyphens. </FormDescription> <FormMessage /> </FormItem>)} />
-                <FormField control={form.control} name="customDomain" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Custom Domain (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., learn.theirgym.com" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <FormDescription> Requires DNS CNAME setup by the brand to point to your app. </FormDescription> <FormMessage /> </FormItem>)} />
+                <FormField control={form.control} name="subdomainSlug" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Subdomain Slug (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., global-fitness" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <FormMessage /> </FormItem>)} />
+                <FormField control={form.control} name="customDomain" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Custom Domain (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., learn.theirgym.com" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <FormMessage /> </FormItem>)} />
                 <FormField control={form.control} name="shortDescription" render={({ field }) => (<FormItem> <FormLabel>Short Description (Optional)</FormLabel> <FormControl> <Textarea rows={3} placeholder="A brief description of the brand (max 150 characters)" {...field} value={field.value ?? ''} /> </FormControl> <FormMessage /> </FormItem>)} />
-                <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Users className="h-4 w-4" /> Maximum Users Allowed </FormLabel> <FormControl> <Input type="number" min="1" placeholder="Leave blank for unlimited" value={field.value === null || field.value === undefined ? '' : String(field.value)} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /> </FormControl> <FormDescription> Set the maximum number of user accounts for this brand. Leave blank for no limit. </FormDescription> <FormMessage /> </FormItem>)} />
+                <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem> <FormLabel className="flex items-center gap-1"> <Users className="h-4 w-4" /> Maximum Users Allowed </FormLabel> <FormControl> <Input type="number" min="1" placeholder="Leave blank for unlimited" value={field.value === null || field.value === undefined ? '' : String(field.value)} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /> </FormControl> <FormMessage /> </FormItem>)} />
                 <FormField control={form.control} name="logoUrl" render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-base font-semibold">Brand Logo (Optional)</FormLabel>
@@ -288,9 +293,7 @@ export default function EditCompanyPage() {
                 <CardDescription>Customize the appearance of the platform for this brand.</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground italic">White-label settings (colors, etc.) will be managed here in a future update.</p>
-                {/* Placeholder for FormField for whiteLabelEnabled if needed for future logic */}
-                {/* <FormField control={form.control} name="whiteLabelEnabled" render={({ field }) => (...)} /> */}
+                <p className="text-sm text-muted-foreground italic">White-label settings (colors, etc.) will be implemented here in a future update.</p>
               </CardContent>
             </Card>
           </div>
@@ -314,14 +317,13 @@ export default function EditCompanyPage() {
                     <FormItem className="flex flex-col">
                       <FormLabel className="flex items-center gap-1 text-sm"> <CalendarDays className="h-4 w-4" /> Trial End Date </FormLabel>
                         <FormControl>
-                            <div> {/* Added div wrapper */}
-                                <DatePickerWithPresets
-                                    date={field.value}
-                                    setDate={(date) => field.onChange(date || null)}
-                                />
-                            </div>
+                           <div> {/* Wrapper for DatePicker */}
+                            <DatePickerWithPresets
+                              date={field.value}
+                              setDate={(date) => field.onChange(date || null)}
+                            />
+                           </div>
                         </FormControl>
-                      <FormDescription> Adjust to extend or shorten the trial. Clear to remove end date. </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -337,7 +339,7 @@ export default function EditCompanyPage() {
                 <CardDescription>Details of the program assigned to this brand.</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground italic">Assigned program information will be displayed here once data fetching logic is restored.</p>
+                <p className="text-sm text-muted-foreground italic">Program information and included courses will be displayed here once implemented.</p>
               </CardContent>
             </Card>
 
@@ -351,4 +353,5 @@ export default function EditCompanyPage() {
     </div>
   );
 }
+
     
