@@ -10,7 +10,8 @@ import {
     query,
     orderBy,
     where, // Added where for querying by brandId
-    limit // Added limit for querying by brandId
+    limit, // Added limit for querying by brandId
+    deleteDoc // Import deleteDoc
 } from 'firebase/firestore';
 import type { CustomerPurchaseRecord, CustomerPurchaseRecordFormData } from '@/types/customer';
 
@@ -91,4 +92,17 @@ export async function getCustomerPurchaseRecordByBrandId(brandId: string): Promi
         console.log(`No customer purchase record found for brand ID: ${brandId}`);
         return null;
     });
+}
+
+export async function deleteCustomerPurchaseRecord(recordId: string): Promise<boolean> {
+    if (!recordId) {
+        console.warn("deleteCustomerPurchaseRecord called with empty recordId.");
+        return false;
+    }
+    return retryOperation(async () => {
+        const recordRef = doc(db, CUSTOMER_PURCHASES_COLLECTION, recordId);
+        await deleteDoc(recordRef);
+        console.log(`Customer purchase record with ID: ${recordId} deleted successfully.`);
+        return true;
+    }, 3);
 }

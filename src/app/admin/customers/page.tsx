@@ -18,13 +18,24 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
+  DropdownMenuSeparator, // Added Separator
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from '@/components/ui/button';
-import { Loader2, Users, ShoppingBag, CreditCard, MoreHorizontal, Search, ExternalLink } from 'lucide-react';
+import { Loader2, Users, ShoppingBag, CreditCard, MoreHorizontal, Search, ExternalLink, Trash2 } from 'lucide-react'; // Added Trash2
 import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/types/user';
 import type { CustomerPurchaseRecord } from '@/types/customer';
-import { getAllCustomerPurchaseRecords } from '@/lib/customer-data';
+import { getAllCustomerPurchaseRecords, deleteCustomerPurchaseRecord } from '@/lib/customer-data'; // Added deleteCustomerPurchaseRecord
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -40,6 +51,9 @@ export default function AdminCustomersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false); // For delete operation loading state
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [recordToDelete, setRecordToDelete] = useState<CustomerPurchaseRecord | null>(null);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -50,7 +64,7 @@ export default function AdminCustomersPage() {
         setCurrentUser(userDetails);
         if (userDetails?.role !== 'Super Admin') {
           toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
-          router.push('/admin/dashboard'); // Or appropriate dashboard
+          router.push('/'); // Or appropriate dashboard
         }
       } else {
         setCurrentUser(null);
@@ -85,6 +99,7 @@ export default function AdminCustomersPage() {
     const filtered = purchaseRecords.filter(record =>
       record.brandName.toLowerCase().includes(lowercasedFilter) ||
       record.adminUserEmail.toLowerCase().includes(lowercasedFilter) ||
+      (record.selectedProgramTitle && record.selectedProgramTitle.toLowerCase().includes(lowercasedFilter)) ||
       (record.paymentIntentId && record.paymentIntentId.toLowerCase().includes(lowercasedFilter))
     );
     setFilteredRecords(filtered);
@@ -93,6 +108,31 @@ export default function AdminCustomersPage() {
   const formatDate = (timestamp: Timestamp | undefined): string => {
     if (!timestamp) return 'N/A';
     return timestamp.toDate().toLocaleDateString();
+  };
+
+  const openDeleteConfirmation = (record: CustomerPurchaseRecord) => {
+    setRecordToDelete(record);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!recordToDelete) return;
+    setIsDeleting(true);
+    try {
+      const success = await deleteCustomerPurchaseRecord(recordToDelete.id);
+      if (success) {
+        toast({ title: "Record Deleted", description: `Purchase record for ${recordToDelete.brandName} deleted.` });
+        fetchPurchaseRecords(); // Refresh the list
+      } else {
+        throw new Error("Failed to delete record from server.");
+      }
+    } catch (error: any) {
+      toast({ title: "Error Deleting Record", description: error.message || "Could not delete the purchase record.", variant: "destructive" });
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+      setRecordToDelete(null);
+    }
   };
 
   if (!currentUser || currentUser.role !== 'Super Admin') {
@@ -105,13 +145,12 @@ export default function AdminCustomersPage() {
         <h1 className="text-3xl font-bold tracking-tight text-primary flex items-center gap-2">
           <ShoppingBag className="h-7 w-7" /> Customer Purchases
         </h1>
-        {/* Future: Add button for "New Manual Sale" or similar if needed */}
       </div>
       <div className="mb-6 flex items-center gap-2">
         <Search className="h-5 w-5 text-muted-foreground" />
         <Input
           type="text"
-          placeholder="Search by Brand, Email, or Payment ID..."
+          placeholder="Search by Brand, Email, Program, or Payment ID..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="max-w-md"
@@ -136,10 +175,10 @@ export default function AdminCustomersPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Brand Name</TableHead>
+                  <TableHead>Program Sold</TableHead>
                   <TableHead>Admin Email</TableHead>
                   <TableHead>Purchase Date</TableHead>
                   <TableHead className="text-right">Amount Paid</TableHead>
-                  <TableHead>Courses</TableHead>
                   <TableHead>Rev Share</TableHead>
                   <TableHead>Payment ID</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -153,18 +192,10 @@ export default function AdminCustomersPage() {
                         {record.brandName}
                       </Link>
                     </TableCell>
+                    <TableCell>{record.selectedProgramTitle || 'N/A'}</TableCell>
                     <TableCell>{record.adminUserEmail}</TableCell>
                     <TableCell>{formatDate(record.purchaseDate)}</TableCell>
                     <TableCell className="text-right">${record.totalAmountPaid.toFixed(2)}</TableCell>
-                    <TableCell>
-                      {record.selectedCourseTitles && record.selectedCourseTitles.length > 0 ? (
-                        <Badge variant="secondary" className="whitespace-nowrap">
-                          {record.selectedCourseTitles.length} Course{record.selectedCourseTitles.length > 1 ? 's' : ''}
-                        </Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">N/A</span>
-                      )}
-                    </TableCell>
                     <TableCell>
                       {record.revenueSharePartners && record.revenueSharePartners.length > 0 ? (
                         <Badge variant="outline">Yes ({record.revenueSharePartners.length})</Badge>
@@ -185,7 +216,7 @@ export default function AdminCustomersPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Manage</DropdownMenuLabel>
-                           {record.paymentIntentId && (
+                           {record.paymentIntentId && record.paymentIntentId !== 'pi_0_free_checkout' && (
                             <DropdownMenuItem asChild>
                                 <a
                                     href={`https://dashboard.stripe.com/payments/${record.paymentIntentId}`}
@@ -198,12 +229,18 @@ export default function AdminCustomersPage() {
                                 </a>
                             </DropdownMenuItem>
                            )}
-                          {/* Add more actions later, e.g., view details, manage subscription (if applicable) */}
                           <DropdownMenuItem onClick={() => router.push(`/admin/companies/${record.brandId}/edit`)}>
                               View Brand Details
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => router.push(`/admin/users?companyId=${record.brandId}`)}>
                               View Brand Users
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                            onClick={() => openDeleteConfirmation(record)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete Record
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -215,6 +252,25 @@ export default function AdminCustomersPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the purchase record for brand "{recordToDelete?.brandName}" (Program: {recordToDelete?.selectedProgramTitle || 'N/A'}).
+              This does NOT delete the brand, users, or affect any Stripe transactions.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setRecordToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isDeleting}>
+              {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Yes, delete purchase record
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
