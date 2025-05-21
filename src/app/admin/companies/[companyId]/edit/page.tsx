@@ -7,14 +7,12 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import Image from 'next/image';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Form,
   FormControl,
@@ -47,10 +45,11 @@ const companyFormSchema = z.object({
   subdomainSlug: z.string()
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$|^$/, { message: 'Slug can only contain lowercase letters, numbers, and hyphens. Leave blank if none.' })
     .max(63, { message: 'Subdomain slug cannot exceed 63 characters.' })
-    .optional(), // Optional at schema level, form handles empty string
-  customDomain: z.string().regex(/^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}$|^$/, { message: 'Invalid custom domain format (e.g., learn.yourgym.com). Leave blank if none.'}).optional(),
-  shortDescription: z.string().max(150, { message: 'Description must be 150 characters or less.' }).optional(),
-  logoUrl: z.string().url({ message: 'Invalid URL format.' }).optional().or(z.literal('')),
+    .optional()
+    .nullable(),
+  customDomain: z.string().regex(/^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}$|^$/, { message: 'Invalid custom domain format (e.g., learn.yourgym.com). Leave blank if none.' }).optional().nullable(),
+  shortDescription: z.string().max(150, { message: 'Description must be 150 characters or less.' }).optional().nullable(),
+  logoUrl: z.string().url({ message: 'Invalid URL format.' }).optional().nullable(),
   maxUsers: z.coerce
     .number({ invalid_type_error: "Must be a number" })
     .int({ message: "Must be a whole number" })
@@ -61,9 +60,9 @@ const companyFormSchema = z.object({
   isTrial: z.boolean().optional().default(false),
   trialEndsAt: z.date().nullable().optional(),
   whiteLabelEnabled: z.boolean().optional().default(false),
-  primaryColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$|^$/, { message: 'Invalid hex color. Leave blank if none.' }).optional(),
-  secondaryColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$|^$/, { message: 'Invalid hex color. Leave blank if none.' }).optional(),
-  accentColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$|^$/, { message: 'Invalid hex color. Leave blank if none.' }).optional(),
+  primaryColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$|^$/, { message: 'Invalid hex color. Leave blank if none.' }).optional().nullable(),
+  secondaryColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$|^$/, { message: 'Invalid hex color. Leave blank if none.' }).optional().nullable(),
+  accentColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$|^$/, { message: 'Invalid hex color. Leave blank if none.' }).optional().nullable(),
 });
 
 type CompanyFormValues = z.infer<typeof companyFormSchema>;
@@ -76,8 +75,9 @@ export default function EditCompanyPage() {
   const [company, setCompany] = useState<Company | null>(null);
   const [assignedProgram, setAssignedProgram] = useState<Program | null>(null);
   const [coursesInProgram, setCoursesInProgram] = useState<Course[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -113,15 +113,15 @@ export default function EditCompanyPage() {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
         try {
-            const userDetails = await getUserByEmail(firebaseUser.email);
-            setCurrentUser(userDetails);
-            if (userDetails?.role !== 'Super Admin') {
-              toast({ title: "Access Denied", description: "You do not have permission to edit brands.", variant: "destructive" });
-              router.push('/admin/companies');
-            }
+          const userDetails = await getUserByEmail(firebaseUser.email);
+          setCurrentUser(userDetails);
+          if (userDetails?.role !== 'Super Admin') {
+            toast({ title: "Access Denied", description: "You do not have permission to edit brands.", variant: "destructive" });
+            router.push('/admin/companies');
+          }
         } catch (error) {
-            toast({ title: "Authentication Error", description: "Failed to verify user.", variant: "destructive" });
-            router.push('/login');
+          toast({ title: "Authentication Error", description: "Failed to verify user.", variant: "destructive" });
+          router.push('/login');
         }
       } else {
         setCurrentUser(null);
@@ -136,10 +136,10 @@ export default function EditCompanyPage() {
 
   const fetchCompanyAndRelatedData = useCallback(async () => {
     if (!companyId || !currentUser || currentUser.role !== 'Super Admin') {
-      setIsLoading(false);
+      setIsLoadingData(false);
       return;
     }
-    setIsLoading(true);
+    setIsLoadingData(true);
     setAssignedProgram(null);
     setCoursesInProgram([]);
     try {
@@ -186,20 +186,20 @@ export default function EditCompanyPage() {
       console.error("Failed to fetch brand/related data:", error);
       toast({ title: "Error", description: "Could not load brand or related program data.", variant: "destructive" });
     } finally {
-      setIsLoading(false);
+      setIsLoadingData(false);
     }
   }, [companyId, router, toast, form, currentUser]);
 
   useEffect(() => {
-    if (currentUser?.role === 'Super Admin' && companyId) {
+    if (currentUser?.role === 'Super Admin' && companyId && isMounted) {
       fetchCompanyAndRelatedData();
     }
-  }, [fetchCompanyAndRelatedData, currentUser, companyId]);
+  }, [fetchCompanyAndRelatedData, currentUser, companyId, isMounted]);
 
   const handleLogoFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !companyId) return;
-    setIsUploading(true);
+    setIsUploadingLogo(true);
     setUploadProgress(0);
     setUploadError(null);
     try {
@@ -212,17 +212,17 @@ export default function EditCompanyPage() {
       setUploadError(error.message || "Failed to upload logo.");
       toast({ title: "Upload Failed", description: error.message || "Could not upload the brand logo.", variant: "destructive" });
     } finally {
-      setIsUploading(false);
+      setIsUploadingLogo(false);
     }
   };
 
   const onSubmit = async (data: CompanyFormValues) => {
     if (!companyId) return;
-    if (isUploading) {
+    if (isUploadingLogo) {
       toast({ title: "Upload in Progress", description: "Please wait for the logo upload to complete.", variant: "destructive" });
       return;
     }
-    setIsLoading(true);
+    setIsSubmitting(true);
     try {
       const metadataToUpdate: Partial<CompanyFormData> = {
         name: data.name,
@@ -249,11 +249,12 @@ export default function EditCompanyPage() {
       console.error("Failed to update brand:", error);
       toast({ title: "Error", description: error.message || "Could not update brand.", variant: "destructive" });
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  if (!isMounted || isLoading || !currentUser || currentUser.role !== 'Super Admin') {
+
+  if (!isMounted || isLoadingData || !currentUser || currentUser.role !== 'Super Admin') {
     return (
       <div className="container mx-auto py-12 md:py-16 lg:py-20">
         <Skeleton className="h-8 w-1/4 mb-6" />
@@ -303,18 +304,18 @@ export default function EditCompanyPage() {
                   <FormItem>
                     <FormLabel className="text-base font-semibold">Brand Logo (Optional)</FormLabel>
                     <FormControl>
-                        <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
-                        {logoUrlValue && !isUploading ? (
-                            <div className="relative w-32 h-32 mx-auto mb-2">
-                            <Image src={logoUrlValue} alt="Brand logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" data-ai-hint="logo business" onError={() => form.setValue('logoUrl', '')} />
+                      <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
+                        {(field.value && !isUploadingLogo) ? (
+                          <div className="relative w-32 h-32 mx-auto mb-2">
+                            <Image src={field.value} alt="Brand logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" data-ai-hint="logo business" onError={() => form.setValue('logoUrl', '', { shouldDirty: true })} />
                             <Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6 opacity-80 hover:opacity-100 z-10" onClick={() => form.setValue('logoUrl', '', {shouldDirty: true})} aria-label="Remove Logo"> <Trash2 className="h-4 w-4" /> </Button>
-                            </div>
-                        ) : isUploading ? (
-                            <div className="flex flex-col items-center justify-center h-full py-8"> <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" /> <p className="text-sm text-muted-foreground mb-1">Uploading...</p> <Progress value={uploadProgress} className="w-full max-w-xs h-2" /> {uploadError && <p className="text-xs text-destructive mt-2">{uploadError}</p>} </div>
+                          </div>
+                        ) : isUploadingLogo ? (
+                          <div className="flex flex-col items-center justify-center h-full py-8"> <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" /> <p className="text-sm text-muted-foreground mb-1">Uploading...</p> <Progress value={uploadProgress} className="w-full max-w-xs h-2" /> {uploadError && <p className="text-xs text-destructive mt-2">{uploadError}</p>} </div>
                         ) : (
-                            <Label htmlFor="logo-upload-edit-page" className="cursor-pointer block"> <ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /> <p className="text-sm text-muted-foreground">Click to upload logo</p> <Input id="logo-upload-edit-page" type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleLogoFileChange} disabled={isUploading} /> </Label>
+                          <Label htmlFor="logo-upload-edit-page" className="cursor-pointer block"> <ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /> <p className="text-sm text-muted-foreground">Click to upload logo</p> <Input id="logo-upload-edit-page" type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleLogoFileChange} disabled={isUploadingLogo} /> </Label>
                         )}
-                        </div>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -357,19 +358,18 @@ export default function EditCompanyPage() {
                   <FormField control={form.control} name="trialEndsAt" render={({ field }) => (
                     <FormItem className="flex flex-col">
                       <FormLabel className="flex items-center gap-1 text-sm"> <CalendarDays className="h-4 w-4" /> Trial End Date </FormLabel>
-                        <FormControl>
-                            <div> {/* Wrapper div for DatePicker */}
-                                <DatePickerWithPresets
-                                date={field.value} 
-                                setDate={(date) => field.onChange(date || null)}
-                                />
-                            </div>
-                        </FormControl>
+                      <FormControl>
+                        <div> {/* Wrapper div for DatePicker */}
+                          <DatePickerWithPresets
+                            date={field.value} 
+                            setDate={(date) => field.onChange(date || null)}
+                          />
+                        </div>
+                      </FormControl>
                       <FormMessage />
                       <ShadFormDescription> Adjust to extend or shorten the trial. Clear to remove end date. </ShadFormDescription>
                     </FormItem>
-                  )}
-                  />
+                  )} />
                 )}
                 {isMounted && !isTrialValue && ( <p className="text-sm text-muted-foreground italic">This brand is not currently on a trial.</p> )}
               </CardContent>
@@ -381,7 +381,7 @@ export default function EditCompanyPage() {
                 <CardDescription>Details of the program assigned to this brand during checkout.</CardDescription>
               </CardHeader>
               <CardContent>
-                {isLoading ? (
+                {isLoadingData ? (
                   <Skeleton className="h-20 w-full" />
                 ) : assignedProgram ? (
                   <div className="space-y-3">
@@ -397,8 +397,8 @@ export default function EditCompanyPage() {
                 ) : ( <p className="text-sm text-muted-foreground italic">No program assigned to this brand via checkout, or brand was created manually.</p> )}
               </CardContent>
             </Card>
-            <Button type="submit" size="lg" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading || isUploading}>
-              {isLoading || isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            <Button type="submit" size="lg" className="w-full bg-primary hover:bg-primary/90" disabled={isSubmitting || isUploadingLogo}>
+              {isSubmitting || isUploadingLogo ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Save Changes
             </Button>
           </div>
@@ -407,5 +407,4 @@ export default function EditCompanyPage() {
     </div>
   );
 }
-      
     
