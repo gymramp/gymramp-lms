@@ -7,26 +7,23 @@ import { loadStripe, StripeElementsOptions } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, CreditCard, User as UserIconLucide, ShieldCheck, AlertCircle, Layers } from 'lucide-react'; // Added Layers
+import { Loader2, CreditCard, ShieldCheck, AlertCircle, Layers, Info } from 'lucide-react'; // Added Layers, Info
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { processCheckout } from '@/actions/checkout'; // Corrected import path
+import { processCheckout } from '@/actions/checkout';
 import { createPaymentIntent } from '@/actions/stripe';
-import type { CheckoutFormData, RevenueSharePartner } from '@/types/user'; // Import RevenueSharePartner
+import type { CheckoutFormData, RevenueSharePartner } from '@/types/user';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { getProgramById } from '@/lib/firestore-data'; // To fetch program title
+import { getProgramById } from '@/lib/firestore-data';
 import type { Program } from '@/types/course';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
-const paymentFormSchema = z.object({
-  adminPassword: z.string().min(6, { message: "Password must be at least 6 characters." }),
-});
+// Zod schema no longer needs adminPassword
+const paymentFormSchema = z.object({}); // Empty schema if no other fields are needed for this step
 type PaymentFormValues = z.infer<typeof paymentFormSchema>;
 
 interface OrderDetails {
@@ -38,8 +35,8 @@ interface OrderDetails {
   state?: string;
   zipCode?: string;
   country?: string;
-  revenueSharePartners?: RevenueSharePartner[]; // Updated
-  selectedProgramId: string; // Changed from selectedCourseIds
+  revenueSharePartners?: RevenueSharePartner[];
+  selectedProgramId: string;
   maxUsers?: number | null;
   finalTotalAmountCents: number;
   subtotalAmount: number;
@@ -55,11 +52,13 @@ function PaymentFormElements({ orderDetails, programTitle }: { orderDetails: Ord
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentErrorMessage, setPaymentErrorMessage] = useState<string | null>(null);
 
+  // Form no longer needs password
   const paymentForm = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentFormSchema),
-    defaultValues: { adminPassword: '' },
+    defaultValues: {},
   });
 
+  // formData no longer contains adminPassword
   const handlePaymentSubmit = async (formData: PaymentFormValues) => {
     setPaymentErrorMessage(null);
     setIsProcessingPayment(true);
@@ -76,7 +75,7 @@ function PaymentFormElements({ orderDetails, programTitle }: { orderDetails: Ord
       const { error: submitError, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: `${window.location.origin}/admin/checkout/success`, // Keep or adjust as needed
+          return_url: `${window.location.origin}/admin/checkout/success`,
         },
         redirect: 'if_required',
       });
@@ -106,7 +105,7 @@ function PaymentFormElements({ orderDetails, programTitle }: { orderDetails: Ord
       }
     } else {
       toast({ title: "No Payment Required", description: "Order total is $0.00." });
-      paymentIntentId = 'pi_0_free_checkout'; // Placeholder for $0 checkouts
+      paymentIntentId = 'pi_0_free_checkout';
     }
 
     try {
@@ -122,7 +121,7 @@ function PaymentFormElements({ orderDetails, programTitle }: { orderDetails: Ord
         revenueSharePartners: orderDetails.revenueSharePartners,
         selectedProgramId: orderDetails.selectedProgramId,
         maxUsers: orderDetails.maxUsers,
-        password: formData.adminPassword,
+        // password field removed from here
         paymentIntentId: paymentIntentId,
         subtotalAmount: orderDetails.subtotalAmount,
         appliedDiscountPercent: orderDetails.appliedDiscountPercent,
@@ -150,7 +149,7 @@ function PaymentFormElements({ orderDetails, programTitle }: { orderDetails: Ord
     <Form {...paymentForm}>
       <form onSubmit={paymentForm.handleSubmit(handlePaymentSubmit)} className="space-y-6">
         <Card>
-          <CardHeader><CardTitle>Step 2: Payment & Admin Password</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Step 2: Payment & Account Finalization</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div>
               <h3 className="font-semibold">Order Summary:</h3>
@@ -160,22 +159,20 @@ function PaymentFormElements({ orderDetails, programTitle }: { orderDetails: Ord
               <p className="text-lg font-bold mt-2">Total Due: ${(orderDetails.finalTotalAmountCents / 100).toFixed(2)}</p>
             </div>
             <hr/>
-            <FormField
-              control={paymentForm.control}
-              name="adminPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="flex items-center gap-1"><ShieldCheck className="h-4 w-4" /> New Admin Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" {...field} placeholder="Enter a secure password" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <Alert variant="default" className="border-blue-300 bg-blue-50 dark:bg-blue-900/30">
+                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <AlertTitle className="text-blue-800 dark:text-blue-300">Admin Password</AlertTitle>
+                <AlertDescription className="text-blue-700 dark:text-blue-400">
+                    A temporary password for the new admin user will be auto-generated.
+                    The user will be prompted to change this password upon their first login.
+                </AlertDescription>
+            </Alert>
+            
+            {/* Removed Admin Password Field */}
+
             {orderDetails.finalTotalAmountCents > 0 && (
               <>
-                <Label>Payment Details</Label>
+                <FormLabel>Payment Details</FormLabel>
                 <PaymentElement id="payment-element" options={{ layout: "tabs" }} />
               </>
             )}
@@ -225,7 +222,6 @@ function PaymentPageContent() {
                 parsedRevSharePartners = JSON.parse(revSharePartnersString);
             } catch (parseError) {
                 console.error("Error parsing revenue share partners from URL:", parseError);
-                // Decide if this is a critical error or if you can proceed without it
             }
         }
 
@@ -248,7 +244,6 @@ function PaymentPageContent() {
         };
         setOrderDetails(parsedDetails);
 
-        // Fetch program title
         const program = await getProgramById(selectedProgramId);
         setProgramTitle(program?.title);
 
@@ -260,8 +255,7 @@ function PaymentPageContent() {
             throw new Error(paymentIntentResult.error || "Failed to initialize payment.");
           }
         } else {
-           // Handle $0 amount - no payment intent needed, or use a placeholder
-          setClientSecret('pi_0_free_checkout'); // Use the placeholder for $0 checkouts
+          setClientSecret('pi_0_free_checkout');
         }
       } catch (e: any) {
         console.error("Error loading payment page:", e);
@@ -305,14 +299,13 @@ function PaymentPageContent() {
 
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20 flex justify-center">
-      {/* Conditionally render Elements only if a payment is required and clientSecret is valid */}
-      {orderDetails.finalTotalAmountCents > 0 && clientSecret && clientSecret !== 'pi_0_free_checkout' && stripeElementsOptions ? (
+      {stripeElementsOptions && orderDetails.finalTotalAmountCents > 0 ? (
         <Elements stripe={stripePromise} options={stripeElementsOptions} key={clientSecret}>
           <PaymentFormElements orderDetails={orderDetails} programTitle={programTitle} />
         </Elements>
-      ) : orderDetails.finalTotalAmountCents <= 0 ? ( // If amount is $0, render form without Elements
+      ) : orderDetails.finalTotalAmountCents <= 0 ? (
         <PaymentFormElements orderDetails={orderDetails} programTitle={programTitle} />
-      ) : ( // If there's an issue with clientSecret for a positive amount
+      ) : ( 
         <Alert variant="destructive" className="max-w-md mx-auto">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Payment Initialization Error</AlertTitle>
@@ -331,3 +324,5 @@ export default function AdminCheckoutPaymentPage() {
     </Suspense>
   );
 }
+
+    
