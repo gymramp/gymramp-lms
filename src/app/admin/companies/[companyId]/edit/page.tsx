@@ -30,7 +30,7 @@ import { useToast } from '@/hooks/use-toast';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { getCompanyById, updateCompany } from '@/lib/company-data';
 import { getAllCourses, getProgramById } from '@/lib/firestore-data';
-import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data'; // Import new function
+import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data';
 import type { Company, CompanyFormData, User } from '@/types/user';
 import type { Course, Program } from '@/types/course';
 import { Loader2, Upload, ImageIcon, Trash2, BookCheck, ArrowLeft, Users, CalendarDays, Gift, Globe, Layers } from 'lucide-react';
@@ -49,7 +49,7 @@ const companyFormSchema = z.object({
     .min(3, { message: 'Subdomain slug must be at least 3 characters.'})
     .max(63, { message: 'Subdomain slug cannot exceed 63 characters.'})
     .optional()
-    .or(z.literal(''))
+    .or(z.literal('')) // Allow empty string
     .nullable(),
   shortDescription: z.string().max(150, { message: 'Description must be 150 characters or less.' }).optional().or(z.literal('')),
   logoUrl: z.string().url({ message: 'Invalid URL format.' }).optional().or(z.literal('')),
@@ -79,7 +79,6 @@ export default function EditCompanyPage() {
   const [company, setCompany] = useState<Company | null>(null);
   const [assignedProgram, setAssignedProgram] = useState<Program | null>(null);
   const [coursesInProgram, setCoursesInProgram] = useState<Course[]>([]);
-  // const [allLibraryCourses, setAllLibraryCourses] = useState<Course[]>([]); // No longer needed here
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -92,10 +91,10 @@ export default function EditCompanyPage() {
     resolver: zodResolver(companyFormSchema),
     defaultValues: {
       name: '',
-      subdomainSlug: '', // Changed from null to empty string
+      subdomainSlug: '',
       shortDescription: '',
       logoUrl: '',
-      customDomain: '', // Changed from null to empty string
+      customDomain: '',
       maxUsers: null,
       isTrial: false,
       trialEndsAt: null,
@@ -109,7 +108,6 @@ export default function EditCompanyPage() {
    const logoUrlValue = form.watch('logoUrl');
    const isTrialValue = form.watch('isTrial');
    const whiteLabelEnabledValue = form.watch('whiteLabelEnabled');
-
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -142,11 +140,11 @@ export default function EditCompanyPage() {
       }
       setCompany(companyData);
       form.reset({
-        name: companyData.name,
-        subdomainSlug: companyData.subdomainSlug || '', // Ensure empty string if null/undefined
+        name: companyData.name || '',
+        subdomainSlug: companyData.subdomainSlug || '',
         shortDescription: companyData.shortDescription || '',
         logoUrl: companyData.logoUrl || '',
-        customDomain: companyData.customDomain || '', // Ensure empty string if null/undefined
+        customDomain: companyData.customDomain || '',
         maxUsers: companyData.maxUsers ?? null,
         isTrial: companyData.isTrial || false,
         trialEndsAt: companyData.trialEndsAt instanceof Timestamp ? companyData.trialEndsAt.toDate() : null,
@@ -161,7 +159,7 @@ export default function EditCompanyPage() {
         const programData = await getProgramById(purchaseRecord.selectedProgramId);
         setAssignedProgram(programData);
         if (programData && programData.courseIds) {
-          const fetchedLibraryCourses = await getAllCourses(); // Fetch all courses to map IDs
+          const fetchedLibraryCourses = await getAllCourses();
           const courses = programData.courseIds
             .map(id => fetchedLibraryCourses.find(c => c.id === id))
             .filter(Boolean) as Course[];
@@ -210,7 +208,7 @@ export default function EditCompanyPage() {
         toast({ title: "Upload in Progress", description: "Please wait for the logo upload to complete.", variant: "destructive" });
         return;
      }
-     setIsLoading(true);
+     setIsLoading(true); // Use a different state for saving indication if needed
      try {
         const metadataToUpdate: Partial<CompanyFormData> = {
             name: data.name,
@@ -218,13 +216,14 @@ export default function EditCompanyPage() {
             shortDescription: data.shortDescription?.trim() || null,
             logoUrl: data.logoUrl?.trim() || null,
             customDomain: data.customDomain?.trim() ? data.customDomain.trim().toLowerCase() : null,
-            maxUsers: data.maxUsers ?? null,
+            maxUsers: data.maxUsers ?? null, // Coerce to null if empty or invalid
             trialEndsAt: data.trialEndsAt ? Timestamp.fromDate(data.trialEndsAt) : null,
             isTrial: data.isTrial,
             whiteLabelEnabled: data.whiteLabelEnabled,
             primaryColor: data.whiteLabelEnabled ? (data.primaryColor?.trim() || null) : null,
             secondaryColor: data.whiteLabelEnabled ? (data.secondaryColor?.trim() || null) : null,
             accentColor: data.whiteLabelEnabled ? (data.accentColor?.trim() || null) : null,
+            // assignedCourseIds is no longer managed here
         };
 
         const updatedCompanyMeta = await updateCompany(companyId, metadataToUpdate);
@@ -232,6 +231,7 @@ export default function EditCompanyPage() {
             throw new Error("Failed to update brand metadata.");
         }
         toast({ title: "Brand Updated", description: `"${data.name}" updated successfully.` });
+        // Re-fetch company data to reflect changes, especially if trialEndsAt was stringified/parsed
         fetchCompanyAndRelatedData();
 
      } catch (error: any)         {
@@ -284,10 +284,10 @@ export default function EditCompanyPage() {
                     </CardHeader>
                     <CardContent className="space-y-6">
                         <FormField control={form.control} name="name" render={({ field }) => ( <FormItem> <FormLabel>Brand Name</FormLabel> <FormControl> <Input placeholder="e.g., Global Fitness Inc." {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                        <FormField control={form.control} name="subdomainSlug" render={({ field }) => ( <FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Subdomain Slug (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., global-fitness (for global-fitness.yourdomain.com)" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <p className="text-xs text-muted-foreground"> Used for branded login URL. Only lowercase letters, numbers, and hyphens. </p> <FormMessage /> </FormItem> )} />
+                        <FormField control={form.control} name="subdomainSlug" render={({ field }) => ( <FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Subdomain Slug (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., global-fitness" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <p className="text-xs text-muted-foreground"> Used for branded login URL. Only lowercase letters, numbers, and hyphens. </p> <FormMessage /> </FormItem> )} />
                         <FormField control={form.control} name="customDomain" render={({ field }) => ( <FormItem> <FormLabel className="flex items-center gap-1"> <Globe className="h-4 w-4" /> Custom Domain (Optional) </FormLabel> <FormControl> <Input placeholder="e.g., learn.yourgym.com" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /> </FormControl> <p className="text-xs text-muted-foreground"> Requires DNS CNAME setup by the brand to point to your app. </p> <FormMessage /> </FormItem> )} />
                         <FormField control={form.control} name="shortDescription" render={({ field }) => ( <FormItem> <FormLabel>Short Description (Optional)</FormLabel> <FormControl> <Textarea rows={3} placeholder="A brief description of the brand (max 150 characters)" {...field} value={field.value ?? ''} /> </FormControl> <FormMessage /> </FormItem> )} />
-                        <FormField control={form.control} name="maxUsers" render={({ field }) => ( <FormItem> <FormLabel className="flex items-center gap-1"> <Users className="h-4 w-4" /> Maximum Users Allowed </FormLabel> <FormControl> <Input type="number" min="1" placeholder="Leave blank for unlimited" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /> </FormControl> <FormMessage /> <p className="text-xs text-muted-foreground"> Set the maximum number of user accounts for this brand. Leave blank for no limit. </p> </FormItem> )} />
+                        <FormField control={form.control} name="maxUsers" render={({ field }) => ( <FormItem> <FormLabel className="flex items-center gap-1"> <Users className="h-4 w-4" /> Maximum Users Allowed </FormLabel> <FormControl> <Input type="number" min="1" placeholder="Leave blank for unlimited" value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /> </FormControl> <FormMessage /> <p className="text-xs text-muted-foreground"> Set the maximum number of user accounts for this brand. Leave blank for no limit. </p> </FormItem> )} />
                          <FormItem className="space-y-2">
                              <FormLabel className="text-base font-semibold">Brand Logo (Optional)</FormLabel>
                              <FormControl>
@@ -330,9 +330,9 @@ export default function EditCompanyPage() {
                                             <CalendarDays className="h-4 w-4" /> Trial End Date
                                         </FormLabel>
                                         <FormControl>
-                                          <div>
+                                          <div> {/* Added div wrapper */}
                                             <DatePickerWithPresets
-                                                date={field.value} // field.value will be Date | null
+                                                date={field.value}
                                                 setDate={(date) => field.onChange(date || null)}
                                             />
                                           </div>
