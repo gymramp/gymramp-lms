@@ -10,16 +10,17 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label'; // Added Label import
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import type { Company, CompanyFormData, User } from '@/types/user';
-import type { Program, Course } from '@/types/course'; // Import Program and Course
+import type { Program, Course } from '@/types/course';
 import { getCompanyById, updateCompany } from '@/lib/company-data';
-import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data'; // Import function to get purchase record
-import { getProgramById, getAllCourses } from '@/lib/firestore-data'; // Import functions to get program and courses
+import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data';
+import { getProgramById, getAllCourses } from '@/lib/firestore-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Globe, Users, CalendarDays, Palette, BookOpen } from 'lucide-react';
 import { getUserByEmail } from '@/lib/user-data';
@@ -44,6 +45,7 @@ const companyFormSchema = z.object({
   maxUsers: z.coerce.number({ invalid_type_error: "Must be a number" }).int().positive().min(1).optional().nullable(),
   isTrial: z.boolean().default(false),
   trialEndsAt: z.date().nullable().optional(),
+  // White-label fields are handled directly for now if enabled, not part of core form schema for this page's main submit
 });
 
 type CompanyFormValues = z.infer<typeof companyFormSchema>;
@@ -55,15 +57,19 @@ export default function EditCompanyPage() {
   const { toast } = useToast();
 
   const [company, setCompany] = useState<Company | null>(null);
-  const [assignedProgram, setAssignedProgram] = useState<Program | null>(null);
-  const [coursesInProgram, setCoursesInProgram] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+
   const [isLogoUploading, setIsLogoUploading] = useState(false);
   const [logoUploadProgress, setLogoUploadProgress] = useState(0);
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
+
+  const [assignedProgram, setAssignedProgram] = useState<Program | null>(null);
+  const [coursesInProgram, setCoursesInProgram] = useState<Course[]>([]);
+  const [isLoadingProgramData, setIsLoadingProgramData] = useState(false);
+
 
   const form = useForm<CompanyFormValues>({
     resolver: zodResolver(companyFormSchema),
@@ -102,11 +108,14 @@ export default function EditCompanyPage() {
   const fetchCompanyAndRelatedData = useCallback(async () => {
     if (!companyId || !currentUser || currentUser.role !== 'Super Admin') {
       setIsLoading(false);
+      setIsLoadingProgramData(false);
       return;
     }
     setIsLoading(true);
+    setIsLoadingProgramData(true);
     setAssignedProgram(null);
     setCoursesInProgram([]);
+
     try {
       const companyData = await getCompanyById(companyId);
       if (companyData) {
@@ -137,7 +146,6 @@ export default function EditCompanyPage() {
             setCoursesInProgram(programCourses);
           }
         }
-
       } else {
         toast({ title: "Error", description: "Brand not found.", variant: "destructive" });
         router.push('/admin/companies');
@@ -147,6 +155,7 @@ export default function EditCompanyPage() {
       toast({ title: "Error", description: "Could not load brand data.", variant: "destructive" });
     } finally {
       setIsLoading(false);
+      setIsLoadingProgramData(false);
     }
   }, [companyId, currentUser, form, router, toast]);
 
@@ -190,14 +199,15 @@ export default function EditCompanyPage() {
         maxUsers: data.maxUsers ?? null,
         isTrial: data.isTrial,
         trialEndsAt: data.isTrial && data.trialEndsAt ? Timestamp.fromDate(data.trialEndsAt) : null,
-        // White-label and other fields handled separately or not on this form directly
+        // White-label and other fields (like assigned courses) are not managed by this core form submission
+        // They are handled by separate mechanisms or are display-only based on other data (like purchase records for programs)
       };
 
       const updatedCompany = await updateCompany(companyId, metadataToUpdate);
       if (updatedCompany) {
-        setCompany(updatedCompany); // Update local state
+        setCompany(updatedCompany);
         toast({ title: "Brand Updated", description: `"${updatedCompany.name}" updated successfully.` });
-        fetchCompanyAndRelatedData(); // Re-fetch to ensure form is reset with latest data
+        fetchCompanyAndRelatedData();
       } else {
         throw new Error("Failed to update brand.");
       }
@@ -209,7 +219,7 @@ export default function EditCompanyPage() {
     }
   };
 
-  if (!isMounted || isLoading || !currentUser) {
+  if (!isMounted || isLoading || !currentUser || currentUser.role !== 'Super Admin') {
     return (
       <div className="container mx-auto py-12 md:py-16 lg:py-20">
         <Skeleton className="h-8 w-1/4 mb-6" />
@@ -229,11 +239,6 @@ export default function EditCompanyPage() {
     );
   }
 
-  if (currentUser.role !== 'Super Admin') {
-    // This should be caught by useEffect redirect, but as a fallback
-    return <div className="container mx-auto py-12 text-center">Access Denied.</div>;
-  }
-
   if (!company) {
     return <div className="container mx-auto py-12 text-center">Brand not found.</div>;
   }
@@ -247,7 +252,7 @@ export default function EditCompanyPage() {
         Edit Brand: {company.name}
       </h1>
       <p className="text-muted-foreground mb-8">
-        Manage core settings, trial status, and other configurations for this brand.
+        Manage core settings and trial status for this brand. White-labeling and Program access are managed separately or displayed for reference.
       </p>
 
       <Form {...form}>
@@ -287,7 +292,7 @@ export default function EditCompanyPage() {
               </Card>
             </div>
 
-            {/* Column 3: User/Trial, White-Label (Placeholder), Program Access */}
+            {/* Column 3: User/Trial, Placeholders */}
             <div className="lg:col-span-1 space-y-6">
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> User &amp; Trial Settings</CardTitle></CardHeader>
@@ -305,10 +310,10 @@ export default function EditCompanyPage() {
                 <CardContent><p className="text-muted-foreground">White-labeling configuration will be here.</p></CardContent>
               </Card>
 
-              <Card>
+               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5" /> Program Access</CardTitle></CardHeader>
-                <CardContent>
-                  {isLoading && !assignedProgram ? (
+                 <CardContent>
+                  {isLoadingProgramData ? (
                     <Skeleton className="h-20 w-full" />
                   ) : assignedProgram ? (
                     <div className="space-y-3">
@@ -353,3 +358,4 @@ export default function EditCompanyPage() {
     </div>
   );
 }
+
