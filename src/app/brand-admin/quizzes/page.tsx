@@ -21,7 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { getUserByEmail, getCompanyById } from '@/lib/user-data';
+import { getUserByEmail } from '@/lib/user-data';
+import { getCompanyById } from '@/lib/company-data'; // Corrected import path
 import { useRouter } from 'next/navigation';
 
 const DEFAULT_ROWS_PER_PAGE = 10;
