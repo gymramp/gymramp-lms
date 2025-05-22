@@ -8,12 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle as DialogUITitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Award } from 'lucide-react';
+import { Award, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Course, BrandCourse } from '@/types/course';
 import type { User, UserCourseProgressData, Company } from '@/types/user';
 import { getUserByEmail, getUserCourseProgress } from '@/lib/user-data';
-import { getCompanyById } from '@/lib/company-data'; // Corrected import
+import { getCompanyById } from '@/lib/company-data';
 import { getCourseById } from '@/lib/firestore-data';
 import { getBrandCourseById } from '@/lib/brand-content-data';
 import { auth } from '@/lib/firebase';
@@ -23,21 +23,22 @@ import { CourseCertificate } from '@/components/learn/CourseCertificate';
 
 type CompletedCourseDisplay = (Course | BrandCourse) & {
     completionDate: Date | null;
-    effectiveCourseId: string; // To distinguish if it was a global or brand course ID
+    effectiveCourseId: string;
 };
 
 export default function MyCertificatesPage() {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [userBrand, setUserBrand] = useState<Company | null>(null);
     const [completedCourses, setCompletedCourses] = useState<CompletedCourseDisplay[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingUser, setIsLoadingUser] = useState(true);
+    const [isLoadingCertificates, setIsLoadingCertificates] = useState(false); // New state
     const { toast } = useToast();
 
     const [selectedCertificate, setSelectedCertificate] = useState<CompletedCourseDisplay | null>(null);
     const [isCertificateDialogOpen, setIsCertificateDialogOpen] = useState(false);
 
     useEffect(() => {
-        setIsLoading(true);
+        setIsLoadingUser(true);
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser && firebaseUser.email) {
                 try {
@@ -54,45 +55,39 @@ export default function MyCertificatesPage() {
             } else {
                 setCurrentUser(null); setUserBrand(null);
             }
+            setIsLoadingUser(false);
         });
         return () => unsubscribe();
     }, [toast]);
 
-    const fetchCompletedCourses = useCallback(async (userId: string) => {
-        setIsLoading(true);
+    const fetchCompletedCourses = useCallback(async () => {
+        if (!currentUser?.id) {
+            setCompletedCourses([]);
+            setIsLoadingCertificates(false);
+            return;
+        }
+        setIsLoadingCertificates(true);
         try {
-            const userDetails = currentUser; // Use state currentUser
-            if (!userDetails?.id) {
-                 setCompletedCourses([]);
-                 setIsLoading(false);
-                 return;
-            }
-
-            // Ensure assignedCourseIds exists and is an array before mapping
-            const assignedCourseIds = Array.isArray(userDetails.assignedCourseIds) ? userDetails.assignedCourseIds : [];
-
+            const assignedCourseIds = Array.isArray(currentUser.assignedCourseIds) ? currentUser.assignedCourseIds : [];
             if (assignedCourseIds.length === 0) {
                 setCompletedCourses([]);
-                setIsLoading(false);
+                setIsLoadingCertificates(false);
                 return;
             }
 
             const coursesDataPromises = assignedCourseIds.map(async (courseId) => {
                 let courseData: Course | BrandCourse | null = null;
-
-                // Try fetching as global course first
                 courseData = await getCourseById(courseId);
                 if (!courseData) {
-                    // If not found as global, try as brand course
                     courseData = await getBrandCourseById(courseId);
                 }
 
                 if (!courseData) {
-                    console.warn(`Course or BrandCourse with ID ${courseId} not found for user ${userId}.`);
+                    console.warn(`Course or BrandCourse with ID ${courseId} not found for user ${currentUser.id}.`);
                     return null;
                 }
 
-                const progressData = await getUserCourseProgress(userId, courseId);
+                const progressData = await getUserCourseProgress(currentUser.id, courseId);
                 if (progressData.status === 'Completed') {
                     const completionDateObject = progressData.lastUpdated instanceof Timestamp
                         ? progressData.lastUpdated.toDate()
@@ -108,29 +103,30 @@ export default function MyCertificatesPage() {
                 .filter(Boolean) as CompletedCourseDisplay[];
 
             setCompletedCourses(fetchedCompletedCourses);
-
         } catch (error) {
             console.error("Error loading completed courses:", error);
             toast({ title: "Error", description: "Could not load completed courses.", variant: "destructive" });
             setCompletedCourses([]);
         } finally {
-            setIsLoading(false);
+            setIsLoadingCertificates(false);
         }
-    }, [currentUser, toast]); // currentUser is the dependency here
+    }, [currentUser, toast]);
 
     useEffect(() => {
-        if (currentUser?.id) {
-            fetchCompletedCourses(currentUser.id);
-        } else if (!isLoading && !currentUser) { // Ensure isLoading is false before deciding no user
-             setCompletedCourses([]);
-             setIsLoading(false); // Make sure loading is set to false if there's no user
+        if (!isLoadingUser && currentUser?.id) {
+            fetchCompletedCourses();
+        } else if (!isLoadingUser && !currentUser) {
+            setCompletedCourses([]);
+            setIsLoadingCertificates(false);
         }
-    }, [currentUser, isLoading, fetchCompletedCourses]);
+    }, [currentUser, isLoadingUser, fetchCompletedCourses]);
 
     const handleViewCertificate = (course: CompletedCourseDisplay) => {
         setSelectedCertificate(course);
         setIsCertificateDialogOpen(true);
     };
+
+    const isLoading = isLoadingUser || isLoadingCertificates;
 
     return (
         <div className="container mx-auto py-12 md:py-16 lg:py-20">
@@ -216,8 +212,8 @@ export default function MyCertificatesPage() {
                             courseName={selectedCertificate.title}
                             userName={currentUser.name}
                             completionDate={selectedCertificate.completionDate || new Date()}
-                            brandName={userBrand?.name}
-                            brandLogoUrl={userBrand?.logoUrl}
+                            brandName={userBrand?.name} // Use userBrand for certificate
+                            brandLogoUrl={userBrand?.logoUrl} // Use userBrand for certificate
                         />
                     </DialogContent>
                 </Dialog>
