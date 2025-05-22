@@ -10,16 +10,18 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BookOpen, PlayCircle, Award, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { Course } from '@/types/course';
+import type { Course, BrandCourse } from '@/types/course'; // Import BrandCourse
 import type { User, UserCourseProgressData } from '@/types/user';
 import { getUserByEmail, getUserCourseProgress } from '@/lib/user-data';
 import { getCourseById } from '@/lib/firestore-data';
+import { getBrandCourseById } from '@/lib/brand-content-data'; // Import function to get brand courses
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { cn } from '@/lib/utils';
 import { Timestamp } from 'firebase/firestore';
 
 // Type for course combined with progress data
+// Uses core Course properties, BrandCourse will be mapped to this for display
 type CourseWithProgress = Course & {
   progress: number;
   status: "Not Started" | "Started" | "In Progress" | "Completed";
@@ -76,13 +78,41 @@ export default function MyCoursesPage() {
         }
 
         const courseProgressPromises = assignedCourseIds.map(async (courseId) => {
-            const course = await getCourseById(courseId);
-            if (!course) {
+            let courseDetails: Course | BrandCourse | null = await getCourseById(courseId); // Try global first
+            let isBrandCourse = false;
+
+            if (!courseDetails) {
+                courseDetails = await getBrandCourseById(courseId); // Try brand-specific if global not found
+                if (courseDetails) {
+                    isBrandCourse = true;
+                }
+            }
+
+            if (!courseDetails) {
+                console.warn(`Course or BrandCourse with ID ${courseId} not found.`);
                 return null;
             }
+            
+            // Map BrandCourse to a structure compatible with Course for display if needed,
+            // though most display properties are common.
+            const displayCourse: Course = {
+                id: courseDetails.id,
+                title: courseDetails.title,
+                description: courseDetails.description,
+                longDescription: courseDetails.longDescription,
+                imageUrl: courseDetails.imageUrl,
+                featuredImageUrl: courseDetails.featuredImageUrl,
+                level: courseDetails.level,
+                duration: courseDetails.duration,
+                curriculum: courseDetails.curriculum,
+                certificateTemplateId: courseDetails.certificateTemplateId,
+                // Ensure other Course specific fields have defaults if not on BrandCourse
+                // (though current structure is very similar for display props)
+            };
+
              const progressData = await getUserCourseProgress(userId, courseId);
              return {
-                 ...course,
+                 ...displayCourse, // Use the common structure
                  progress: progressData.progress,
                  status: progressData.status,
                  completedItems: progressData.completedItems,
@@ -107,11 +137,11 @@ export default function MyCoursesPage() {
    useEffect(() => {
         if (currentUser?.id) {
             fetchCourseData(currentUser.id);
-        } else if (currentUser === null) {
+        } else if (currentUser === null && !isLoading) { // Ensures this runs after auth check
              setAssignedCoursesWithProgress([]);
-             setIsLoading(false);
+             // No need to setIsLoading(false) here as it's done in the outer useEffect or fetchCourseData
         }
-    }, [currentUser?.id, fetchCourseData]);
+    }, [currentUser, isLoading, fetchCourseData]); // Added isLoading to dependency array
 
 
   return (
