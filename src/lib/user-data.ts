@@ -95,7 +95,6 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 
     return retryOperation(async () => {
         const usersRef = collection(db, USERS_COLLECTION);
-        // Updated query to include isDeleted check
         const q = query(usersRef, where("email", "==", lowercasedEmail), where("isDeleted", "==", false));
 
         try {
@@ -111,15 +110,14 @@ export async function getUserByEmail(email: string): Promise<User | null> {
             const userData = docSnap.data();
             console.log(`[getUserByEmail] Document found for '${lowercasedEmail}' with isDeleted:false. ID: ${docSnap.id}.`);
 
-            if (docSnap.exists()) { // This check is somewhat redundant due to querySnapshot.empty check, but safe
+            if (docSnap.exists()) { 
                 return { id: docSnap.id, ...userData } as User;
             } else {
-                // This case should ideally not be reached if querySnapshot is not empty
                 return null;
             }
         } catch (error) {
             console.error(`[getUserByEmail] Error during Firestore query for email '${lowercasedEmail}':`, error);
-            throw error; // Re-throw to be caught by retryOperation if needed
+            throw error; 
         }
     });
 }
@@ -152,7 +150,7 @@ export async function getUserCountByCompanyId(companyId: string): Promise<number
         const q = query(
             usersRef,
             where("companyId", "==", companyId),
-            where("isActive", "==", true), // Only count active users
+            where("isActive", "==", true), 
             where("isDeleted", "==", false)
         );
         const snapshot = await getCountFromServer(q);
@@ -168,17 +166,17 @@ export async function addUser(userData: Omit<UserFormData, 'password'> & { requi
             name: userData.name,
             email: userData.email.toLowerCase(),
             role: userData.role,
-            companyId: userData.companyId || '', // Default to empty string if null
+            companyId: userData.companyId || '', 
             assignedLocationIds: userData.assignedLocationIds || [],
-            isActive: true, // New users are active by default
-            isDeleted: false, // New users are not deleted by default
+            isActive: true, 
+            isDeleted: false, 
             deletedAt: null,
             createdAt: serverTimestamp() as Timestamp,
-            lastLogin: null, // No login yet
+            lastLogin: null, 
             assignedCourseIds: userData.assignedCourseIds || [],
-            courseProgress: {}, // Initialize course progress
+            courseProgress: {}, 
             profileImageUrl: userData.profileImageUrl || null,
-            requiresPasswordChange: userData.requiresPasswordChange === true, // Set the flag
+            requiresPasswordChange: userData.requiresPasswordChange === true, 
         };
         const docRef = await addDoc(usersRef, newUserDoc);
         const newDocSnap = await getDoc(docRef);
@@ -198,16 +196,14 @@ export async function updateUser(userId: string, userData: Partial<UserFormData 
     }
     return retryOperation(async () => {
         const userRef = doc(db, USERS_COLLECTION, userId);
-        // Destructure to separate password if present, as it's not stored in Firestore User doc
         const { password, ...dataToUpdate } = userData;
 
-        // Prepare a payload with only the fields that are actually being updated
         const updatePayload: Partial<User> = {};
 
         if (dataToUpdate.name !== undefined) updatePayload.name = dataToUpdate.name;
         if (dataToUpdate.email !== undefined) updatePayload.email = dataToUpdate.email.toLowerCase();
         if (dataToUpdate.role !== undefined) updatePayload.role = dataToUpdate.role;
-        if (dataToUpdate.companyId !== undefined) updatePayload.companyId = dataToUpdate.companyId || ''; // Ensure empty string if null
+        if (dataToUpdate.companyId !== undefined) updatePayload.companyId = dataToUpdate.companyId || ''; 
         if (dataToUpdate.assignedLocationIds !== undefined) updatePayload.assignedLocationIds = dataToUpdate.assignedLocationIds;
         if (dataToUpdate.assignedCourseIds !== undefined) updatePayload.assignedCourseIds = dataToUpdate.assignedCourseIds;
         if (dataToUpdate.isActive !== undefined) updatePayload.isActive = dataToUpdate.isActive;
@@ -215,10 +211,8 @@ export async function updateUser(userId: string, userData: Partial<UserFormData 
         if (dataToUpdate.requiresPasswordChange !== undefined) updatePayload.requiresPasswordChange = dataToUpdate.requiresPasswordChange;
 
 
-        // Check if anything is actually being updated beyond just 'updatedAt'
         if (Object.keys(updatePayload).length === 0 && dataToUpdate.requiresPasswordChange === undefined) {
             console.warn("updateUser called with no data to update for user:", userId);
-            // Fetch and return the current document if no changes are made
             const currentUserDocSnap = await getDoc(userRef);
             if (currentUserDocSnap.exists() && currentUserDocSnap.data().isDeleted !== true) {
                 return { id: userId, ...currentUserDocSnap.data() } as User;
@@ -226,7 +220,7 @@ export async function updateUser(userId: string, userData: Partial<UserFormData 
             return null;
         }
         
-        updatePayload.updatedAt = serverTimestamp() as Timestamp; // Always update the timestamp
+        updatePayload.updatedAt = serverTimestamp() as Timestamp; 
 
 
         await updateDoc(userRef, updatePayload);
@@ -255,7 +249,7 @@ export async function toggleUserStatus(userId: string): Promise<User | null> {
         if (docSnap.exists() && docSnap.data().isDeleted !== true) {
             const currentStatus = docSnap.data().isActive;
             await updateDoc(userRef, { isActive: !currentStatus, updatedAt: serverTimestamp() });
-            const updatedUser = await getUserById(userId); // Fetch the updated user data
+            const updatedUser = await getUserById(userId); 
             return updatedUser;
         } else {
             console.error("User not found or is soft-deleted for status toggle.");
@@ -265,7 +259,7 @@ export async function toggleUserStatus(userId: string): Promise<User | null> {
 }
 
 
-export async function deleteUser(userId: string): Promise<boolean> { // Soft delete
+export async function deleteUser(userId: string): Promise<boolean> { 
     if (!userId) {
         console.warn("deleteUser (soft delete) called with empty ID.");
         return false;
@@ -275,14 +269,13 @@ export async function deleteUser(userId: string): Promise<boolean> { // Soft del
         await updateDoc(userRef, {
             isDeleted: true,
             deletedAt: serverTimestamp(),
-            isActive: false, // Also deactivate on soft delete
+            isActive: false, 
             updatedAt: serverTimestamp(),
         });
         return true;
-    }, 3); // Retry 3 times for delete operation
+    }, 3); 
 }
 
-// Function to assign or unassign courses for a user
 export const toggleUserCourseAssignments = async (userId: string, courseIds: string[], action: 'assign' | 'unassign'): Promise<User | null> => {
     if (!userId || !Array.isArray(courseIds) || courseIds.length === 0) {
         console.warn("toggleUserCourseAssignments called with invalid input.");
@@ -305,39 +298,36 @@ export const toggleUserCourseAssignments = async (userId: string, courseIds: str
             if (coursesToAdd.length > 0) {
                 updateData.assignedCourseIds = arrayUnion(...coursesToAdd);
 
-                // Initialize progress for newly assigned courses
                 coursesToAdd.forEach(courseId => {
-                    if (!currentProgress[courseId]) { // Only initialize if no progress exists
+                    if (!currentProgress[courseId]) { 
                         const progressFieldPath = `courseProgress.${courseId}`;
                         updateData[progressFieldPath] = {
                             completedItems: [],
                             status: "Not Started",
                             progress: 0,
-                            lastUpdated: serverTimestamp() // Use serverTimestamp for initialization
+                            videoProgress: {}, // Initialize videoProgress
+                            lastUpdated: serverTimestamp() 
                         };
                         console.log(`Initialized progress for user ${userId}, course ${courseId}`);
                     }
                 });
             }
-        } else { // unassign
+        } else { 
             const coursesToRemove = courseIds.filter(id => currentAssignedIds.includes(id));
             if (coursesToRemove.length > 0) {
                 updateData.assignedCourseIds = arrayRemove(...coursesToRemove);
 
-                // Remove progress for unassigned courses
                 coursesToRemove.forEach(courseId => {
                     const progressFieldPath = `courseProgress.${courseId}`;
-                    updateData[progressFieldPath] = deleteField(); // Use deleteField to remove the map entry
+                    updateData[progressFieldPath] = deleteField(); 
                 });
             }
         }
 
-        // Only update if there are actual changes to assigned courses or progress
-        if (Object.keys(updateData).length > 1) { // More than just updatedAt
+        if (Object.keys(updateData).length > 1) { 
             await updateDoc(userRef, updateData);
         }
 
-        // Fetch and return the updated user document
         const updatedUserSnap = await getDoc(userRef);
         if (updatedUserSnap.exists()) {
             return { id: userId, ...updatedUserSnap.data() } as User;
@@ -349,14 +339,12 @@ export const toggleUserCourseAssignments = async (userId: string, courseIds: str
 };
 
 
-// Get users who do not have a companyId or have an empty string companyId
 export async function getUsersWithoutCompany(): Promise<User[]> {
     return retryOperation(async () => {
         const usersRef = collection(db, USERS_COLLECTION);
         const users: User[] = [];
-        const userIds = new Set<string>(); // To avoid duplicates if a user matches both queries (shouldn't happen with current logic)
+        const userIds = new Set<string>(); 
 
-        // Query for companyId == null
         const qNull = query(usersRef, where('companyId', '==', null), where("isDeleted", "==", false));
         const snapshotNull = await getDocs(qNull);
         snapshotNull.forEach((doc) => {
@@ -366,11 +354,10 @@ export async function getUsersWithoutCompany(): Promise<User[]> {
             }
         });
 
-        // Query for companyId == ''
         const qEmpty = query(usersRef, where('companyId', '==', ''), where("isDeleted", "==", false));
         const snapshotEmpty = await getDocs(qEmpty);
         snapshotEmpty.forEach((doc) => {
-             if (!userIds.has(doc.id)) { // Check again to avoid duplicates
+             if (!userIds.has(doc.id)) { 
                  users.push({ id: doc.id, ...doc.data() } as User);
                  userIds.add(doc.id);
              }
@@ -381,7 +368,6 @@ export async function getUsersWithoutCompany(): Promise<User[]> {
     });
 }
 
-// Assign a default companyId to users who are missing one
 export async function assignMissingCompanyToUsers(defaultCompanyId: string): Promise<number> {
     if (!defaultCompanyId) {
         console.error("Cannot assign missing brand: defaultCompanyId is required.");
@@ -398,17 +384,15 @@ export async function assignMissingCompanyToUsers(defaultCompanyId: string): Pro
         usersToUpdate.forEach(user => {
             const userRef = doc(db, USERS_COLLECTION, user.id);
             console.log(`Assigning brand ${defaultCompanyId} to user ${user.email} (${user.id})`);
-            // Ensure isDeleted is false when assigning, and update timestamp
             batch.update(userRef, { companyId: defaultCompanyId, isDeleted: false, updatedAt: serverTimestamp() });
         });
 
         await batch.commit();
         console.log(`Successfully assigned brand ID ${defaultCompanyId} to ${usersToUpdate.length} users.`);
         return usersToUpdate.length;
-    }, 3); // Retry batch commit 3 times
+    }, 3); 
 }
 
-// Assign a default location to users within a company who don't have any locations assigned
 export async function assignMissingLocationToUsers(companyId: string, defaultLocationId: string): Promise<number> {
     if (!companyId || !defaultLocationId) {
         console.error("Cannot assign missing location: brand ID and defaultLocationId are required.");
@@ -425,7 +409,6 @@ export async function assignMissingLocationToUsers(companyId: string, defaultLoc
 
         companyUsersSnapshot.forEach((userDoc) => {
             const userData = userDoc.data() as User;
-            // Check if assignedLocationIds is null, undefined, or an empty array
             if (!userData.assignedLocationIds || !Array.isArray(userData.assignedLocationIds) || userData.assignedLocationIds.length === 0) {
                 console.log(`Assigning location ${defaultLocationId} to user ${userData.email} (${userDoc.id})`);
                 const userRef = doc(db, USERS_COLLECTION, userDoc.id);
@@ -445,35 +428,31 @@ export async function assignMissingLocationToUsers(companyId: string, defaultLoc
     }, 3);
 }
 
-// Get user's progress for a specific course
-export const getUserCourseProgress = async (userId: string, courseId: string): Promise<{ progress: number; status: "Not Started" | "Started" | "In Progress" | "Completed"; completedItems: string[]; lastUpdated?: Timestamp | Date | null }> => {
+export const getUserCourseProgress = async (userId: string, courseId: string): Promise<{ progress: number; status: "Not Started" | "Started" | "In Progress" | "Completed"; completedItems: string[]; videoProgress?: Record<string, number>; lastUpdated?: Timestamp | Date | null }> => {
     console.log(`Fetching progress for user ${userId} and course ${courseId}`);
-    const defaultProgress = { progress: 0, status: "Not Started" as const, completedItems: [], lastUpdated: null };
+    const defaultProgress = { progress: 0, status: "Not Started" as const, completedItems: [], videoProgress: {}, lastUpdated: null };
 
     try {
         const user = await getUserById(userId);
 
-        // Important: Check if user is null (not found or soft-deleted)
         if (!user) {
             console.warn(`User ${userId} not found or is soft-deleted. Returning default progress.`);
             return defaultProgress;
         }
 
-        // Try fetching as global course first
         let courseData: Course | BrandCourse | null = await getCourseById(courseId);
         if (!courseData) {
-            // If not found as global, try as brand course
             courseData = await getBrandCourseById(courseId);
         }
 
         if (!courseData || !courseData.curriculum || courseData.curriculum.length === 0) {
             console.warn(`Course ${courseId} (global or brand) not found or has no curriculum. Cannot calculate progress accurately.`);
-            // Return stored progress if any, otherwise default
             const storedProgress = user.courseProgress?.[courseId] as UserCourseProgressData | undefined;
             return {
                 progress: storedProgress?.progress ?? 0,
                 status: storedProgress?.status ?? "Not Started",
                 completedItems: storedProgress?.completedItems ?? [],
+                videoProgress: storedProgress?.videoProgress ?? {},
                 lastUpdated: storedProgress?.lastUpdated ?? null
             };
         }
@@ -484,28 +463,31 @@ export const getUserCourseProgress = async (userId: string, courseId: string): P
         const completedCount = completedItems.length;
         const calculatedProgress = totalItems > 0 ? Math.round((completedCount / totalItems) * 100) : 0;
 
-        // Determine status based on progress
         let currentStatus = progressData?.status || "Not Started";
         if (completedCount === totalItems && totalItems > 0) {
             currentStatus = "Completed";
         } else if (completedCount > 0) {
-            currentStatus = "In Progress"; // Or "Started" if it's the very first item completed
+            currentStatus = "In Progress"; 
         } else if (progressData?.status === "Started" && completedCount === 0) {
-            // Retain "Started" if explicitly marked as such but no items yet complete
             currentStatus = "Started";
         }
 
 
         console.log(`Calculated progress for ${userId} on ${courseId}: ${calculatedProgress}%, Status: ${currentStatus}`);
-        return { progress: calculatedProgress, status: currentStatus, completedItems, lastUpdated: progressData?.lastUpdated ?? null };
+        return { 
+            progress: calculatedProgress, 
+            status: currentStatus, 
+            completedItems, 
+            videoProgress: progressData?.videoProgress ?? {}, // Ensure videoProgress is always returned
+            lastUpdated: progressData?.lastUpdated ?? null 
+        };
 
     } catch (error) {
         console.error(`Error fetching progress for user ${userId}, course ${courseId}:`, error);
-        return defaultProgress; // Return default on any error
+        return defaultProgress; 
     }
 };
 
-// Get user's overall progress across all assigned courses
 export const getUserOverallProgress = async (userId: string): Promise<number> => {
     console.log(`Calculating overall progress for user ${userId}`);
     const user = await getUserById(userId);
@@ -518,10 +500,8 @@ export const getUserOverallProgress = async (userId: string): Promise<number> =>
     let totalCompletedItems = 0;
 
     for (const courseId of user.assignedCourseIds) {
-        // Try fetching as global course first
         let courseData: Course | BrandCourse | null = await getCourseById(courseId);
         if (!courseData) {
-            // If not found as global, try as brand course
             courseData = await getBrandCourseById(courseId);
         }
 
@@ -529,7 +509,6 @@ export const getUserOverallProgress = async (userId: string): Promise<number> =>
             const courseTotal = courseData.curriculum.length;
             totalCurriculumItems += courseTotal;
 
-            // Get specific progress for this course
             const courseProgressData = user.courseProgress?.[courseId];
             const completedCount = courseProgressData?.completedItems?.length || 0;
             totalCompletedItems += completedCount;
@@ -542,7 +521,7 @@ export const getUserOverallProgress = async (userId: string): Promise<number> =>
 
     if (totalCurriculumItems === 0) {
         console.log(`User ${userId} assigned courses have no curriculum items in total.`);
-        return 0; // Avoid division by zero
+        return 0; 
     }
 
     const overallProgress = Math.round((totalCompletedItems / totalCurriculumItems) * 100);
@@ -551,7 +530,6 @@ export const getUserOverallProgress = async (userId: string): Promise<number> =>
 };
 
 
-// Update user's progress for a specific item in a course
 export const updateEmployeeProgress = async (userId: string, courseId: string, completedItemIndex: number): Promise<void> => {
     if (!userId || !courseId || completedItemIndex < 0) {
         console.error("Invalid input for updateEmployeeProgress");
@@ -563,10 +541,8 @@ export const updateEmployeeProgress = async (userId: string, courseId: string, c
     return retryOperation(async () => {
         const userRef = doc(db, USERS_COLLECTION, userId);
         
-        // Try fetching as global course first
         let course: Course | BrandCourse | null = await getCourseById(courseId);
         if (!course) {
-            // If not found as global, try as brand course
             course = await getBrandCourseById(courseId);
         }
 
@@ -575,15 +551,14 @@ export const updateEmployeeProgress = async (userId: string, courseId: string, c
             throw new Error("Invalid course data or item index.");
         }
 
-        const completedItemId = course.curriculum[completedItemIndex]; // Get the actual item ID
-        if (!completedItemId) { // Should not happen if index is valid, but good check
+        const completedItemId = course.curriculum[completedItemIndex]; 
+        if (!completedItemId) { 
              console.error(`Could not find item ID at index ${completedItemIndex} for course ${courseId}`);
              throw new Error("Could not find item ID.");
         }
         const progressFieldPath = `courseProgress.${courseId}`;
         const totalItems = course.curriculum.length;
 
-        // Fetch current user data to get existing progress
         const userSnap = await getDoc(userRef);
         if (!userSnap.exists() || userSnap.data().isDeleted === true) {
              console.error(`User ${userId} not found or is soft-deleted for progress update.`);
@@ -591,61 +566,94 @@ export const updateEmployeeProgress = async (userId: string, courseId: string, c
         }
         const currentProgressData = userSnap.data()?.courseProgress?.[courseId] as UserCourseProgressData | undefined;
 
-        // Add the newly completed item ID, ensuring no duplicates
         const updatedCompletedItems = Array.from(new Set([...(currentProgressData?.completedItems || []), completedItemId]));
         const completedCount = updatedCompletedItems.length;
 
-        // Determine new status
         let newStatus: UserCourseProgressData['status'] = "In Progress";
         if (completedCount === totalItems && totalItems > 0) {
             newStatus = "Completed";
         } else if (completedCount === 0 && (!currentProgressData || currentProgressData.status === "Not Started")) {
-            newStatus = "Not Started"; // Stay "Not Started" if 0 items and previously "Not Started"
+            newStatus = "Not Started"; 
         } else if (completedCount > 0 && (!currentProgressData || currentProgressData.status === "Not Started")) {
-             newStatus = "Started"; // Change to "Started" if first item completed
+             newStatus = "Started"; 
         } else if (currentProgressData?.status) {
-            newStatus = currentProgressData.status; // Maintain existing status if items are being completed further
+            newStatus = currentProgressData.status; 
              if (newStatus === "Started" && completedCount > 0 && completedCount < totalItems) {
-                newStatus = "In Progress"; // Transition from Started to In Progress if more items are done but not all
+                newStatus = "In Progress"; 
             }
         }
 
-
         const newProgressPercentage = totalItems > 0 ? Math.round((completedCount / totalItems) * 100) : 0;
+        
+        // Ensure videoProgress map exists if it doesn't
+        const videoProgressMapPath = `${progressFieldPath}.videoProgress`;
+        const currentVideoProgress = currentProgressData?.videoProgress || {};
+
 
         await updateDoc(userRef, {
             [`${progressFieldPath}.completedItems`]: updatedCompletedItems,
             [`${progressFieldPath}.status`]: newStatus,
             [`${progressFieldPath}.progress`]: newProgressPercentage,
+            [videoProgressMapPath]: currentVideoProgress, // Ensure this map is at least initialized/preserved
             [`${progressFieldPath}.lastUpdated`]: serverTimestamp(),
-            updatedAt: serverTimestamp(), // Update user's main updatedAt as well
+            updatedAt: serverTimestamp(), 
         });
         console.log(`Progress updated successfully for user ${userId}, course ${courseId}. New progress: ${newProgressPercentage}%, Status: ${newStatus}`);
     });
 };
 
 
-// Placeholder function to represent fetching company data by hostname/slug
-// This is simplified and would need more robust logic for production
+// Function to update user's video progress for a specific lesson item in a course
+export const updateUserVideoProgress = async (
+    userId: string,
+    courseId: string,
+    lessonItemId: string, // This is the prefixed ID like 'lesson-xyz' or 'brandLesson-abc'
+    currentTime: number
+): Promise<void> => {
+    if (!userId || !courseId || !lessonItemId || typeof currentTime !== 'number' || currentTime < 0) {
+        console.error("Invalid input for updateUserVideoProgress", { userId, courseId, lessonItemId, currentTime });
+        return;
+    }
+
+    console.log(`Saving video progress for user ${userId}, course ${courseId}, lesson ${lessonItemId}, time ${currentTime}`);
+
+    return retryOperation(async () => {
+        const userRef = doc(db, USERS_COLLECTION, userId);
+        const userSnap = await getDoc(userRef);
+
+        if (!userSnap.exists() || userSnap.data().isDeleted === true) {
+            console.error(`User ${userId} not found or is soft-deleted for video progress update.`);
+            throw new Error("User not found or is soft-deleted.");
+        }
+
+        const videoProgressFieldPath = `courseProgress.${courseId}.videoProgress.${lessonItemId}`;
+
+        await updateDoc(userRef, {
+            [videoProgressFieldPath]: currentTime,
+            [`courseProgress.${courseId}.lastUpdated`]: serverTimestamp(), 
+            updatedAt: serverTimestamp(), 
+        });
+        console.log(`Video progress updated for user ${userId}, course ${courseId}, lesson ${lessonItemId} to ${currentTime}s`);
+    });
+};
+
+
 export async function getUserCompany(identifier: string | null): Promise<Company | null> {
   console.warn(
-    "getUserCompany in user-data.ts is called. For RootLayout theming, this function relies on `identifier` (hostname/slug) passed correctly from a server context. It will attempt to find a brand by customDomain or subdomainSlug."
+    "[getUserCompany] in user-data.ts is called. For RootLayout theming, this function relies on `identifier` (hostname/slug) being passed correctly from a server context. It will attempt to find a brand by customDomain or subdomainSlug."
   );
   if (!identifier) {
     return null;
   }
   try {
-    // First, try to find by custom domain
-    let company = await getCompanyDataById(identifier); // Assuming getCompanyDataById can also check customDomain or a new function getCompanyByCustomDomain is used
+    let company = await getCompanyDataById(identifier); 
     if (company && company.customDomain === identifier) {
       console.log(`[getUserCompany] Found brand by customDomain "${identifier}": ${company.name}`);
       return company;
     }
 
-    // If not found by custom domain, try by subdomain slug
-    // This requires parsing the identifier if it's a full hostname
-    const slug = identifier.includes('.') ? identifier.split('.')[0] : identifier; // Basic slug extraction
-    if (slug && slug !== 'www' && slug !== 'localhost' && !slug.startsWith('gymramp-lms')) {
+    const slug = identifier.includes('.') ? identifier.split('.')[0] : identifier; 
+    if (slug && slug !== 'www' && slug !== 'localhost' && !slug.startsWith('gymramp-lms')) { 
         company = await getCompanyBySubdomainSlug(slug);
         if (company) {
         console.log(`[getUserCompany] Found brand by subdomainSlug "${slug}" (from host "${identifier}"): ${company.name}`);
