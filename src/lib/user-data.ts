@@ -23,6 +23,8 @@ import type { User, UserFormData, UserRole, UserCourseProgressData, Company } fr
 import { auth } from './firebase';
 import { createDefaultCompany, getCompanyById, getCompanyBySubdomainSlug } from './company-data';
 import { getCourseById } from './firestore-data';
+import { getBrandCourseById } from './brand-content-data'; // Import for brand courses
+import type { Course, BrandCourse } from '@/types/course'; // Import BrandCourse type
 
 const USERS_COLLECTION = 'users';
 
@@ -93,12 +95,11 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 
     return retryOperation(async () => {
         const usersRef = collection(db, USERS_COLLECTION);
-        // Updated query to be more specific
         const q = query(usersRef, where("email", "==", lowercasedEmail), where("isDeleted", "==", false));
 
         try {
             const querySnapshot = await getDocs(q);
-            console.log(`[getUserByEmail] Query for '${lowercasedEmail}' (and isDeleted:false) executed. Snapshot empty: ${querySnapshot.empty}. Docs count: ${querySnapshot.docs.length}`);
+            console.log(`[getUserByEmail] Query for '${lowercasedEmail}' and isDeleted:false executed. Snapshot empty: ${querySnapshot.empty}. Docs count: ${querySnapshot.docs.length}`);
 
             if (querySnapshot.empty) {
                 console.log(`[getUserByEmail] No user document found for email: '${lowercasedEmail}' with isDeleted:false in collection '${USERS_COLLECTION}'.`);
@@ -107,7 +108,7 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 
             const docSnap = querySnapshot.docs[0];
             const userData = docSnap.data();
-            console.log(`[getUserByEmail] Document found for '${lowercasedEmail}' with isDeleted:false. ID: ${docSnap.id}.`); // Simplified log
+            console.log(`[getUserByEmail] Document found for '${lowercasedEmail}' with isDeleted:false. ID: ${docSnap.id}.`);
 
             if (docSnap.exists()) {
                 return { id: docSnap.id, ...userData } as User;
@@ -175,7 +176,7 @@ export async function addUser(userData: Omit<UserFormData, 'password'> & { requi
             assignedCourseIds: userData.assignedCourseIds || [],
             courseProgress: {},
             profileImageUrl: userData.profileImageUrl || null,
-            requiresPasswordChange: userData.requiresPasswordChange === true, // Ensure it's explicitly true or false
+            requiresPasswordChange: userData.requiresPasswordChange === true,
         };
         const docRef = await addDoc(usersRef, newUserDoc);
         const newDocSnap = await getDoc(docRef);
@@ -199,7 +200,6 @@ export async function updateUser(userId: string, userData: Partial<UserFormData 
 
         const updatePayload: Partial<User> = {};
 
-        // Only include fields that are actually provided in userData
         if (dataToUpdate.name !== undefined) updatePayload.name = dataToUpdate.name;
         if (dataToUpdate.email !== undefined) updatePayload.email = dataToUpdate.email.toLowerCase();
         if (dataToUpdate.role !== undefined) updatePayload.role = dataToUpdate.role;
@@ -211,7 +211,10 @@ export async function updateUser(userId: string, userData: Partial<UserFormData 
         if (dataToUpdate.requiresPasswordChange !== undefined) updatePayload.requiresPasswordChange = dataToUpdate.requiresPasswordChange;
 
 
-        if (Object.keys(updatePayload).length === 0) {
+        if (Object.keys(updatePayload).length === 0 && Object.keys(dataToUpdate).includes('requiresPasswordChange') && dataToUpdate.requiresPasswordChange === false) {
+           // This case handles when only requiresPasswordChange is being updated to false.
+           // We need to ensure updatedAt is also set.
+        } else if (Object.keys(updatePayload).length === 0) {
             console.warn("updateUser called with no data to update for user:", userId);
             const currentUserDocSnap = await getDoc(userRef);
             if (currentUserDocSnap.exists() && currentUserDocSnap.data().isDeleted !== true) {
@@ -219,6 +222,9 @@ export async function updateUser(userId: string, userData: Partial<UserFormData 
             }
             return null;
         }
+        
+        updatePayload.updatedAt = serverTimestamp() as Timestamp;
+
 
         await updateDoc(userRef, updatePayload);
         const updatedDocSnap = await getDoc(userRef);
@@ -245,7 +251,7 @@ export async function toggleUserStatus(userId: string): Promise<User | null> {
         const docSnap = await getDoc(userRef);
         if (docSnap.exists() && docSnap.data().isDeleted !== true) {
             const currentStatus = docSnap.data().isActive;
-            await updateDoc(userRef, { isActive: !currentStatus });
+            await updateDoc(userRef, { isActive: !currentStatus, updatedAt: serverTimestamp() });
             const updatedUser = await getUserById(userId);
             return updatedUser;
         } else {
@@ -266,7 +272,8 @@ export async function deleteUser(userId: string): Promise<boolean> {
         await updateDoc(userRef, {
             isDeleted: true,
             deletedAt: serverTimestamp(),
-            isActive: false
+            isActive: false,
+            updatedAt: serverTimestamp(),
         });
         return true;
     }, 3);
@@ -285,7 +292,7 @@ export const toggleUserCourseAssignments = async (userId: string, courseIds: str
             return null;
         }
 
-        const updateData: { [key: string]: any } = {};
+        const updateData: { [key: string]: any } = { updatedAt: serverTimestamp() };
         const currentProgress = userSnap.data()?.courseProgress || {};
         const currentAssignedIds = userSnap.data()?.assignedCourseIds || [];
 
@@ -319,7 +326,7 @@ export const toggleUserCourseAssignments = async (userId: string, courseIds: str
             }
         }
 
-        if (Object.keys(updateData).length > 0) {
+        if (Object.keys(updateData).length > 1) { // More than just updatedAt
             await updateDoc(userRef, updateData);
         }
 
@@ -379,7 +386,7 @@ export async function assignMissingCompanyToUsers(defaultCompanyId: string): Pro
         usersToUpdate.forEach(user => {
             const userRef = doc(db, USERS_COLLECTION, user.id);
             console.log(`Assigning brand ${defaultCompanyId} to user ${user.email} (${user.id})`);
-            batch.update(userRef, { companyId: defaultCompanyId, isDeleted: false });
+            batch.update(userRef, { companyId: defaultCompanyId, isDeleted: false, updatedAt: serverTimestamp() });
         });
 
         await batch.commit();
@@ -407,7 +414,7 @@ export async function assignMissingLocationToUsers(companyId: string, defaultLoc
             if (!userData.assignedLocationIds || !Array.isArray(userData.assignedLocationIds) || userData.assignedLocationIds.length === 0) {
                 console.log(`Assigning location ${defaultLocationId} to user ${userData.email} (${userDoc.id})`);
                 const userRef = doc(db, USERS_COLLECTION, userDoc.id);
-                batch.update(userRef, { assignedLocationIds: [defaultLocationId] });
+                batch.update(userRef, { assignedLocationIds: [defaultLocationId], updatedAt: serverTimestamp() });
                 updatedCount++;
             }
         });
@@ -435,9 +442,13 @@ export const getUserCourseProgress = async (userId: string, courseId: string): P
             return defaultProgress;
         }
 
-        const course = await getCourseById(courseId);
-        if (!course || !course.curriculum || course.curriculum.length === 0) {
-            console.warn(`Course ${courseId} not found or has no curriculum. Cannot calculate progress.`);
+        let courseData: Course | BrandCourse | null = await getCourseById(courseId);
+        if (!courseData) {
+            courseData = await getBrandCourseById(courseId);
+        }
+
+        if (!courseData || !courseData.curriculum || courseData.curriculum.length === 0) {
+            console.warn(`Course ${courseId} (global or brand) not found or has no curriculum. Cannot calculate progress.`);
             const storedProgress = user.courseProgress?.[courseId] as UserCourseProgressData | undefined;
             return {
                 progress: storedProgress?.progress ?? 0,
@@ -447,7 +458,7 @@ export const getUserCourseProgress = async (userId: string, courseId: string): P
             };
         }
 
-        const totalItems = course.curriculum.length;
+        const totalItems = courseData.curriculum.length;
         const progressData = user.courseProgress?.[courseId] as UserCourseProgressData | undefined;
         const completedItems = progressData?.completedItems || [];
         const completedCount = completedItems.length;
@@ -457,7 +468,11 @@ export const getUserCourseProgress = async (userId: string, courseId: string): P
             currentStatus = "Completed";
         } else if (completedCount > 0) {
             currentStatus = "In Progress";
+        } else if (progressData?.status === "Started" && completedCount === 0) {
+            // Keep 'Started' if no items are complete but it was explicitly started
+            currentStatus = "Started";
         }
+
 
         console.log(`Calculated progress for ${userId} on ${courseId}: ${calculatedProgress}%, Status: ${currentStatus}`);
         return { progress: calculatedProgress, status: currentStatus, completedItems, lastUpdated: progressData?.lastUpdated ?? null };
@@ -480,9 +495,13 @@ export const getUserOverallProgress = async (userId: string): Promise<number> =>
     let totalCompletedItems = 0;
 
     for (const courseId of user.assignedCourseIds) {
-        const course = await getCourseById(courseId);
-        if (course?.curriculum && course.curriculum.length > 0) {
-            const courseTotal = course.curriculum.length;
+        let courseData: Course | BrandCourse | null = await getCourseById(courseId);
+        if (!courseData) {
+            courseData = await getBrandCourseById(courseId);
+        }
+
+        if (courseData?.curriculum && courseData.curriculum.length > 0) {
+            const courseTotal = courseData.curriculum.length;
             totalCurriculumItems += courseTotal;
             const courseProgressData = user.courseProgress?.[courseId];
             const completedCount = courseProgressData?.completedItems?.length || 0;
@@ -490,7 +509,7 @@ export const getUserOverallProgress = async (userId: string): Promise<number> =>
             const individualProgress = courseTotal > 0 ? Math.round((completedCount / courseTotal) * 100) : 0;
             console.log(`  - Course ${courseId}: ${completedCount}/${courseTotal} items completed (${individualProgress}%)`);
         } else {
-            console.warn(`  - Course ${courseId} not found or has no curriculum items.`);
+            console.warn(`  - Course ${courseId} (global or brand) not found or has no curriculum items.`);
         }
     }
 
@@ -515,7 +534,11 @@ export const updateEmployeeProgress = async (userId: string, courseId: string, c
 
     return retryOperation(async () => {
         const userRef = doc(db, USERS_COLLECTION, userId);
-        const course = await getCourseById(courseId);
+        
+        let course: Course | BrandCourse | null = await getCourseById(courseId);
+        if (!course) {
+            course = await getBrandCourseById(courseId);
+        }
 
         if (!course || !course.curriculum || completedItemIndex >= course.curriculum.length) {
             console.error(`Invalid course data or item index for progress update. Course: ${courseId}, Index: ${completedItemIndex}`);
@@ -543,13 +566,14 @@ export const updateEmployeeProgress = async (userId: string, courseId: string, c
         let newStatus: UserCourseProgressData['status'] = "In Progress";
         if (completedCount === totalItems && totalItems > 0) {
             newStatus = "Completed";
-        } else if (completedCount === 0) {
-            newStatus = "Not Started";
+        } else if (completedCount === 0 && (!currentProgressData || currentProgressData.status === "Not Started")) {
+            newStatus = "Not Started"; // Stay "Not Started" if 0 items and previously "Not Started"
         } else if (completedCount > 0 && (!currentProgressData || currentProgressData.status === "Not Started")) {
-             newStatus = "In Progress";
+             newStatus = "Started"; // Change to "Started" if first item completed
         } else if (currentProgressData?.status) {
-            if(currentProgressData.status === "In Progress" || currentProgressData.status === "Started"){
-                newStatus = currentProgressData.status;
+            newStatus = currentProgressData.status; // Maintain existing status if items are being completed further
+             if (newStatus === "Started" && completedCount > 0 && completedCount < totalItems) {
+                newStatus = "In Progress";
             }
         }
 
@@ -561,6 +585,7 @@ export const updateEmployeeProgress = async (userId: string, courseId: string, c
             [`${progressFieldPath}.status`]: newStatus,
             [`${progressFieldPath}.progress`]: newProgressPercentage,
             [`${progressFieldPath}.lastUpdated`]: serverTimestamp(),
+            updatedAt: serverTimestamp(),
         });
         console.log(`Progress updated successfully for user ${userId}, course ${courseId}. New progress: ${newProgressPercentage}%, Status: ${newStatus}`);
     });
@@ -569,24 +594,22 @@ export const updateEmployeeProgress = async (userId: string, courseId: string, c
 
 export async function getUserCompany(identifier: string | null): Promise<Company | null> {
   console.warn(
-    "getUserCompany in user-data.ts is called. This function attempts to resolve a brand by customDomain or subdomainSlug. For RootLayout theming, reliable server-side host identification is complex and depends on deployment."
+    "getUserCompany in user-data.ts is called. For RootLayout theming, this function relies on `identifier` (hostname/slug) passed correctly from a server context. It will attempt to find a brand by customDomain or subdomainSlug."
   );
   if (!identifier) {
     return null;
   }
   try {
-    // Attempt to find by custom domain first
     let company = await getCompanyByCustomDomain(identifier);
     if (company) {
       console.log(`[getUserCompany] Found brand by customDomain "${identifier}": ${company.name}`);
       return company;
     }
 
-    // If not found by custom domain, try by subdomain slug
-    // This basic parsing assumes identifier might be "slug.yourmainapp.com"
-    // More robust parsing might be needed in a real scenario.
     const parts = identifier.split('.');
-    if (parts.length > 1 && parts[0] !== 'www' && parts[0] !== 'localhost') {
+    // Basic check for a potential subdomain slug format (e.g., brand.yourmain.com)
+    // Avoids treating 'localhost' or 'www.yourmain.com' as slugs.
+    if (parts.length > 1 && parts[0] !== 'www' && parts[0] !== 'localhost' && !parts[0].startsWith('gymramp-lms')) { // Added check for gymramp-lms project ID to avoid using it as a slug
       const slug = parts[0];
       company = await getCompanyBySubdomainSlug(slug);
       if (company) {
