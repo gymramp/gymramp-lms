@@ -21,7 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { getUserByEmail, getCompanyById as getUserCompanyData } from '@/lib/user-data'; // Renamed to avoid conflict
+import { getUserByEmail } from '@/lib/user-data';
+import { getCompanyById as getUserCompanyData } from '@/lib/company-data'; // Corrected import
 import { useRouter } from 'next/navigation';
 
 const DEFAULT_ROWS_PER_PAGE = 10;
@@ -115,7 +116,7 @@ export default function BrandAdminCoursesPage() {
     const lowercasedFilter = searchTerm.toLowerCase();
     const filtered = courses.filter(course =>
       course.title.toLowerCase().includes(lowercasedFilter) ||
-      course.description.toLowerCase().includes(lowercasedFilter)
+      (course.description && course.description.toLowerCase().includes(lowercasedFilter))
     );
     setFilteredCourses(filtered);
     setCurrentPage(1);
@@ -294,4 +295,3 @@ export default function BrandAdminCoursesPage() {
     </div>
   );
 }
-
