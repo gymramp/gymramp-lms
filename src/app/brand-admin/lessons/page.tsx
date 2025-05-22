@@ -21,7 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { getUserByEmail, getCompanyById } from '@/lib/user-data'; // getCompanyById to check canManageCourses
+import { getUserByEmail } from '@/lib/user-data';
+import { getCompanyById } from '@/lib/company-data'; // Corrected import path
 import { useRouter } from 'next/navigation';
 
 const DEFAULT_ROWS_PER_PAGE = 10;
@@ -232,7 +233,7 @@ export default function BrandAdminLessonsPage() {
                             <DropdownMenuLabel>Manage</DropdownMenuLabel>
                             <DropdownMenuItem onClick={() => handleEditLesson(lesson)}><Edit className="mr-2 h-4 w-4" />Edit Details</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => openDeleteConfirmation(lesson)} disabled={isDeleting}>
+                            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => openDeleteConfirmation(lesson)} disabled={isDeleting && lessonToDelete?.id === lesson.id}>
                               {isDeleting && lessonToDelete?.id === lesson.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Trash2 className="mr-2 h-4 w-4" />}
                               Delete Lesson
                             </DropdownMenuItem>
@@ -291,3 +292,5 @@ export default function BrandAdminLessonsPage() {
     </div>
   );
 }
+
+    
