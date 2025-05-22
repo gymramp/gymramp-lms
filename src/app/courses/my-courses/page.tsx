@@ -8,20 +8,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BookOpen, PlayCircle, Award, Eye } from 'lucide-react';
+import { BookOpen, PlayCircle, Eye } from 'lucide-react'; // Removed Award as it's not used here
 import { useToast } from '@/hooks/use-toast';
-import type { Course, BrandCourse } from '@/types/course'; // Import BrandCourse
+import type { Course, BrandCourse } from '@/types/course';
 import type { User, UserCourseProgressData } from '@/types/user';
 import { getUserByEmail, getUserCourseProgress } from '@/lib/user-data';
 import { getCourseById } from '@/lib/firestore-data';
-import { getBrandCourseById } from '@/lib/brand-content-data'; // Import function to get brand courses
+import { getBrandCourseById } from '@/lib/brand-content-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { cn } from '@/lib/utils';
 import { Timestamp } from 'firebase/firestore';
 
-// Type for course combined with progress data
-// Uses core Course properties, BrandCourse will be mapped to this for display
 type CourseWithProgress = Course & {
   progress: number;
   status: "Not Started" | "Started" | "In Progress" | "Completed";
@@ -33,11 +31,13 @@ type CourseWithProgress = Course & {
 export default function MyCoursesPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [assignedCoursesWithProgress, setAssignedCoursesWithProgress] = useState<CourseWithProgress[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
+  const [isLoadingCourses, setIsLoadingCourses] = useState(false); // Initially false, true when fetching courses
   const { toast } = useToast();
 
+  // Effect 1: Handle Auth State Change and Set User
   useEffect(() => {
-    setIsLoading(true);
+    setIsLoadingUser(true);
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
         try {
@@ -47,77 +47,58 @@ export default function MyCoursesPage() {
            console.error("Error fetching user details:", error);
            setCurrentUser(null);
            toast({ title: "Error", description: "Could not load your profile.", variant: "destructive" });
-           setIsLoading(false);
         }
       } else {
         setCurrentUser(null);
-        setIsLoading(false);
       }
+      setIsLoadingUser(false);
     });
 
     return () => unsubscribe();
   }, [toast]);
 
+  // Effect 2: Fetch Course Data when User ID is available
   const fetchCourseData = useCallback(async (userId: string) => {
-    setIsLoading(true);
+    if (!currentUser) { // Check if currentUser (from state) is available
+        setAssignedCoursesWithProgress([]);
+        return;
+    }
+    setIsLoadingCourses(true);
     try {
-        const userDetails = currentUser;
-
-        if (!userDetails) {
-            setAssignedCoursesWithProgress([]);
-            setIsLoading(false);
-            return;
-        }
-
-        const assignedCourseIds = userDetails.assignedCourseIds || [];
+        const assignedCourseIds = currentUser.assignedCourseIds || [];
 
         if (assignedCourseIds.length === 0) {
             setAssignedCoursesWithProgress([]);
-            setIsLoading(false);
             return;
         }
 
         const courseProgressPromises = assignedCourseIds.map(async (courseId) => {
-            let courseDetails: Course | BrandCourse | null = await getCourseById(courseId); // Try global first
-            let isBrandCourse = false;
+            let courseDetails: Course | BrandCourse | null = null;
+            let courseTypeForDisplay: Partial<Course> = {};
 
-            if (!courseDetails) {
-                courseDetails = await getBrandCourseById(courseId); // Try brand-specific if global not found
-                if (courseDetails) {
-                    isBrandCourse = true;
+            courseDetails = await getCourseById(courseId); // Try global first
+            if (courseDetails) {
+                courseTypeForDisplay = courseDetails;
+            } else {
+                const brandCourseDetails = await getBrandCourseById(courseId); // Try brand-specific if global not found
+                if (brandCourseDetails) {
+                    courseTypeForDisplay = brandCourseDetails;
                 }
             }
 
-            if (!courseDetails) {
-                console.warn(`Course or BrandCourse with ID ${courseId} not found.`);
+            if (!courseTypeForDisplay.id) { // Check if any course was found
+                console.warn(`Course (global or brand) with ID ${courseId} not found.`);
                 return null;
             }
             
-            // Map BrandCourse to a structure compatible with Course for display if needed,
-            // though most display properties are common.
-            const displayCourse: Course = {
-                id: courseDetails.id,
-                title: courseDetails.title,
-                description: courseDetails.description,
-                longDescription: courseDetails.longDescription,
-                imageUrl: courseDetails.imageUrl,
-                featuredImageUrl: courseDetails.featuredImageUrl,
-                level: courseDetails.level,
-                duration: courseDetails.duration,
-                curriculum: courseDetails.curriculum,
-                certificateTemplateId: courseDetails.certificateTemplateId,
-                // Ensure other Course specific fields have defaults if not on BrandCourse
-                // (though current structure is very similar for display props)
+            const progressData = await getUserCourseProgress(userId, courseTypeForDisplay.id);
+            return {
+                ...(courseTypeForDisplay as Course), // Cast to Course for CourseWithProgress type
+                progress: progressData.progress,
+                status: progressData.status,
+                completedItems: progressData.completedItems,
+                lastUpdated: progressData.lastUpdated
             };
-
-             const progressData = await getUserCourseProgress(userId, courseId);
-             return {
-                 ...displayCourse, // Use the common structure
-                 progress: progressData.progress,
-                 status: progressData.status,
-                 completedItems: progressData.completedItems,
-                 lastUpdated: progressData.lastUpdated
-             };
         });
 
         const coursesWithProgressData = (await Promise.all(courseProgressPromises))
@@ -130,19 +111,20 @@ export default function MyCoursesPage() {
         toast({ title: "Error", description: "Could not load assigned courses or progress.", variant: "destructive" });
         setAssignedCoursesWithProgress([]);
     } finally {
-        setIsLoading(false);
+        setIsLoadingCourses(false);
     }
-  }, [currentUser, toast]);
+  }, [currentUser, toast]); // Depends on currentUser object for assignedCourseIds
 
    useEffect(() => {
-        if (currentUser?.id) {
+        if (!isLoadingUser && currentUser?.id) { // Fetch courses only after user is loaded and has an ID
             fetchCourseData(currentUser.id);
-        } else if (currentUser === null && !isLoading) { // Ensures this runs after auth check
-             setAssignedCoursesWithProgress([]);
-             // No need to setIsLoading(false) here as it's done in the outer useEffect or fetchCourseData
+        } else if (!isLoadingUser && !currentUser) { // If user loading is done and there's no user
+            setAssignedCoursesWithProgress([]);
+            setIsLoadingCourses(false); // Ensure courses loading is also false
         }
-    }, [currentUser, isLoading, fetchCourseData]); // Added isLoading to dependency array
+    }, [isLoadingUser, currentUser, fetchCourseData]);
 
+  const isLoading = isLoadingUser || isLoadingCourses; // Combined loading state for UI
 
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20">
@@ -198,11 +180,10 @@ export default function MyCoursesPage() {
                         data-ai-hint="course cover"
                          onError={(e) => {
                              const target = e.target as HTMLImageElement;
-                             target.onerror = null; // Prevent infinite loop if fallback also fails
-                             // Try secondary image URL if primary fails
+                             target.onerror = null; 
                              if (course.imageUrl && target.src !== course.imageUrl) {
                                  target.src = course.imageUrl;
-                             } else { // Fallback to placeholder
+                             } else { 
                                  target.src = `https://placehold.co/600x350.png?text=${encodeURIComponent(course.title)}`;
                              }
                          }}
@@ -246,3 +227,4 @@ export default function MyCoursesPage() {
     </div>
   );
 }
+
