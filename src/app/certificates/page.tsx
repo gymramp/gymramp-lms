@@ -8,11 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle as DialogUITitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Award, BookOpen } from 'lucide-react';
+import { Award } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Course, BrandCourse } from '@/types/course';
 import type { User, UserCourseProgressData, Company } from '@/types/user';
-import { getUserByEmail, getUserCourseProgress, getCompanyById } from '@/lib/user-data';
+import { getUserByEmail, getUserCourseProgress } from '@/lib/user-data';
+import { getCompanyById } from '@/lib/company-data'; // Corrected import
 import { getCourseById } from '@/lib/firestore-data';
 import { getBrandCourseById } from '@/lib/brand-content-data';
 import { auth } from '@/lib/firebase';
@@ -43,7 +44,6 @@ export default function MyCertificatesPage() {
                     const userDetails = await getUserByEmail(firebaseUser.email);
                     setCurrentUser(userDetails);
                     if (userDetails?.companyId) {
-                        // Using the correctly imported getCompanyById from user-data (which should be company-data, fixed if previously error)
                         const brand = await getCompanyById(userDetails.companyId);
                         setUserBrand(brand);
                     }
@@ -54,7 +54,6 @@ export default function MyCertificatesPage() {
             } else {
                 setCurrentUser(null); setUserBrand(null);
             }
-            // setIsLoading(false); // Moved loading set to false after course fetching
         });
         return () => unsubscribe();
     }, [toast]);
@@ -63,13 +62,15 @@ export default function MyCertificatesPage() {
         setIsLoading(true);
         try {
             const userDetails = currentUser; // Use state currentUser
-            if (!userDetails?.id) { // Check for userDetails.id
+            if (!userDetails?.id) {
                  setCompletedCourses([]);
                  setIsLoading(false);
                  return;
             }
 
-            const assignedCourseIds = userDetails.assignedCourseIds || [];
+            // Ensure assignedCourseIds exists and is an array before mapping
+            const assignedCourseIds = Array.isArray(userDetails.assignedCourseIds) ? userDetails.assignedCourseIds : [];
+
             if (assignedCourseIds.length === 0) {
                 setCompletedCourses([]);
                 setIsLoading(false);
@@ -78,12 +79,12 @@ export default function MyCertificatesPage() {
 
             const coursesDataPromises = assignedCourseIds.map(async (courseId) => {
                 let courseData: Course | BrandCourse | null = null;
-                let isBrandCourse = false;
 
+                // Try fetching as global course first
                 courseData = await getCourseById(courseId);
                 if (!courseData) {
+                    // If not found as global, try as brand course
                     courseData = await getBrandCourseById(courseId);
-                    if (courseData) isBrandCourse = true;
                 }
 
                 if (!courseData) {
@@ -115,16 +116,16 @@ export default function MyCertificatesPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [currentUser, toast]); // currentUser is now a dependency
+    }, [currentUser, toast]); // currentUser is the dependency here
 
     useEffect(() => {
-        if (currentUser?.id) { // Fetch only if currentUser.id is available
+        if (currentUser?.id) {
             fetchCompletedCourses(currentUser.id);
-        } else if (currentUser === null && !isLoading) { // Handle no user after initial auth check
+        } else if (!isLoading && !currentUser) { // Ensure isLoading is false before deciding no user
              setCompletedCourses([]);
-             setIsLoading(false);
+             setIsLoading(false); // Make sure loading is set to false if there's no user
         }
-    }, [currentUser, isLoading, fetchCompletedCourses]); // Add isLoading to dependencies
+    }, [currentUser, isLoading, fetchCompletedCourses]);
 
     const handleViewCertificate = (course: CompletedCourseDisplay) => {
         setSelectedCertificate(course);
@@ -170,7 +171,7 @@ export default function MyCertificatesPage() {
                             {course.featuredImageUrl || course.imageUrl ? (
                                 <div className="relative aspect-video w-full">
                                 <Image
-                                    src={course.featuredImageUrl || course.imageUrl}
+                                    src={course.featuredImageUrl || course.imageUrl || `https://placehold.co/600x350.png?text=${encodeURIComponent(course.title)}`}
                                     alt={course.title}
                                     fill
                                     style={{ objectFit: 'cover' }}
