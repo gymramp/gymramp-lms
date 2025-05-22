@@ -79,16 +79,19 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
         ]
       },
       { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },
+      { href: '/certificates', label: 'My Certificates', icon: Award }, // Added here
     );
   } else if (user.role === 'Manager') {
     roleSpecificItems.push(
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/admin/users', label: 'Users', icon: Users },
       { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },
+      { href: '/certificates', label: 'My Certificates', icon: Award }, // Added here
     );
   } else if (user.role === 'Staff') {
     roleSpecificItems.push(
       { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },
+      { href: '/certificates', label: 'My Certificates', icon: Award }, // Added here
     );
   }
 
@@ -105,6 +108,7 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
              if (subItem.requiresCanManageCourses && !(userCompany?.canManageCourses === true)) return false;
              return true;
         });
+        // Hide main dropdown if all its sub-items are filtered out due to conditions
         if (item.isDropdown && item.subItems.length === 0 && (item.requiresCanManageCourses || item.requiresCompanyId)) return false;
     }
     return true;
@@ -129,7 +133,7 @@ export function getUserDropdownItems(user: User | null): NavItemType[] {
         items.push(
             { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }
         );
-         if (user.companyId) { // Only add if they belong to a brand
+         if (user.companyId) {
             items.push({ href: `/admin/companies/${user.companyId}/locations`, label: 'Manage Locations', icon: MapPin, requiresCompanyId: true });
         }
     } else if (user.role === 'Manager') {
