@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation'; // Added usePathname
+import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -15,71 +15,93 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"; // For mobile dropdowns
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     Menu, LogOut, User as UserIcon, LayoutDashboard, Settings, Users, BookOpen, FileText,
     ListChecks, Building, ShoppingCart, Award, MapPin, BarChartBig, Gift,
-    TestTube2, UserPlus, Percent, HelpCircle, Layers, CreditCard
-} from 'lucide-react';
+    TestTube2, UserPlus, Percent, HelpCircle, Layers, CreditCard, Cog, Package
+} from 'lucide-react'; // Added Cog, Package
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { getUserByEmail } from '@/lib/user-data';
 import type { User } from '@/types/user';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
-import { getNavigationStructure, getUserDropdownItems, NavItemType } from '@/lib/nav-config'; // Import from nav-config
+import { getNavigationStructure, getUserDropdownItems, NavItemType } from '@/lib/nav-config';
+import { Skeleton } from '../ui/skeleton';
 
-export function Navbar() {
+interface NavbarProps {
+  brandLogoUrl?: string | null;
+  brandName?: string | null;
+}
+
+export function Navbar({ brandLogoUrl, brandName }: NavbarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [navItems, setNavItems] = useState<NavItemType[]>([]);
+  const [userMenuItems, setUserMenuItems] = useState<NavItemType[]>([]);
+  const [isLoadingNav, setIsLoadingNav] = useState(true);
 
   const isLoggedIn = !!currentUser;
 
-  const fetchUserData = useCallback(async (firebaseUser: import('firebase/auth').User | null) => {
+  const fetchNavAndUserData = useCallback(async (firebaseUser: import('firebase/auth').User | null) => {
+    setIsLoadingNav(true);
     if (firebaseUser && firebaseUser.email) {
       try {
         const userDetails = await getUserByEmail(firebaseUser.email);
         setCurrentUser(userDetails);
+        if (userDetails) {
+          const mainNav = await getNavigationStructure(userDetails);
+          const userNav = await getUserDropdownItems(userDetails);
+          setNavItems(mainNav);
+          setUserMenuItems(userNav);
+        } else {
+          setNavItems([]);
+          setUserMenuItems([]);
+        }
       } catch (error) {
-        console.error("Error fetching user data:", error);
+        console.error("Error fetching user data for Navbar:", error);
         setCurrentUser(null);
+        setNavItems([]);
+        setUserMenuItems([]);
       }
     } else {
       setCurrentUser(null);
+      const publicNav = await getNavigationStructure(null); // Get public nav items if any
+      setNavItems(publicNav);
+      setUserMenuItems([]); // No user items if not logged in
     }
+    setIsLoadingNav(false);
   }, []);
 
   useEffect(() => {
     setIsMounted(true);
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      fetchUserData(firebaseUser);
+      fetchNavAndUserData(firebaseUser);
     });
     return () => unsubscribe();
-  }, [fetchUserData]);
+  }, [fetchNavAndUserData]);
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      setCurrentUser(null);
+      // No need to manually set currentUser to null, onAuthStateChanged will handle it
       if (typeof window !== 'undefined') {
           localStorage.removeItem('isLoggedIn');
           localStorage.removeItem('userEmail');
       }
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
-      router.push('/');
+      router.push('/'); // Redirect to login page
     } catch (error) {
       console.error("Logout failed:", error);
       toast({ title: "Logout Failed", description: "Could not log you out.", variant: "destructive" });
     }
   };
-
-  const mainNavItems = getNavigationStructure(currentUser);
-  const userMenuItems = getUserDropdownItems(currentUser);
 
   const getInitials = (name?: string | null): string => {
     if (!name) return '??';
@@ -109,12 +131,15 @@ export function Navbar() {
       </Button>
     );
   };
+  
+  const displayLogoUrl = brandLogoUrl || "/images/newlogo.png";
+  const displayLogoAlt = brandName ? `${brandName} Logo` : "GYMRAMP Logo";
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className={cn("container flex h-14 items-center justify-between", "mx-auto")}>
         <div className="flex items-center">
-           {isMounted && isLoggedIn && mainNavItems.length > 0 && (
+           {isMounted && isLoggedIn && navItems.length > 0 && (
                 <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
                 <SheetTrigger asChild>
                     <Button
@@ -131,7 +156,7 @@ export function Navbar() {
                     <SheetTitle className="text-left">Menu</SheetTitle>
                     </SheetHeader>
                     <nav className="flex flex-col gap-1 p-4">
-                    {mainNavItems.map((item) => (
+                    {navItems.map((item) => (
                         item.isDropdown && item.subItems ? (
                             <Accordion type="single" collapsible className="w-full" key={item.label}>
                                 <AccordionItem value={item.label} className="border-b-0">
@@ -152,14 +177,14 @@ export function Navbar() {
                             renderMobileNavItem(item)
                           ) : null
                     ))}
-                    {currentUser && (
+                    {currentUser && userMenuItems.length > 0 && (
                         <>
                             <hr className="my-3"/>
                             <div className="px-3 py-1.5 text-sm font-semibold text-muted-foreground">User Account</div>
                             {userMenuItems.map((item) => (
                                 <Link
                                     key={item.label}
-                                    href={item.href}
+                                    href={item.href || '#'} // Ensure href has a fallback
                                     onClick={() => setIsMobileMenuOpen(false)}
                                     className="flex items-center gap-3 px-3 py-2 text-base text-foreground/80 hover:text-foreground hover:bg-muted rounded-md w-full"
                                 >
@@ -184,24 +209,29 @@ export function Navbar() {
            )}
             <Link href={isLoggedIn && currentUser ? (currentUser.role === 'Staff' ? "/courses/my-courses" : (currentUser.role === 'Super Admin' ? "/admin/dashboard" : "/dashboard")) : "/"} className="flex items-center">
                 <Image
-                    src="/images/newlogo.png"
-                    alt="GYMRAMP Logo"
+                    src={displayLogoUrl}
+                    alt={displayLogoAlt}
                     width={150}
                     height={45}
                     priority
+                    className="max-h-[30px] object-contain" // Ensure logo fits nicely
+                    onError={(e) => { (e.target as HTMLImageElement).src = '/images/newlogo.png'; }}
                 />
             </Link>
         </div>
 
-        {/* Desktop navigation removed from here, now handled by Sidebar */}
         <nav className="hidden md:flex items-center justify-center space-x-1 text-sm font-medium flex-grow">
           {/* Main desktop nav items are now in Sidebar.tsx */}
         </nav>
 
         <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2"> {/* Keep this div for structure if ModeToggle is added back */}
-                {isMounted ? (
-                  isLoggedIn && currentUser ? (
+            <div className="flex items-center gap-2">
+                {isLoadingNav ? (
+                     <>
+                         <Skeleton className="h-8 w-8 rounded-full" />
+                         <Skeleton className="h-8 w-24 rounded-md" />
+                     </>
+                 ) : isMounted && isLoggedIn && currentUser && userMenuItems.length > 0 ? (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="relative h-8 w-8 rounded-full">
@@ -226,7 +256,7 @@ export function Navbar() {
                             <DropdownMenuSeparator />
                             {userMenuItems.map((item) => (
                                 <DropdownMenuItem key={item.label} asChild className="cursor-pointer">
-                                    <Link href={item.href || '#'} className="flex items-center gap-2"> {/* Ensure href is present */}
+                                    <Link href={item.href || '#'} className="flex items-center gap-2">
                                         {item.icon && <item.icon className="mr-2 h-4 w-4" />}
                                         <span>{item.label}</span>
                                     </Link>
@@ -239,7 +269,7 @@ export function Navbar() {
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                ) : (
+                ) : isMounted && !isLoggedIn ? (
                      <>
                         <Button asChild size="sm" variant="ghost">
                           <Link href="/">Login</Link>
@@ -248,12 +278,8 @@ export function Navbar() {
                           <Link href="/contact">Schedule A Call</Link>
                         </Button>
                      </>
-                )) : (
-                     <>
-                         <div className="h-8 w-8 rounded-full bg-muted animate-pulse"></div>
-                         <div className="h-8 w-24 rounded-md bg-muted animate-pulse"></div>
-                     </>
-                 )}
+                 ) : null /* Handles the case where isMounted is true but still loading nav, or no user */
+                }
             </div>
         </div>
       </div>

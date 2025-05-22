@@ -1,79 +1,126 @@
 
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import './globals.css';
-// Import for server-side header access if needed (e.g. in a dynamic Server Component context)
-// import { headers } from 'next/headers';
-import { getUserCompany } from '@/lib/user-data'; // This function needs to be adapted for server-side hostname detection
+import { headers } from 'next/headers'; // For reading host
+import { getUserCompany } from '@/lib/user-data';
 import { Footer } from '@/components/layout/Footer';
 import { Toaster } from "@/components/ui/toaster";
 import { cn } from '@/lib/utils';
 import { Navbar } from '@/components/layout/Navbar';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { hexToHslString } from '@/lib/utils'; // Import the new utility
 
-export const metadata: Metadata = {
-  title: 'GYMRAMP', // Default title
-  description: 'Sales training for gym employees',
-};
+// Default values for HSL theme variables from globals.css
+const DEFAULT_BACKGROUND_HSL = "0 0% 100%";
+const DEFAULT_FOREGROUND_HSL = "0 0% 3.9%";
+const DEFAULT_PRIMARY_HSL = "0 0% 3.9%";
+const DEFAULT_SECONDARY_HSL = "0 0% 96.1%";
+const DEFAULT_ACCENT_HSL = "226 71% 56%";
+const DEFAULT_CARD_HSL = "0 0% 100%";
+const DEFAULT_CARD_FOREGROUND_HSL = "0 0% 3.9%";
+const DEFAULT_POPOVER_HSL = "0 0% 100%";
+const DEFAULT_POPOVER_FOREGROUND_HSL = "0 0% 3.9%";
+const DEFAULT_MUTED_HSL = "0 0% 96.1%";
+const DEFAULT_MUTED_FOREGROUND_HSL = "0 0% 45.1%";
+const DEFAULT_DESTRUCTIVE_HSL = "0 84.2% 60.2%";
+const DEFAULT_DESTRUCTIVE_FOREGROUND_HSL = "0 0% 98%";
+const DEFAULT_BORDER_HSL = "0 0% 89.8%";
+const DEFAULT_INPUT_HSL = "0 0% 89.8%";
+const DEFAULT_RING_HSL = "0 0% 3.9%";
+
+
+export async function generateMetadata(): Promise<Metadata> {
+  const host = headers().get('host');
+  const company = await getUserCompany(host); // Pass host to identify brand
+
+  return {
+    title: company?.name || 'GYMRAMP',
+    description: company?.shortDescription || 'Sales training for gym employees',
+    // TODO: Add dynamic favicon if brand.faviconUrl is implemented
+    // icons: { icon: company?.faviconUrl || '/favicon.ico' },
+  };
+}
+
+export const viewport: Viewport = {
+  themeColor: [ // Example, could also be dynamic
+    { media: '(prefers-color-scheme: light)', color: 'white' },
+    { media: '(prefers-color-scheme: dark)', color: 'black' },
+  ],
+}
 
 export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // TODO: For true dynamic white-labeling based on hostname for RootLayout styling:
-  // 1. This RootLayout, if it remains a Server Component, needs to access request headers
-  //    to get the hostname. This is possible in dynamic Server Components or if deployed
-  //    to environments (like Node.js server, Vercel, or Cloud Run with custom request handling)
-  //    that expose headers. Firebase App Hosting's direct Next.js support might make this tricky
-  //    without an intermediary like a Cloud Function.
-  //
-  // 2. Extract the subdomain or full domain from the hostname.
-  //    const host = headers().get('host'); // Example if headers() is available
-  //    const subdomainSlug = extractSubdomain(host); // You'd need a utility for this
-  //
-  // 3. Modify `getUserCompany` to be a server-side function that can take this
-  //    `subdomainSlug` (or hostname) and query Firestore for the matching brand.
-  //    const company = await getUserCompany(subdomainSlug);
-  //
-  // 4. If `getUserCompany` successfully returns brand data, use its white-labeling
-  //    settings (primaryColor, secondaryColor, accentColor, logoUrl) below.
+  const host = headers().get('host');
+  const company = await getUserCompany(host);
 
-  // For now, `getUserCompany` is a placeholder and returns null.
-  const company = await getUserCompany(null); // Pass null or a placeholder for now
+  let themeStyles: React.CSSProperties = {
+    '--background': DEFAULT_BACKGROUND_HSL,
+    '--foreground': DEFAULT_FOREGROUND_HSL,
+    '--card': DEFAULT_CARD_HSL,
+    '--card-foreground': DEFAULT_CARD_FOREGROUND_HSL,
+    '--popover': DEFAULT_POPOVER_HSL,
+    '--popover-foreground': DEFAULT_POPOVER_FOREGROUND_HSL,
+    '--primary': DEFAULT_PRIMARY_HSL,
+    '--primary-foreground': company?.whiteLabelEnabled && company.brandForegroundColor ? hexToHslString(company.brandForegroundColor) || DEFAULT_FOREGROUND_HSL : DEFAULT_FOREGROUND_HSL, // Assuming primary-fg contrasts with primary
+    '--secondary': DEFAULT_SECONDARY_HSL,
+    '--secondary-foreground': company?.whiteLabelEnabled && company.brandForegroundColor ? hexToHslString(company.brandForegroundColor) || DEFAULT_FOREGROUND_HSL : DEFAULT_FOREGROUND_HSL, // Assuming secondary-fg contrasts
+    '--muted': DEFAULT_MUTED_HSL,
+    '--muted-foreground': DEFAULT_MUTED_FOREGROUND_HSL,
+    '--accent': DEFAULT_ACCENT_HSL,
+    '--accent-foreground': company?.whiteLabelEnabled && company.brandForegroundColor ? hexToHslString(company.brandForegroundColor) || DEFAULT_FOREGROUND_HSL : DEFAULT_FOREGROUND_HSL, // Assuming accent-fg contrasts
+    '--destructive': DEFAULT_DESTRUCTIVE_HSL,
+    '--destructive-foreground': DEFAULT_DESTRUCTIVE_FOREGROUND_HSL,
+    '--border': DEFAULT_BORDER_HSL,
+    '--input': DEFAULT_INPUT_HSL,
+    '--ring': DEFAULT_RING_HSL,
+  };
 
-  const defaultPrimary = '#004d40'; // GYMRAMP's default dark teal
-  const defaultSecondary = '#e0e0e0'; // GYMRAMP's default light gray
-  const defaultAccent = '#ff9800';   // GYMRAMP's default orange
-
-  const primaryColor = (company?.whiteLabelEnabled && company.primaryColor) ? company.primaryColor : defaultPrimary;
-  const secondaryColor = (company?.whiteLabelEnabled && company.secondaryColor) ? company.secondaryColor : defaultSecondary;
-  const accentColor = (company?.whiteLabelEnabled && company.accentColor) ? company.accentColor : defaultAccent;
-
-  // The title and logo for the browser tab would also ideally be dynamic.
-  // `metadata` object above would need to be a `generateMetadata` function.
-  // export async function generateMetadata({ params }): Promise<Metadata> {
-  //   // Fetch brand data based on params or hostname
-  //   // return { title: brand.name || 'GYMRAMP', description: ... , icons: { icon: brand.faviconUrl }}
-  // }
-
+  if (company && company.whiteLabelEnabled) {
+    if (company.brandBackgroundColor) {
+      const bgHsl = hexToHslString(company.brandBackgroundColor);
+      if (bgHsl) themeStyles['--background'] = bgHsl;
+    }
+    if (company.brandForegroundColor) {
+      const fgHsl = hexToHslString(company.brandForegroundColor);
+      if (fgHsl) {
+        themeStyles['--foreground'] = fgHsl;
+        // Update contrasting foregrounds if brand foreground is set
+        themeStyles['--primary-foreground'] = fgHsl;
+        themeStyles['--secondary-foreground'] = fgHsl;
+        themeStyles['--accent-foreground'] = fgHsl;
+        themeStyles['--card-foreground'] = fgHsl;
+        themeStyles['--popover-foreground'] = fgHsl;
+      }
+    }
+    if (company.primaryColor) {
+      const primaryHsl = hexToHslString(company.primaryColor);
+      if (primaryHsl) themeStyles['--primary'] = primaryHsl;
+    }
+    if (company.secondaryColor) {
+      const secondaryHsl = hexToHslString(company.secondaryColor);
+      if (secondaryHsl) themeStyles['--secondary'] = secondaryHsl;
+    }
+    if (company.accentColor) {
+      const accentHsl = hexToHslString(company.accentColor);
+      if (accentHsl) themeStyles['--accent'] = accentHsl;
+    }
+    // Note: Card, Popover, Muted, Destructive, Border, Input, Ring might need their own brand color fields
+    // or derive from the primary/secondary/background/foreground.
+    // For simplicity, they currently retain defaults unless the general foreground changes.
+  }
 
   return (
     <html lang="en" className={cn("h-full", GeistSans.variable)}>
       <body
         className={cn("flex flex-col h-full font-sans antialiased")}
-        style={{
-          // These CSS variables will be overridden by globals.css which has HSL values.
-          // To make these effective dynamically, globals.css would need to use these
-          // direct hex values OR these would need to be converted to HSL strings here.
-          // Alternatively, set HSL values here if your brand colors are stored as HSL.
-          // For now, this sets the variables, but globals.css might take precedence.
-          '--primary-color-hex': primaryColor,
-          '--secondary-color-hex': secondaryColor,
-          '--accent-color-hex': accentColor,
-        } as React.CSSProperties}>
-        <Navbar />
-        <div className="flex flex-1 overflow-hidden">
+        style={themeStyles}
+      >
+        <Navbar brandLogoUrl={company?.logoUrl} brandName={company?.name} />
+        <div className="flex flex-1 overflow-hidden"> {/* Removed pt-14, Navbar not fixed */}
           <Sidebar />
           <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto bg-secondary/30">
             {children}
