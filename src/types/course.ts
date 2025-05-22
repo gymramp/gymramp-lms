@@ -3,25 +3,39 @@
 export type QuestionType = 'multiple-choice' | 'true-false' | 'multiple-select';
 import type { Timestamp } from 'firebase/firestore'; // Import Timestamp
 
-// Represents a single question within a quiz
-export interface Question {
-    id: string;
+// Represents a single question within a quiz (Global or Brand)
+export interface QuestionBase {
+    id: string; // Can be generated client-side or by Firestore function
     text: string;
     type: QuestionType;
-    options: string[];
+    options: string[]; // Always an array of available option texts
 
-    correctAnswer?: string; 
-    correctAnswers?: string[];
+    // For single-answer types ('multiple-choice', 'true-false')
+    correctAnswer?: string; // The single correct option text
+
+    // For multi-answer type ('multiple-select')
+    correctAnswers?: string[]; // Array of correct option texts
 }
+
+export type QuestionFormDataBase = Omit<QuestionBase, 'id'>;
+
+
+// --- Global Library Content ---
+
+export interface Question extends QuestionBase {}
+export type QuestionFormData = QuestionFormDataBase;
+
 
 // Represents a standalone quiz in the library
 export interface Quiz {
     id: string;
     title: string;
     questions: Question[];
-    questionCount?: number;
+    questionCount?: number; // Denormalized for list views
     isDeleted?: boolean;
     deletedAt?: Timestamp | null;
+    createdAt?: Timestamp;
+    updatedAt?: Timestamp;
 }
 
 // Represents a single standalone lesson in the library
@@ -36,6 +50,8 @@ export interface Lesson {
     playbackTime?: string | null;
     isDeleted?: boolean;
     deletedAt?: Timestamp | null;
+    createdAt?: Timestamp;
+    updatedAt?: Timestamp;
 }
 
 // Represents a course in the global library
@@ -48,13 +64,15 @@ export interface Course {
   featuredImageUrl?: string | null;
   level: 'Beginner' | 'Intermediate' | 'Advanced';
   duration: string; 
-  curriculum: string[];
+  curriculum: string[]; // Array of 'lesson-[id]' or 'quiz-[id]'
   isDeleted?: boolean;
   deletedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
 }
 
 // Type for the form data when adding/editing a course metadata (global library)
-export type CourseFormData = Omit<Course, 'id' | 'isDeleted' | 'deletedAt' | 'curriculum'>;
+export type CourseFormData = Omit<Course, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'curriculum'>;
 
 
 // Type for the form data when adding/editing a lesson
@@ -73,14 +91,6 @@ export interface QuizFormData {
     title: string;
 }
 
-// Type for adding/editing a single question
-export interface QuestionFormData {
-    type: QuestionType;
-    text: string;
-    options: string[];
-    correctAnswer?: string;
-    correctAnswers?: string[];
-}
 
 // Represents user's progress on a specific course
 export interface UserCourseProgress {
@@ -115,7 +125,7 @@ export interface Program {
 
 // Type for form data when adding/editing a Program
 export type ProgramFormData = Omit<Program, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'courseIds'> & {
-  price: string;
+  price: string; // One-time base price
   firstSubscriptionPrice?: string | null;
   stripeFirstPriceId?: string | null;
   secondSubscriptionPrice?: string | null;
@@ -152,37 +162,32 @@ export interface BrandLesson {
     featuredImageUrl?: string | null;
     exerciseFilesInfo?: string | null;
     playbackTime?: string | null;
-    // isPreviewAvailable is likely not needed for brand-specific content unless they have their own public catalog
     isDeleted?: boolean;
     deletedAt?: Timestamp | null;
     createdAt?: Timestamp;
     updatedAt?: Timestamp;
 }
 
-// Ensure brandId is part of the form data for creation
-export type BrandLessonFormData = Omit<BrandLesson, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt'>;
+export type BrandLessonFormData = Omit<BrandLesson, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt'> & {
+  brandId: string; // Required for creation
+};
 
+
+export interface BrandQuestion extends QuestionBase {}
+export type BrandQuestionFormData = QuestionFormDataBase;
 
 export interface BrandQuiz {
     id: string;
     brandId: string;
     title: string;
     questions: BrandQuestion[];
+    questionCount?: number; // Denormalized for list views
     isDeleted?: boolean;
     deletedAt?: Timestamp | null;
     createdAt?: Timestamp;
     updatedAt?: Timestamp;
 }
 
-export type BrandQuizFormData = Omit<BrandQuiz, 'id' | 'brandId' | 'questions' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt'>;
-
-export interface BrandQuestion {
-    id: string; // Could be generated client-side or by Firestore function
-    text: string;
-    type: QuestionType;
-    options: string[];
-    correctAnswer?: string;
-    correctAnswers?: string[];
-}
-
-export type BrandQuestionFormData = Omit<BrandQuestion, 'id'>;
+export type BrandQuizFormData = Omit<BrandQuiz, 'id' | 'brandId' | 'questions' | 'questionCount' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt'> & {
+  brandId: string; // Required for creation
+};

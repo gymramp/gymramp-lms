@@ -16,7 +16,7 @@ import {
     arrayRemove,
     Timestamp
 } from 'firebase/firestore';
-import type { BrandCourse, BrandCourseFormData, BrandLesson, BrandLessonFormData, BrandQuiz, BrandQuizFormData, BrandQuestion, BrandQuestionFormData } from '@/types/course';
+import type { BrandCourse, BrandCourseFormData, BrandLesson, BrandLessonFormData, BrandQuiz, BrandQuizFormData, BrandQuestion, BrandQuestionFormData, QuestionType } from '@/types/course';
 
 const BRAND_COURSES_COLLECTION = 'brandCourses';
 const BRAND_LESSONS_COLLECTION = 'brandLessons';
@@ -124,8 +124,6 @@ export async function deleteBrandCourse(courseId: string): Promise<boolean> {
     return retryOperation(async () => {
         const courseRef = doc(db, BRAND_COURSES_COLLECTION, courseId);
         await updateDoc(courseRef, { isDeleted: true, deletedAt: serverTimestamp() });
-        // Note: This does not automatically remove associated brandLessons or brandQuizzes.
-        // A more complex cleanup might be needed if those should also be hard/soft deleted.
         return true;
     }, 3);
 }
@@ -210,7 +208,7 @@ export async function updateBrandLesson(lessonId: string, lessonData: Partial<Br
         for (const key in lessonData) {
             if (Object.prototype.hasOwnProperty.call(lessonData, key)) {
                 const value = lessonData[key as keyof BrandLessonFormData];
-                 if (key === 'brandId' && value === undefined) continue; // Don't null out brandId
+                 if (key === 'brandId' && value === undefined) continue; 
                 if (key === 'videoUrl' || key === 'featuredImageUrl' || key === 'exerciseFilesInfo' || key === 'playbackTime') {
                     (dataToUpdate as any)[key] = (value as string)?.trim() || null;
                 } else {
@@ -259,20 +257,202 @@ export async function deleteBrandLessonAndCleanUp(lessonId: string, brandId: str
 }
 
 
-// --- BrandQuiz Functions (Placeholder for now, to be implemented similarly) ---
+// --- BrandQuiz Functions ---
 
-export async function getAllBrandQuizzesByBrandId(brandId: string): Promise<BrandQuiz[]> {
+export async function createBrandQuiz(brandId: string, quizData: BrandQuizFormData): Promise<BrandQuiz | null> {
+    if (!brandId) {
+        console.error("Brand ID is required to create a brand quiz.");
+        return null;
+    }
+    return retryOperation(async () => {
+        const quizzesRef = collection(db, BRAND_QUIZZES_COLLECTION);
+        const newQuizDoc = {
+            ...quizData, // Contains title
+            brandId: brandId,
+            questions: [], // Initialize with empty questions array
+            isDeleted: false,
+            deletedAt: null,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        };
+        const docRef = await addDoc(quizzesRef, newQuizDoc);
+        const newDocSnap = await getDoc(docRef);
+        if (newDocSnap.exists()) {
+            const createdQuiz = { id: docRef.id, ...newDocSnap.data() } as BrandQuiz;
+            createdQuiz.questionCount = 0; // Initialize count
+            return createdQuiz;
+        } else {
+            return null;
+        }
+    });
+}
+
+export async function getBrandQuizzesByBrandId(brandId: string): Promise<BrandQuiz[]> {
     if (!brandId) return [];
-    // This is a placeholder. Actual implementation will query BRAND_QUIZZES_COLLECTION.
-    console.warn("getAllBrandQuizzesByBrandId is not fully implemented yet.");
-    return Promise.resolve([]); 
+    return retryOperation(async () => {
+        const quizzesRef = collection(db, BRAND_QUIZZES_COLLECTION);
+        const q = query(quizzesRef, where("brandId", "==", brandId), where("isDeleted", "==", false));
+        const querySnapshot = await getDocs(q);
+        const quizzes: BrandQuiz[] = [];
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            quizzes.push({ 
+                id: doc.id, 
+                ...data,
+                questionCount: data.questions?.length || 0 // Calculate questionCount
+            } as BrandQuiz);
+        });
+        return quizzes;
+    });
 }
 
 export async function getBrandQuizById(quizId: string): Promise<BrandQuiz | null> {
     if (!quizId) return null;
-    // Placeholder
-    console.warn(`getBrandQuizById for ${quizId} is not fully implemented.`);
-    return Promise.resolve(null);
+    return retryOperation(async () => {
+        const quizRef = doc(db, BRAND_QUIZZES_COLLECTION, quizId);
+        const docSnap = await getDoc(quizRef);
+        if (docSnap.exists() && docSnap.data().isDeleted !== true) {
+            const data = docSnap.data();
+            return { 
+                id: docSnap.id, 
+                ...data, 
+                questions: data.questions || [] // Ensure questions is always an array
+            } as BrandQuiz;
+        } else {
+            return null;
+        }
+    });
 }
 
-// ... other BrandQuiz and BrandQuestion CRUD functions will go here ...
+export async function updateBrandQuiz(quizId: string, quizData: Partial<BrandQuizFormData>): Promise<BrandQuiz | null> {
+    if (!quizId) return null;
+    return retryOperation(async () => {
+        const quizRef = doc(db, BRAND_QUIZZES_COLLECTION, quizId);
+        const quizSnap = await getDoc(quizRef);
+        if (!quizSnap.exists() || quizSnap.data().isDeleted === true) return null;
+
+        await updateDoc(quizRef, {...quizData, updatedAt: serverTimestamp() });
+        const updatedDocSnap = await getDoc(quizRef);
+        if (updatedDocSnap.exists()) {
+            const data = updatedDocSnap.data();
+            return { 
+                id: quizId, 
+                ...data, 
+                questions: data.questions || [] // Ensure questions is always an array
+            } as BrandQuiz;
+        } else {
+            return null;
+        }
+    });
+}
+
+export async function deleteBrandQuizAndCleanUp(quizId: string, brandId: string): Promise<boolean> {
+    if (!quizId || !brandId) return false;
+    return retryOperation(async () => {
+        const prefixedQuizId = `brandQuiz-${quizId}`;
+        await removeBrandItemFromBrandCourseCurriculums(brandId, prefixedQuizId);
+        
+        const quizRef = doc(db, BRAND_QUIZZES_COLLECTION, quizId);
+        await updateDoc(quizRef, { isDeleted: true, deletedAt: serverTimestamp() });
+        return true;
+    }, 3);
+}
+
+// --- BrandQuestion Management Functions (within a BrandQuiz) ---
+
+export async function addBrandQuestionToBrandQuiz(brandQuizId: string, questionData: BrandQuestionFormData): Promise<BrandQuestion | null> {
+    if (!brandQuizId) return null;
+    return retryOperation(async () => {
+        const quizRef = doc(db, BRAND_QUIZZES_COLLECTION, brandQuizId);
+        const quizSnap = await getDoc(quizRef);
+        if (!quizSnap.exists() || quizSnap.data().isDeleted === true) {
+            throw new Error(`Brand Quiz with ID ${brandQuizId} not found or is soft-deleted.`);
+        }
+
+        const questionId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        
+        const questionForFirestore: BrandQuestion = {
+            id: questionId,
+            type: questionData.type,
+            text: questionData.text,
+            options: questionData.options || [],
+        };
+
+        if (questionData.type === 'multiple-select') {
+            questionForFirestore.correctAnswers = questionData.correctAnswers || [];
+        } else {
+            questionForFirestore.correctAnswer = questionData.correctAnswer || '';
+        }
+        
+        await updateDoc(quizRef, {
+            questions: arrayUnion(questionForFirestore),
+            updatedAt: serverTimestamp(),
+        });
+
+        const updatedQuizSnap = await getDoc(quizRef);
+        const updatedQuiz = updatedQuizSnap.data() as BrandQuiz;
+        const addedQuestion = updatedQuiz?.questions?.find(q => q.id === questionId);
+        return addedQuestion || null;
+    });
+}
+
+export async function updateBrandQuestionInBrandQuiz(brandQuizId: string, questionId: string, questionData: Partial<BrandQuestionFormData>): Promise<BrandQuestion | null> {
+    if (!brandQuizId || !questionId) return null;
+    return retryOperation(async () => {
+        const quizRef = doc(db, BRAND_QUIZZES_COLLECTION, brandQuizId);
+        const quizSnap = await getDoc(quizRef);
+        if (!quizSnap.exists() || quizSnap.data().isDeleted === true) {
+            throw new Error(`Brand Quiz with ID ${brandQuizId} not found or is soft-deleted.`);
+        }
+
+        const currentQuestions: BrandQuestion[] = quizSnap.data().questions || [];
+        let questionFound = false;
+        const newQuestionsArray = currentQuestions.map(q => {
+            if (q.id === questionId) {
+                questionFound = true;
+                const updatedQuestionData: BrandQuestion = {
+                    ...q, // Spread existing question to preserve ID and other fields
+                    ...questionData, // Override with new data
+                    // Ensure correct answer field is structured based on type
+                    ...(questionData.type && questionData.type === 'multiple-select' 
+                        ? { correctAnswers: questionData.correctAnswers || [], correctAnswer: undefined } 
+                        : { correctAnswer: questionData.correctAnswer || '', correctAnswers: undefined }),
+                };
+                return updatedQuestionData;
+            }
+            return q;
+        });
+
+        if (!questionFound) {
+             throw new Error(`Brand Question with ID ${questionId} not found in brand quiz ${brandQuizId}.`);
+        }
+
+        await updateDoc(quizRef, { questions: newQuestionsArray, updatedAt: serverTimestamp() });
+        
+        const updatedQuizSnap = await getDoc(quizRef);
+        const updatedQuiz = updatedQuizSnap.data() as BrandQuiz;
+        const updatedQuestion = updatedQuiz?.questions?.find(q => q.id === questionId);
+        return updatedQuestion || null;
+    });
+}
+
+export async function deleteBrandQuestionFromBrandQuiz(brandQuizId: string, questionId: string): Promise<boolean> {
+    if (!brandQuizId || !questionId) return false;
+    return retryOperation(async () => {
+        const quizRef = doc(db, BRAND_QUIZZES_COLLECTION, brandQuizId);
+        const quizSnap = await getDoc(quizRef);
+        if (!quizSnap.exists() || quizSnap.data().isDeleted === true) {
+             throw new Error(`Brand Quiz with ID ${brandQuizId} not found or is soft-deleted.`);
+        }
+
+        const currentQuestions: BrandQuestion[] = quizSnap.data().questions || [];
+        const questionToRemove = currentQuestions.find(q => q.id === questionId);
+        if (!questionToRemove) {
+            console.warn(`Brand Question with ID ${questionId} not found in brand quiz ${brandQuizId} for deletion.`);
+            return false;
+        }
+        const newQuestionsArray = currentQuestions.filter(q => q.id !== questionId);
+        await updateDoc(quizRef, { questions: newQuestionsArray, updatedAt: serverTimestamp() });
+        return true;
+    }, 3);
+}

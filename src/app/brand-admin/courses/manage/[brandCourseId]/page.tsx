@@ -9,13 +9,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowLeft, BookOpen, PlusCircle, Trash2, GripVertical, FileText, HelpCircle, Loader2, Layers, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { BrandCourse, BrandLesson, BrandQuiz, Course } from '@/types/course'; // Added Course for global
+import type { BrandCourse, BrandLesson, BrandQuiz, Course } from '@/types/course';
 import type { User, Company } from '@/types/user';
-import { getBrandCourseById, getBrandLessonsByBrandId, getBrandQuizzesByBrandId, updateBrandCourseCurriculum, getCompanyById } from '@/lib/brand-content-data'; // getCompanyById is actually from user-data
-import { getAllCourses as getAllGlobalCourses } from '@/lib/firestore-data'; // To get global courses for program
+import { getBrandCourseById, getBrandLessonsByBrandId, getBrandQuizzesByBrandId, updateBrandCourseCurriculum } from '@/lib/brand-content-data';
+import { getCompanyById } from '@/lib/user-data'; // getCompanyById is from user-data
 
 import { AddBrandLessonToCurriculumDialog } from '@/components/brand-admin/AddBrandLessonToCurriculumDialog';
-// import { AddBrandQuizToCurriculumDialog } from '@/components/brand-admin/AddBrandQuizToCurriculumDialog'; // Placeholder
+import { AddBrandQuizToCurriculumDialog } from '@/components/brand-admin/AddBrandQuizToCurriculumDialog'; // Import AddBrandQuizToCurriculumDialog
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -23,12 +23,11 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getUserByEmail } from '@/lib/user-data';
-import { getProgramById } from '@/lib/firestore-data'; // To get program details
 
 type BrandCurriculumItem = {
     id: string;
-    type: 'brandLesson' | 'brandQuiz' | 'globalCourse'; // Added globalCourse
-    data: BrandLesson | BrandQuiz | Course; // Can also be global Course
+    type: 'brandLesson' | 'brandQuiz'; // Removed globalCourse for now
+    data: BrandLesson | BrandQuiz;
 };
 
 export default function ManageBrandCourseCurriculumPage() {
@@ -46,10 +45,10 @@ export default function ManageBrandCourseCurriculumPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isAddLessonDialogOpen, setIsAddLessonDialogOpen] = useState(false);
-  // const [isAddQuizDialogOpen, setIsAddQuizDialogOpen] = useState(false); // Placeholder
+  const [isAddQuizDialogOpen, setIsAddQuizDialogOpen] = useState(false); // State for Add Quiz Dialog
 
   const [availableBrandLessonsForDialog, setAvailableBrandLessonsForDialog] = useState<BrandLesson[]>([]);
-  // const [availableBrandQuizzesForDialog, setAvailableBrandQuizzesForDialog] = useState<BrandQuiz[]>([]); // Placeholder
+  const [availableBrandQuizzesForDialog, setAvailableBrandQuizzesForDialog] = useState<BrandQuiz[]>([]); // State for available quizzes
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -58,7 +57,7 @@ export default function ManageBrandCourseCurriculumPage() {
           const userDetails = await getUserByEmail(firebaseUser.email);
           setCurrentUser(userDetails);
           if (userDetails && (userDetails.role === 'Admin' || userDetails.role === 'Owner') && userDetails.companyId) {
-            const brand = await getCompanyById(userDetails.companyId); // Fetch company details
+            const brand = await getCompanyById(userDetails.companyId);
             setCurrentBrandDetails(brand);
             if (brand?.canManageCourses) {
               setIsAuthorized(true);
@@ -78,10 +77,7 @@ export default function ManageBrandCourseCurriculumPage() {
           router.push('/');
         }
       } else {
-        setCurrentUser(null);
-        setCurrentBrandDetails(null);
-        setIsAuthorized(false);
-        router.push('/');
+        setCurrentUser(null); setCurrentBrandDetails(null); setIsAuthorized(false); router.push('/');
       }
     });
     return () => unsubscribe();
@@ -89,31 +85,26 @@ export default function ManageBrandCourseCurriculumPage() {
 
   const fetchBrandCourseAndData = useCallback(async () => {
     if (!isAuthorized || !brandCourseId || !currentUser?.companyId) {
-      setIsLoading(false);
-      return;
+      setIsLoading(false); return;
     }
     setIsLoading(true);
     try {
       const fetchedBrandCourse = await getBrandCourseById(brandCourseId);
       if (!fetchedBrandCourse || fetchedBrandCourse.brandId !== currentUser.companyId) {
         toast({ title: "Error", description: "Brand Course not found or not owned by your brand.", variant: "destructive" });
-        router.push('/brand-admin/courses');
-        return;
+        router.push('/brand-admin/courses'); return;
       }
       setBrandCourse(fetchedBrandCourse);
 
       const [brandLessons, brandQuizzes] = await Promise.all([
         getBrandLessonsByBrandId(currentUser.companyId),
-        getBrandQuizzesByBrandId(currentUser.companyId) // Placeholder, will return [] for now
+        getBrandQuizzesByBrandId(currentUser.companyId)
       ]);
 
       const allItemsMap = new Map<string, BrandCurriculumItem>();
       brandLessons.forEach(lesson => allItemsMap.set(`brandLesson-${lesson.id}`, { id: `brandLesson-${lesson.id}`, type: 'brandLesson', data: lesson }));
       brandQuizzes.forEach(quiz => allItemsMap.set(`brandQuiz-${quiz.id}`, { id: `brandQuiz-${quiz.id}`, type: 'brandQuiz', data: quiz }));
       
-      // For global courses (if they can be added to brand course curriculum) - This part is complex and might be a future feature
-      // For now, curriculum only contains brandLesson and brandQuiz prefixed IDs
-
       const orderedCurriculumItems = (fetchedBrandCourse.curriculum || [])
         .map(itemId => allItemsMap.get(itemId))
         .filter(Boolean) as BrandCurriculumItem[];
@@ -121,7 +112,7 @@ export default function ManageBrandCourseCurriculumPage() {
 
       const currentCurriculumIds = new Set(fetchedBrandCourse.curriculum || []);
       setAvailableBrandLessonsForDialog(brandLessons.filter(lesson => !currentCurriculumIds.has(`brandLesson-${lesson.id}`)));
-      // setAvailableBrandQuizzesForDialog(brandQuizzes.filter(quiz => !currentCurriculumIds.has(`brandQuiz-${quiz.id}`)));
+      setAvailableBrandQuizzesForDialog(brandQuizzes.filter(quiz => !currentCurriculumIds.has(`brandQuiz-${quiz.id}`)));
 
     } catch (error) {
       console.error("Error fetching brand course/data:", error);
@@ -131,33 +122,31 @@ export default function ManageBrandCourseCurriculumPage() {
     }
   }, [isAuthorized, brandCourseId, currentUser?.companyId, router, toast]);
 
-  useEffect(() => {
-    if (isAuthorized) {
-      fetchBrandCourseAndData();
-    }
-  }, [isAuthorized, fetchBrandCourseAndData]);
+  useEffect(() => { if (isAuthorized) fetchBrandCourseAndData(); }, [isAuthorized, fetchBrandCourseAndData]);
 
-  const handleAddLessonToCurriculum = async (lessonId: string) => {
-    const lessonToAdd = availableBrandLessonsForDialog.find(l => l.id === lessonId);
-    if (lessonToAdd && brandCourse) {
-      const prefixedId = `brandLesson-${lessonId}`;
-      const newItem: BrandCurriculumItem = { id: prefixedId, type: 'brandLesson', data: lessonToAdd };
+  const handleAddItemToCurriculum = async (itemId: string, itemType: 'brandLesson' | 'brandQuiz') => {
+    let itemToAdd: BrandLesson | BrandQuiz | undefined;
+    if (itemType === 'brandLesson') itemToAdd = availableBrandLessonsForDialog.find(l => l.id === itemId);
+    else itemToAdd = availableBrandQuizzesForDialog.find(q => q.id === itemId);
+    
+    if (itemToAdd && brandCourse) {
+      const prefixedId = `${itemType}-${itemId}`;
+      const newItem: BrandCurriculumItem = { id: prefixedId, type: itemType, data: itemToAdd };
       setCurriculumItems(prev => [...prev, newItem]);
       const newCurriculumIds = [...curriculumItems.map(item => item.id), prefixedId];
       await saveCurriculum(newCurriculumIds);
-      fetchBrandCourseAndData(); // Refresh available items
+      fetchBrandCourseAndData(); 
     }
-    setIsAddLessonDialogOpen(false);
+    if (itemType === 'brandLesson') setIsAddLessonDialogOpen(false);
+    else setIsAddQuizDialogOpen(false);
   };
-
-  // const handleAddQuizToCurriculum = async (quizId: string) => { /* Placeholder */ };
 
   const handleRemoveItem = async (itemIdToRemove: string) => {
     const newCurriculumItems = curriculumItems.filter(item => item.id !== itemIdToRemove);
     setCurriculumItems(newCurriculumItems);
     const newCurriculumIds = newCurriculumItems.map(item => item.id);
     await saveCurriculum(newCurriculumIds);
-    fetchBrandCourseAndData(); // Refresh available items
+    fetchBrandCourseAndData();
   };
 
   const saveCurriculum = async (newCurriculumIds: string[]) => {
@@ -172,7 +161,6 @@ export default function ManageBrandCourseCurriculumPage() {
         throw new Error("Failed to update brand course curriculum in Firestore.");
       }
     } catch (error) {
-      console.error("Error saving curriculum:", error);
       toast({ title: "Save Error", description: "Could not save curriculum.", variant: "destructive" });
     } finally {
       setIsSaving(false);
@@ -216,12 +204,7 @@ export default function ManageBrandCourseCurriculumPage() {
   );
 
   if (!currentUser || !currentBrandDetails || !isAuthorized) {
-    return (
-      <div className="container mx-auto py-12 text-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <p className="mt-2">Verifying access and loading data...</p>
-      </div>
-    );
+    return <div className="container mx-auto py-12 text-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /><p className="mt-2">Verifying access...</p></div>;
   }
   if (isLoading) {
     return (<div className="container mx-auto py-12 md:py-16 lg:py-20 space-y-8"><Skeleton className="h-8 w-1/4" /><div className="flex items-center justify-between"><Skeleton className="h-10 w-64" /><div className="flex space-x-2"><Skeleton className="h-10 w-32" /><Skeleton className="h-10 w-32" /></div></div><Skeleton className="h-64 w-full" /></div>);
@@ -243,8 +226,8 @@ export default function ManageBrandCourseCurriculumPage() {
             <Button onClick={() => setIsAddLessonDialogOpen(true)} className="bg-accent text-accent-foreground hover:bg-accent/90">
               <PlusCircle className="mr-2 h-4 w-4" /> Add Brand Lesson
             </Button>
-            <Button variant="outline" disabled> {/* Placeholder for Add Brand Quiz */}
-              <PlusCircle className="mr-2 h-4 w-4" /> Add Brand Quiz (Soon)
+            <Button onClick={() => setIsAddQuizDialogOpen(true)} className="bg-accent text-accent-foreground hover:bg-accent/90">
+              <PlusCircle className="mr-2 h-4 w-4" /> Add Brand Quiz
             </Button>
           </div>
         </div>
@@ -252,7 +235,7 @@ export default function ManageBrandCourseCurriculumPage() {
         <Card className="mb-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">Brand Course Curriculum ({curriculumItems.length}) {isSaving && <Loader2 className="h-4 w-4 animate-spin"/>}</CardTitle>
-            <CardDescription>Drag and drop lessons to reorder the curriculum.</CardDescription>
+            <CardDescription>Drag and drop lessons and quizzes to reorder the curriculum.</CardDescription>
           </CardHeader>
           <CardContent>
             <Droppable droppableId="brandCourseCurriculum">
@@ -274,9 +257,14 @@ export default function ManageBrandCourseCurriculumPage() {
           isOpen={isAddLessonDialogOpen}
           setIsOpen={setIsAddLessonDialogOpen}
           availableLessons={availableBrandLessonsForDialog}
-          onAddLesson={handleAddLessonToCurriculum}
+          onAddLesson={(lessonId) => handleAddItemToCurriculum(lessonId, 'brandLesson')}
         />
-        {/* <AddBrandQuizToCurriculumDialog /> Placeholder */}
+        <AddBrandQuizToCurriculumDialog
+          isOpen={isAddQuizDialogOpen}
+          setIsOpen={setIsAddQuizDialogOpen}
+          availableQuizzes={availableBrandQuizzesForDialog}
+          onAddQuiz={(quizId) => handleAddItemToCurriculum(quizId, 'brandQuiz')}
+        />
       </div>
     </DragDropContext>
   );
