@@ -105,13 +105,15 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
              if (subItem.requiresCanManageCourses && !(userCompany?.canManageCourses === true)) return false;
              return true;
         });
+        // If it's a dropdown and all its subItems got filtered out due to conditions, hide the dropdown itself.
         if (item.isDropdown && item.subItems.length === 0 && (item.requiresCanManageCourses || item.requiresCompanyId)) return false;
     }
     return true;
   });
 
+  // "My Certificates" and "Site Help" are common for all logged-in users if not Super Admin
   if (user.role !== 'Super Admin') {
-    filteredRoleSpecificItems.push({ href: '/certificates', label: 'My Certificates', icon: Award });
+    // No common items to add here for now, they are handled in getUserDropdownItems if specific to dropdown
   }
 
   return [...baseItems, ...filteredRoleSpecificItems];
@@ -127,7 +129,6 @@ export function getUserDropdownItems(user: User | null): NavItemType[] {
     if (user.role === 'Super Admin') {
         items.push(
             { href: '/admin/dashboard', label: 'Super Admin Dashboard', icon: BarChartBig },
-            // Users link removed from SA dropdown as it's in main nav for them
             { href: '/admin/settings', label: 'Settings', icon: Cog }
         );
     } else if (user.role === 'Admin' || user.role === 'Owner') {
@@ -140,6 +141,7 @@ export function getUserDropdownItems(user: User | null): NavItemType[] {
          );
     }
 
+    // "My Certificates" should be available to all roles
     items.push({ href: '/certificates', label: 'My Certificates', icon: Award });
     items.push({ href: '/site-help', label: 'Site Help', icon: HelpCircle });
 
