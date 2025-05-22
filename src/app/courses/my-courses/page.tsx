@@ -159,7 +159,7 @@ export default function MyCoursesPage() {
                   <CardHeader className="p-0">
                     <div className="relative aspect-video w-full">
                       <Image
-                        src={course.featuredImageUrl || course.imageUrl || `https://picsum.photos/seed/${course.id}/600/350`}
+                        src={course.featuredImageUrl || course.imageUrl || `https://placehold.co/600x350.png?text=Course+Preview`}
                         alt={course.title}
                         fill
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
@@ -168,11 +168,12 @@ export default function MyCoursesPage() {
                         data-ai-hint="course cover"
                          onError={(e) => {
                              const target = e.target as HTMLImageElement;
-                             target.onerror = null;
-                              if (course.imageUrl && target.src !== course.imageUrl) {
+                             target.onerror = null; // Prevent infinite loop if fallback also fails
+                             // Try secondary image URL if primary fails
+                             if (course.imageUrl && target.src !== course.imageUrl) {
                                  target.src = course.imageUrl;
-                             } else {
-                                 target.src = `https://picsum.photos/seed/${course.id}/600/350`;
+                             } else { // Fallback to placeholder
+                                 target.src = `https://placehold.co/600x350.png?text=${encodeURIComponent(course.title)}`;
                              }
                          }}
                       />
