@@ -7,7 +7,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'; // Added DialogHeader, DialogTitle, DialogDescription
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle, Lock, PlayCircle, FileText, HelpCircle, ChevronLeft, ChevronRight, Menu, Award, MousePointerClick, Video as VideoIcon } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -129,12 +129,12 @@ export default function LearnCoursePage() {
                     if (isBrandCourse) {
                         if (typePrefix === 'brandLesson') itemData = await getBrandLessonById(id);
                         else if (typePrefix === 'brandQuiz') itemData = await getBrandQuizById(id);
-                        else {
+                        else { // Fallback to global if prefix is not brand-specific but course is brand-specific (unlikely but safe)
                             if(typePrefix === 'lesson') itemData = await getLessonById(id);
                             else if(typePrefix === 'quiz') itemData = await getQuizById(id);
                             itemType = typePrefix as 'lesson' | 'quiz';
                         }
-                    } else {
+                    } else { // Global course
                         if (typePrefix === 'lesson') itemData = await getLessonById(id);
                         else if (typePrefix === 'quiz') itemData = await getQuizById(id);
                         itemType = typePrefix as 'lesson' | 'quiz';
@@ -183,13 +183,13 @@ export default function LearnCoursePage() {
         } finally {
             setIsLoading(false);
         }
-    }, [courseId, router, toast, showCertificateDialog]);
+    }, [courseId, router, toast, showCertificateDialog]); // Added showCertificateDialog to dependencies
 
     useEffect(() => {
         if (currentUser?.id) {
             loadCourseData(currentUser.id, currentUser.companyId);
         }
-     }, [currentUser, loadCourseData]);
+     }, [currentUser, loadCourseData]); // loadCourseData is now a dependency
 
     useEffect(() => {
         if (!currentContentItem) return;
@@ -207,7 +207,7 @@ export default function LearnCoursePage() {
                 setIsVideoWatched(true);
             }
         } else {
-            setIsVideoWatched(true);
+            setIsVideoWatched(true); // No video, so considered "watched" for completion purposes
         }
     }, [currentContentItem, completedItemIds]);
 
@@ -221,6 +221,7 @@ export default function LearnCoursePage() {
 
         try {
             await updateEmployeeProgress(currentUser.id, courseId, overallIndex);
+            // Re-fetch progress to ensure completedItemIds and status are fresh
             const updatedProgressData = await getUserCourseProgress(currentUser.id, courseId);
             setUserProgressData(updatedProgressData);
             setCompletedItemIds(updatedProgressData.completedItems || []);
@@ -234,17 +235,18 @@ export default function LearnCoursePage() {
             toast({ title: "Error", description: "Could not update your progress.", variant: "destructive"});
             return false;
         }
-    }, [currentUser?.id, courseId, curriculumItems, completedItemIds, isCourseCompleted, toast, showCertificateDialog]);
+    }, [currentUser?.id, courseId, curriculumItems, completedItemIds, isCourseCompleted, toast, showCertificateDialog]); // Added showCertificateDialog
 
 
     const isItemLocked = useCallback((itemIndex: number) => {
-        if (itemIndex === 0) return false;
+        if (itemIndex === 0) return false; // First item is never locked
+        // Check if all PREVIOUS items are completed
         for (let i = 0; i < itemIndex; i++) {
             if (!completedItemIds.includes(curriculumItems[i].id)) {
-                return true;
+                return true; // A previous item is not complete, so this one is locked
             }
         }
-        return false;
+        return false; // All previous items are complete
     }, [completedItemIds, curriculumItems]);
 
     const handleContentSelection = (item: CurriculumDisplayItem, index: number) => {
@@ -254,19 +256,22 @@ export default function LearnCoursePage() {
         }
         setCurrentContentItem(item);
         setCurrentIndex(index);
-        setIsSidebarOpen(false);
+        setIsSidebarOpen(false); // Close mobile sidebar on selection
     };
 
     const advanceToNextItem = useCallback(async () => {
         const nextItemIndex = currentIndex + 1;
         if (nextItemIndex < curriculumItems.length) {
-            if (!isItemLocked(nextItemIndex)) {
+            if (!isItemLocked(nextItemIndex)) { // Check if next item is unlocked
                 setCurrentContentItem(curriculumItems[nextItemIndex]);
                 setCurrentIndex(nextItemIndex);
             } else {
+                // This case should ideally not be hit if handleItemCompletion works correctly
+                // and gating is enforced.
                 toast({ title: "Next Item Locked", description: "Something went wrong, next item is still locked.", variant: "default" });
             }
-        } else if (currentUser?.id) { 
+        } else if (currentUser?.id) { // Reached the end of the course
+            // Ensure progress is fully updated
             const finalProgress = await getUserCourseProgress(currentUser.id, courseId);
             setUserProgressData(finalProgress);
             setCompletedItemIds(finalProgress.completedItems || []);
@@ -275,14 +280,26 @@ export default function LearnCoursePage() {
                 setShowCertificateDialog(true);
             }
         }
-    }, [currentIndex, curriculumItems, isItemLocked, toast, currentUser, courseId, course?.title, showCertificateDialog]);
+    }, [currentIndex, curriculumItems, isItemLocked, toast, currentUser, courseId, course?.title, showCertificateDialog]); // Added showCertificateDialog
 
     const handleQuizComplete = async (quizId: string, score: number, passed: boolean) => {
-        const currentItemFullId = currentContentItem?.id;
-        const expectedFullId = isBrandSpecificCourse ? `brandQuiz-${quizId}` : `quiz-${quizId}`;
-
-        if (currentItemFullId !== expectedFullId) return;
-
+        // Ensure currentContentItem and its id are defined
+        if (!currentContentItem || !currentContentItem.id) {
+            console.error("Current content item or its ID is undefined in handleQuizComplete.");
+            return;
+        }
+    
+        const currentItemFullId = currentContentItem.id;
+    
+        // Construct the expected full ID based on whether it's a brand-specific course or global
+        // The quizId passed from QuizTaking is just the raw quiz ID (e.g., "quiz123")
+        // The currentItemFullId is prefixed (e.g., "quiz-quiz123" or "brandQuiz-quiz123")
+        const expectedPrefix = isBrandSpecificCourse ? `brandQuiz-` : `quiz-`;
+        if (!currentItemFullId.startsWith(expectedPrefix) || !currentItemFullId.endsWith(quizId)) {
+            console.warn(`Quiz ID mismatch or type mismatch: currentItemFullId is ${currentItemFullId}, expected to handle quiz ${quizId}`);
+            return; 
+        }
+    
         if (passed) {
             const completionSuccessful = await handleItemCompletion(currentItemFullId);
             if (completionSuccessful) {
@@ -294,10 +311,24 @@ export default function LearnCoursePage() {
     };
 
     const handleMarkLessonComplete = async () => {
-       if (!currentContentItem || !(currentContentItem.type === 'lesson' || currentContentItem.type === 'brandLesson') || (isCourseCompleted && completedItemIds.includes(currentContentItem.id))) return;
+       // Ensure currentContentItem and its id are defined
+       if (!currentContentItem || !currentContentItem.id) {
+        console.error("Current content item or its ID is undefined in handleMarkLessonComplete.");
+        return;
+       }
+       if (!(currentContentItem.type === 'lesson' || currentContentItem.type === 'brandLesson')) return;
+       if (isCourseCompleted && completedItemIds.includes(currentContentItem.id)) return;
 
        const lessonData = currentContentItem.data as (Lesson | BrandLesson);
        const hasVideo = !!lessonData.videoUrl;
+
+       // If already completed, don't re-mark unless it's specifically allowed for review
+       if (completedItemIds.includes(currentContentItem.id) && !isCourseCompleted) {
+            // If item is complete but course is not, allow advancing
+            advanceToNextItem();
+            return;
+       }
+
 
        if (!completedItemIds.includes(currentContentItem.id) && hasVideo && !isVideoWatched) {
            toast({ title: "Video Not Watched", description: "Please watch the entire video before marking complete.", variant: "default"});
@@ -315,7 +346,7 @@ export default function LearnCoursePage() {
         if (prevItemIndex >= 0) {
              setCurrentContentItem(curriculumItems[prevItemIndex]);
              setCurrentIndex(prevItemIndex);
-             setIsSidebarOpen(false);
+             setIsSidebarOpen(false); // Close mobile sidebar
         }
     };
 
@@ -330,10 +361,10 @@ export default function LearnCoursePage() {
         if (isLoading || !currentUser) {
              return ( <div className="p-6 text-center"> <Skeleton className="h-8 w-1/2 mx-auto mb-4" /> <Skeleton className="aspect-video w-full my-6 rounded-lg" /> <Skeleton className="h-4 w-full my-2" /> <Skeleton className="h-4 w-5/6 my-2" /> </div> );
         }
-        if (isCourseCompleted && showCertificateDialog && isMounted) { // Only show certificate if mounted and course completed
-            return null;
+        if (isCourseCompleted && showCertificateDialog && isMounted) { 
+            return null; // Dialog handles the display
         }
-        if (isCourseCompleted && !currentContentItem && isMounted) { // Check isMounted here too
+        if (isCourseCompleted && !currentContentItem && isMounted) {
             return ( <div className="p-6 text-center flex flex-col items-center justify-center h-full"> <Award className="h-16 w-16 text-green-500 mb-4" /> <h2 className="text-2xl font-semibold mb-2">Course Already Completed!</h2> <p className="text-muted-foreground">You've successfully finished "{course?.title}".</p> <Button onClick={() => setShowCertificateDialog(true)} variant="default" className="mt-4">View Certificate</Button> <Button asChild variant="link" className="mt-2"><Link href="/courses/my-courses">Back to My Learning</Link></Button> </div> );
         }
          if (!currentContentItem && curriculumItems.length > 0 && isMounted) {
@@ -342,7 +373,7 @@ export default function LearnCoursePage() {
         if (!currentContentItem && curriculumItems.length === 0 && isMounted) {
             return <div className="p-6 text-center">This course has no content yet.</div>;
         }
-        if (!isMounted || !currentContentItem) { // Fallback if not mounted or no item (should be covered by skeleton)
+        if (!isMounted || !currentContentItem) { 
              return ( <div className="p-6 text-center"> <Skeleton className="h-8 w-1/2 mx-auto mb-4" /> <Skeleton className="aspect-video w-full my-6 rounded-lg" /> <Skeleton className="h-4 w-full my-2" /> <Skeleton className="h-4 w-5/6 my-2" /> </div> );
         }
 
@@ -355,14 +386,17 @@ export default function LearnCoursePage() {
         if (type === 'lesson' || type === 'brandLesson') {
             const lesson = itemData as (Lesson | BrandLesson);
             const hasVideo = !!lesson.videoUrl;
-            const canMarkComplete = isVideoWatched || !hasVideo;
-            const isLessonEffectivelyComplete = isItemCompleted || (isCourseCompleted && isLastItemInCourse);
+            const canMarkComplete = isVideoWatched || !hasVideo; // Can mark if video watched OR no video
             
             let buttonText = "Mark Complete & Next";
-            if (isLessonEffectivelyComplete && !isLastItemInCourse) buttonText = "Next Item";
-            else if (isLastItemInCourse) buttonText = (isLessonEffectivelyComplete || isCourseCompleted) ? "View Certificate" : "Mark Complete & Finish";
+            if (isItemCompleted && !isLastItemInCourse) buttonText = "Next Item";
+            else if (isLastItemInCourse) buttonText = (isItemCompleted || isCourseCompleted) ? "View Certificate" : "Mark Complete & Finish";
 
-            const isMarkButtonDisabled = (!canMarkComplete && !isItemCompleted) || (isLessonEffectivelyComplete && isLastItemInCourse && isCourseCompleted);
+            // Disable button if:
+            // 1. Lesson with video not watched AND not yet completed
+            // 2. OR (It's the last item AND it's already completed AND the whole course is completed) -> handled by "View Certificate" text change
+            const isMarkButtonDisabled = (!canMarkComplete && !isItemCompleted) || (isItemCompleted && isLastItemInCourse && isCourseCompleted);
+
 
             return (
                 <div className="p-4 md:p-6 lg:p-8 space-y-6">
@@ -377,7 +411,7 @@ export default function LearnCoursePage() {
                          <Button
                             onClick={buttonText === "View Certificate" ? () => setShowCertificateDialog(true) : handleMarkLessonComplete}
                             disabled={isMarkButtonDisabled}
-                            className={cn((isItemCompleted || (isCourseCompleted && isLastItemInCourse)) && !isLastItemInCourse && buttonText === "Next Item" ? "bg-secondary text-secondary-foreground hover:bg-secondary/80" : "bg-primary hover:bg-primary/90")}
+                            className={cn(isItemCompleted && !isLastItemInCourse && buttonText === "Next Item" ? "bg-secondary text-secondary-foreground hover:bg-secondary/80" : "bg-primary hover:bg-primary/90")}
                             title={(hasVideo && !isVideoWatched && !isItemCompleted) ? "Watch video to enable" : ""}
                             >
                                 {buttonText}
@@ -454,9 +488,9 @@ export default function LearnCoursePage() {
                      <div className="flex-1 overflow-y-auto bg-background">{renderContent()}</div>
                  </main>
             </div>
-            {isMounted && showCertificateDialog && course && currentUser && userProgressData && (
+             {isMounted && showCertificateDialog && course && currentUser && userProgressData && (
                 <Dialog open={showCertificateDialog} onOpenChange={setShowCertificateDialog}>
-                    <DialogHeader className="p-6"> {/* Added DialogHeader for accessibility */}
+                    <DialogHeader className="p-6 print-hide">
                         <DialogTitle>Course Certificate</DialogTitle>
                         <DialogDescription>
                             Congratulations on completing {course.title}!
@@ -476,4 +510,3 @@ export default function LearnCoursePage() {
         </>
     );
 }
-

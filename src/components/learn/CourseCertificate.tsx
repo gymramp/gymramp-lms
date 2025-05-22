@@ -34,7 +34,7 @@ export function CourseCertificate({ courseName, userName, completionDate, brandN
     const issuingEntityStyle = "pt-6 text-sm text-muted-foreground";
 
     return (
-        <div className="certificate-container"> {/* Outer div for print control */}
+        <div className="certificate-container p-4"> {/* Outer div for print control and some padding */}
             <Card className={certificateStyle}>
                 <CardHeader className={headerStyle}>
                      <Award className="h-20 w-20 mx-auto text-accent mb-4" />
