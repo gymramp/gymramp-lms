@@ -31,7 +31,6 @@ import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { hexToHslString } from '@/lib/utils';
 
 const companyFormSchema = z.object({
   name: z.string().min(2, "Brand name must be at least 2 characters."),
@@ -69,11 +68,9 @@ export default function EditCompanyPage() {
   const [logoUploadProgress, setLogoUploadProgress] = useState(0);
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
 
-  // State for Program Access section
   const [assignedProgram, setAssignedProgram] = useState<Program | null>(null);
   const [coursesInProgram, setCoursesInProgram] = useState<Course[]>([]);
   const [isLoadingProgramData, setIsLoadingProgramData] = useState(false);
-
 
   const form = useForm<CompanyFormValues>({
     resolver: zodResolver(companyFormSchema),
@@ -166,7 +163,6 @@ export default function EditCompanyPage() {
           setAssignedProgram(null);
           setCoursesInProgram([]);
         }
-
       } else {
         toast({ title: "Error", description: "Brand not found.", variant: "destructive" });
         router.push('/admin/companies');
@@ -211,8 +207,7 @@ export default function EditCompanyPage() {
     if (!companyId) return;
     setIsSaving(true);
     try {
-      // Explicitly get the latest logoUrl from the form state
-      const currentLogoUrl = form.getValues('logoUrl');
+      const currentLogoUrl = form.getValues('logoUrl'); // Get latest logoUrl from form state
 
       const metadataToUpdate: Partial<CompanyFormData> = {
         name: data.name,
@@ -234,8 +229,7 @@ export default function EditCompanyPage() {
 
       const updatedCompany = await updateCompany(companyId, metadataToUpdate);
       if (updatedCompany) {
-        setCompany(updatedCompany); // Update local state
-        // Reset form with the new, authoritative data from Firestore
+        setCompany(updatedCompany);
         form.reset({
           name: updatedCompany.name || '',
           subdomainSlug: updatedCompany.subdomainSlug || '',
@@ -298,7 +292,6 @@ export default function EditCompanyPage() {
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
-              {/* Core Brand Information Card */}
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" /> Core Brand Information</CardTitle><CardDescription>Basic identification and descriptive details for the brand.</CardDescription></CardHeader>
                 <CardContent className="space-y-4">
@@ -309,7 +302,6 @@ export default function EditCompanyPage() {
                 </CardContent>
               </Card>
 
-              {/* Brand Logo Card */}
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><ImageIconLucide className="h-5 w-5" /> Brand Logo</CardTitle><CardDescription>Upload or manage the brand's logo.</CardDescription></CardHeader>
                 <CardContent>
@@ -323,55 +315,69 @@ export default function EditCompanyPage() {
                         <Label htmlFor="brand-logo-upload" className="cursor-pointer block"><ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Click to upload logo</p><Input id="brand-logo-upload" type="file" accept="image/*" className="hidden" onChange={handleLogoFileChange} disabled={isLogoUploading} /></Label>
                       )}
                     </div>
-                    <FormField control={form.control} name="logoUrl" render={({ field }) => (<FormItem className="hidden"><FormLabel>Logo URL</FormLabel><FormControl><Input type="url" {...field} value={field.value ?? ''} readOnly /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="logoUrl" render={({ field }) => (<FormItem className="hidden"><FormControl><Input type="url" {...field} value={field.value ?? ''} readOnly /></FormControl><FormMessage /></FormItem>)} />
                   </FormItem>
                 </CardContent>
               </Card>
 
-              {/* White-Label Settings - Placeholder */}
-               <Card>
-                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings</CardTitle>
-                    <CardDescription>Customize the appearance for this brand.</CardDescription>
-                 </CardHeader>
-                 <CardContent>
-                    <p className="text-sm text-muted-foreground italic">White-label settings UI will be implemented here.</p>
-                     {/*
-                        When re-implementing, ensure the FormField for whiteLabelEnabled, primaryColor, etc.
-                        are correctly structured and guarded by isMounted && whiteLabelEnabledValue
-                        as in the previous full version.
-                     */}
-                 </CardContent>
-               </Card>
-
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings</CardTitle>
+                  <CardDescription>Customize the appearance for this brand if white-labeling is enabled.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {isMounted && (
+                    <FormField
+                      control={form.control}
+                      name="whiteLabelEnabled"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">Enable White-Labeling</FormLabel>
+                            <FormMessage name="whiteLabelEnabled" /> 
+                          </div>
+                          <FormControl>
+                            <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                  {isMounted && whiteLabelEnabledValue && (
+                    <>
+                      <FormField control={form.control} name="primaryColor" render={({ field }) => (<FormItem><FormLabel>Primary Color (HEX)</FormLabel><FormControl><Input placeholder="#3498db" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="secondaryColor" render={({ field }) => (<FormItem><FormLabel>Secondary Color (HEX)</FormLabel><FormControl><Input placeholder="#ecf0f1" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="accentColor" render={({ field }) => (<FormItem><FormLabel>Accent Color (HEX)</FormLabel><FormControl><Input placeholder="#2ecc71" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="brandBackgroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Background Color (HEX)</FormLabel><FormControl><Input placeholder="#ffffff" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="brandForegroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Foreground (Text) Color (HEX)</FormLabel><FormControl><Input placeholder="#000000" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                    </>
+                  )}
+                </CardContent>
+              </Card>
             </div>
 
             <div className="lg:col-span-1 space-y-6">
-              {/* User & Trial Settings Card */}
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> User &amp; Trial Settings</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem><FormLabel>Max Users</FormLabel><FormControl><Input type="number" min="1" placeholder="Leave blank for unlimited" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
                   {isMounted && (
-                    <FormField control={form.control} name="isTrial" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Is Trial Account?</FormLabel></div><FormControl><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="isTrial" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Is Trial Account?</FormLabel></div><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormMessage /></FormItem>)} />
                   )}
                   {isMounted && isTrialValue && (
                     <FormField control={form.control} name="trialEndsAt" render={({ field }) => (
-                        <FormItem>
-                            <FormLabel className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Trial End Date</FormLabel>
-                            <FormControl>
-                                <div> {/* Ensure single child for FormControl */}
-                                    <DatePickerWithPresets date={field.value} setDate={field.onChange} />
-                                </div>
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Trial End Date</FormLabel>
+                        <FormControl>
+                          <div><DatePickerWithPresets date={field.value} setDate={field.onChange} /></div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
                     )} />
                   )}
                 </CardContent>
               </Card>
 
-              {/* Course Management Ability Card */}
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><PackageCheck className="h-5 w-5" /> Course Management Ability</CardTitle></CardHeader>
                 <CardContent>
@@ -384,7 +390,8 @@ export default function EditCompanyPage() {
                           <div className="space-y-0.5">
                             <FormLabel className="text-base">Enable Course Management</FormLabel>
                           </div>
-                          <FormControl><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></FormControl>
+                          <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                          <FormMessage name="canManageCourses" /> 
                         </FormItem>
                       )}
                     />
@@ -392,17 +399,25 @@ export default function EditCompanyPage() {
                 </CardContent>
               </Card>
 
-              {/* Program Access Card - Placeholder */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2"><Layers className="h-5 w-5" /> Program Access</CardTitle>
                   <CardDescription>Details of the Program assigned to this brand during checkout.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-muted-foreground italic">Program access details will be displayed here.</p>
+                  {isLoadingProgramData ? (
+                    <div className="space-y-2"><Skeleton className="h-5 w-3/4" /><Skeleton className="h-4 w-full" /><Skeleton className="h-20 w-full" /></div>
+                  ) : assignedProgram ? (
+                    <div className="space-y-3">
+                      <div> <h4 className="font-semibold text-foreground">{assignedProgram.title}</h4> <p className="text-sm text-muted-foreground">{assignedProgram.description}</p> <p className="text-sm text-muted-foreground mt-1">Base Price: <Badge variant="outline">{assignedProgram.price}</Badge></p> </div>
+                      {coursesInProgram.length > 0 && ( <div> <h5 className="text-sm font-medium text-muted-foreground mb-1">Courses Included:</h5> <ScrollArea className="h-40 w-full rounded-md border p-2"> <ul className="space-y-1"> {coursesInProgram.map(course => ( <li key={course.id} className="text-xs text-foreground p-1 bg-secondary/50 rounded-sm flex items-center gap-1.5"> <BookOpen className="h-3 w-3 flex-shrink-0" /> {course.title} <Badge variant="ghost" className="ml-auto text-xs">{course.level}</Badge> </li> ))} </ul> </ScrollArea> </div> )}
+                      {coursesInProgram.length === 0 && ( <p className="text-xs text-muted-foreground italic">This program currently has no courses assigned to it in the library.</p> )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">No program information found for this brand. This may be an older brand or one created manually.</p>
+                  )}
                 </CardContent>
               </Card>
-
             </div>
           </div>
 
