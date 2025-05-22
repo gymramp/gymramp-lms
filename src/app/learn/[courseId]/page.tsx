@@ -7,30 +7,31 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent } from '@/components/ui/dialog'; // Removed DialogHeader, DialogTitle, DialogDescription as they are used via CourseCertificate
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle, Lock, PlayCircle, FileText, HelpCircle, ChevronLeft, ChevronRight, Menu, Award, MousePointerClick, Video as VideoIcon } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { getCourseById, getLessonById, getQuizById } from '@/lib/firestore-data';
-import type { Course, Lesson, Quiz } from '@/types/course';
+import { getBrandCourseById, getBrandLessonById, getBrandQuizById } from '@/lib/brand-content-data'; // Import brand content getters
+import type { Course, Lesson, Quiz, BrandCourse, BrandLesson, BrandQuiz } from '@/types/course'; // Add Brand types
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getUserByEmail, getUserCourseProgress, updateEmployeeProgress } from '@/lib/user-data';
-import { getCompanyById } from '@/lib/company-data'; // Corrected import for getCompanyById
+import { getCompanyById as getBrandDetailsForCertificate } from '@/lib/company-data'; // Use a distinct alias
 import type { User, UserCourseProgressData, Company } from '@/types/user';
 import { QuizTaking } from '@/components/learn/QuizTaking';
-import { CourseCertificate } from '@/components/learn/CourseCertificate'; // Import Certificate
+import { CourseCertificate } from '@/components/learn/CourseCertificate';
 import { cn } from '@/lib/utils';
 import { Timestamp } from 'firebase/firestore';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 
-type CurriculumItem = {
+type CurriculumDisplayItem = {
     id: string;
-    type: 'lesson' | 'quiz';
-    data: Lesson | Quiz;
+    type: 'lesson' | 'quiz' | 'brandLesson' | 'brandQuiz'; // Differentiate brand items
+    data: Lesson | Quiz | BrandLesson | BrandQuiz;
 };
 
 export default function LearnCoursePage() {
@@ -39,11 +40,11 @@ export default function LearnCoursePage() {
     const courseId = params.courseId as string;
     const { toast } = useToast();
 
-    const [course, setCourse] = useState<Course | null>(null);
-    const [brandDetails, setBrandDetails] = useState<Company | null>(null);
+    const [course, setCourse] = useState<Course | BrandCourse | null>(null); // Can be Course or BrandCourse
+    const [certificateBrandDetails, setCertificateBrandDetails] = useState<Company | null>(null); // For certificate branding
     const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [curriculumItems, setCurriculumItems] = useState<CurriculumItem[]>([]);
-    const [currentContentItem, setCurrentContentItem] = useState<CurriculumItem | null>(null);
+    const [curriculumItems, setCurriculumItems] = useState<CurriculumDisplayItem[]>([]);
+    const [currentContentItem, setCurrentContentItem] = useState<CurriculumDisplayItem | null>(null);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [userProgressData, setUserProgressData] = useState<UserCourseProgressData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -52,6 +53,7 @@ export default function LearnCoursePage() {
     const [isVideoWatched, setIsVideoWatched] = useState(false);
     const videoRef = useRef<HTMLVideoElement>(null);
     const [showCertificateDialog, setShowCertificateDialog] = useState(false);
+    const [isBrandSpecificCourse, setIsBrandSpecificCourse] = useState(false);
 
     const isCourseCompleted = userProgressData?.status === "Completed";
 
@@ -76,37 +78,75 @@ export default function LearnCoursePage() {
         return () => unsubscribe();
     }, [router]);
 
-    const loadCourseData = useCallback(async (userId: string) => {
+    const loadCourseData = useCallback(async (userId: string, userCompanyId?: string | null) => {
         if (!courseId) return;
         setIsLoading(true);
         try {
-            const fetchedCourse = await getCourseById(courseId);
-            if (fetchedCourse) {
-                setCourse(fetchedCourse);
-                if (fetchedCourse.isDeleted) {
+            let fetchedCourseData: Course | BrandCourse | null = null;
+            let isBrandCourse = false;
+
+            // Try fetching global course first
+            fetchedCourseData = await getCourseById(courseId);
+
+            if (!fetchedCourseData) {
+                // If not a global course, try fetching as a brand-specific course
+                fetchedCourseData = await getBrandCourseById(courseId);
+                if (fetchedCourseData) {
+                    isBrandCourse = true;
+                }
+            }
+            
+            setIsBrandSpecificCourse(isBrandCourse); // Set this early
+
+            if (fetchedCourseData) {
+                setCourse(fetchedCourseData); // Store as Course or BrandCourse
+
+                if (fetchedCourseData.isDeleted) {
                     toast({ title: "Course Unavailable", description: "This course is no longer available.", variant: "destructive" });
                     router.push('/courses/my-courses');
                     return;
                 }
 
-                 if (currentUser?.companyId) {
-                     const company = await getCompanyById(currentUser.companyId);
-                     setBrandDetails(company);
-                 }
-
-                const allItemsMap = new Map<string, CurriculumItem>();
-                for (const prefixedId of (fetchedCourse.curriculum || [])) {
-                    const [type, id] = prefixedId.split('-');
-                    let itemData: Lesson | Quiz | null = null;
-                    if (type === 'lesson') itemData = await getLessonById(id);
-                    else if (type === 'quiz') itemData = await getQuizById(id);
-
-                    if (itemData) allItemsMap.set(prefixedId, { id: prefixedId, type: type as 'lesson' | 'quiz', data: itemData });
+                // Fetch brand details for certificate branding, either from BrandCourse or User's company
+                let brandIdForCertificate: string | null = null;
+                if (isBrandCourse && (fetchedCourseData as BrandCourse).brandId) {
+                    brandIdForCertificate = (fetchedCourseData as BrandCourse).brandId;
+                } else if (userCompanyId) {
+                    brandIdForCertificate = userCompanyId;
                 }
 
-                const orderedItems = (fetchedCourse.curriculum || [])
+                if (brandIdForCertificate) {
+                    const brandData = await getBrandDetailsForCertificate(brandIdForCertificate);
+                    setCertificateBrandDetails(brandData);
+                }
+
+
+                const allItemsMap = new Map<string, CurriculumDisplayItem>();
+                for (const prefixedId of (fetchedCourseData.curriculum || [])) {
+                    const [typePrefix, id] = prefixedId.split('-');
+                    let itemData: Lesson | Quiz | BrandLesson | BrandQuiz | null = null;
+                    let itemType: CurriculumDisplayItem['type'] = typePrefix as CurriculumDisplayItem['type'];
+
+                    if (isBrandCourse) {
+                        if (typePrefix === 'brandLesson') itemData = await getBrandLessonById(id);
+                        else if (typePrefix === 'brandQuiz') itemData = await getBrandQuizById(id);
+                        else { // If a brand course curriculum item doesn't have brandLesson/brandQuiz prefix, try global
+                            if(typePrefix === 'lesson') itemData = await getLessonById(id);
+                            else if(typePrefix === 'quiz') itemData = await getQuizById(id);
+                            itemType = typePrefix as 'lesson' | 'quiz'; // ensure correct type
+                        }
+                    } else { // Global course
+                        if (typePrefix === 'lesson') itemData = await getLessonById(id);
+                        else if (typePrefix === 'quiz') itemData = await getQuizById(id);
+                        itemType = typePrefix as 'lesson' | 'quiz';
+                    }
+
+                    if (itemData) allItemsMap.set(prefixedId, { id: prefixedId, type: itemType, data: itemData });
+                }
+
+                const orderedItems = (fetchedCourseData.curriculum || [])
                     .map(prefixedId => allItemsMap.get(prefixedId))
-                    .filter(Boolean) as CurriculumItem[];
+                    .filter(Boolean) as CurriculumDisplayItem[];
                 setCurriculumItems(orderedItems);
 
                 const progressData = await getUserCourseProgress(userId, courseId);
@@ -114,7 +154,7 @@ export default function LearnCoursePage() {
                 const localCompletedIds = progressData.completedItems || [];
                 setCompletedItemIds(localCompletedIds);
 
-                let initialItem: CurriculumItem | null = null;
+                let initialItem: CurriculumDisplayItem | null = null;
                 let initialItemIndex = 0;
 
                 if (orderedItems.length > 0) {
@@ -130,7 +170,7 @@ export default function LearnCoursePage() {
                 setCurrentContentItem(initialItem);
                 setCurrentIndex(initialItemIndex);
 
-                 if (progressData.status === "Completed" && orderedItems.length > 0 && !showCertificateDialog) { // Prevent re-showing if already dismissed
+                 if (progressData.status === "Completed" && orderedItems.length > 0 && !showCertificateDialog) {
                     setShowCertificateDialog(true);
                 }
 
@@ -144,27 +184,36 @@ export default function LearnCoursePage() {
         } finally {
             setIsLoading(false);
         }
-    }, [courseId, router, toast, currentUser?.companyId, showCertificateDialog]); // Added showCertificateDialog to deps
+    }, [courseId, router, toast, showCertificateDialog]); // Removed currentUser?.companyId, will pass it
 
     useEffect(() => {
         if (currentUser?.id) {
-            loadCourseData(currentUser.id);
+            loadCourseData(currentUser.id, currentUser.companyId);
         }
-     }, [currentUser?.id, loadCourseData]);
+     }, [currentUser, loadCourseData]); // Depend on whole currentUser object
 
     useEffect(() => {
-        if (currentContentItem?.type === 'lesson' && (currentContentItem.data as Lesson).videoUrl) {
+        if (!currentContentItem) return;
+
+        let hasVideo = false;
+        if (currentContentItem.type === 'lesson' && (currentContentItem.data as Lesson).videoUrl) {
+            hasVideo = true;
+        } else if (currentContentItem.type === 'brandLesson' && (currentContentItem.data as BrandLesson).videoUrl) {
+            hasVideo = true;
+        }
+
+        if (hasVideo) {
             setIsVideoWatched(false);
             if (completedItemIds.includes(currentContentItem.id)) {
                 setIsVideoWatched(true);
             }
         } else {
-            setIsVideoWatched(true); // Auto-set to true for non-video items or if video not present
+            setIsVideoWatched(true);
         }
     }, [currentContentItem, completedItemIds]);
 
 
-    const handleItemCompletion = useCallback(async (itemIdToComplete: string): Promise<boolean> => { // Added return type
+    const handleItemCompletion = useCallback(async (itemIdToComplete: string): Promise<boolean> => {
         if (isCourseCompleted || !currentUser?.id || !courseId || !itemIdToComplete || completedItemIds.includes(itemIdToComplete)) {
             return false;
         }
@@ -173,18 +222,18 @@ export default function LearnCoursePage() {
 
         try {
             await updateEmployeeProgress(currentUser.id, courseId, overallIndex);
-            const updatedProgressData = await getUserCourseProgress(currentUser.id, courseId); // Re-fetch progress
+            const updatedProgressData = await getUserCourseProgress(currentUser.id, courseId);
             setUserProgressData(updatedProgressData);
             setCompletedItemIds(updatedProgressData.completedItems || []);
 
             if (updatedProgressData.status === "Completed" && updatedProgressData.progress === 100 && !showCertificateDialog) {
                 setShowCertificateDialog(true);
             }
-            return true; // Indicate success
+            return true;
         } catch (error) {
             console.error("Failed to update progress:", error);
             toast({ title: "Error", description: "Could not update your progress.", variant: "destructive"});
-            return false; // Indicate failure
+            return false;
         }
     }, [currentUser?.id, courseId, curriculumItems, completedItemIds, isCourseCompleted, toast, showCertificateDialog]);
 
@@ -199,7 +248,7 @@ export default function LearnCoursePage() {
         return false;
     }, [completedItemIds, curriculumItems]);
 
-    const handleContentSelection = (item: CurriculumItem, index: number) => {
+    const handleContentSelection = (item: CurriculumDisplayItem, index: number) => {
         if (isItemLocked(index) && !completedItemIds.includes(item.id) && currentContentItem?.id !== item.id) {
             toast({ title: "Locked Content", description: "Please complete the previous items first.", variant: "default" });
             return;
@@ -216,11 +265,10 @@ export default function LearnCoursePage() {
                 setCurrentContentItem(curriculumItems[nextItemIndex]);
                 setCurrentIndex(nextItemIndex);
             } else {
-                 // This case should ideally not be hit if "Mark Complete & Next" only enables when next is unlockable
                 toast({ title: "Next Item Locked", description: "Something went wrong, next item is still locked.", variant: "default" });
             }
-        } else {
-            const finalProgress = await getUserCourseProgress(currentUser!.id, courseId);
+        } else if (currentUser?.id) { // Check currentUser?.id
+            const finalProgress = await getUserCourseProgress(currentUser.id, courseId);
             setUserProgressData(finalProgress);
             setCompletedItemIds(finalProgress.completedItems || []);
              if(finalProgress.status === "Completed" && !showCertificateDialog) {
@@ -231,10 +279,14 @@ export default function LearnCoursePage() {
     }, [currentIndex, curriculumItems, isItemLocked, toast, currentUser, courseId, course?.title, showCertificateDialog]);
 
     const handleQuizComplete = async (quizId: string, score: number, passed: boolean) => {
-        if (currentContentItem?.id !== `quiz-${quizId}`) return;
+        // Ensure currentContentItem.id matches the quizId from callback, prefixed correctly
+        const currentItemFullId = currentContentItem?.id;
+        const expectedFullId = isBrandSpecificCourse ? `brandQuiz-${quizId}` : `quiz-${quizId}`;
+
+        if (currentItemFullId !== expectedFullId) return;
 
         if (passed) {
-            const completionSuccessful = await handleItemCompletion(currentContentItem.id);
+            const completionSuccessful = await handleItemCompletion(currentItemFullId);
             if (completionSuccessful) {
                 advanceToNextItem();
             }
@@ -244,10 +296,12 @@ export default function LearnCoursePage() {
     };
 
     const handleMarkLessonComplete = async () => {
-       if (!currentContentItem || currentContentItem.type !== 'lesson' || (isCourseCompleted && completedItemIds.includes(currentContentItem.id))) return;
+       if (!currentContentItem || !(currentContentItem.type === 'lesson' || currentContentItem.type === 'brandLesson') || (isCourseCompleted && completedItemIds.includes(currentContentItem.id))) return;
 
-       const lessonData = currentContentItem.data as Lesson;
-       if (!completedItemIds.includes(currentContentItem.id) && lessonData.videoUrl && !isVideoWatched) {
+       const lessonData = currentContentItem.data as (Lesson | BrandLesson);
+       const hasVideo = !!lessonData.videoUrl;
+
+       if (!completedItemIds.includes(currentContentItem.id) && hasVideo && !isVideoWatched) {
            toast({ title: "Video Not Watched", description: "Please watch the entire video before marking complete.", variant: "default"});
            return;
        }
@@ -293,14 +347,15 @@ export default function LearnCoursePage() {
 
 
         const { type, data } = currentContentItem!;
+        const itemData = data as Lesson | BrandLesson | Quiz | BrandQuiz; // Common base properties
         const isItemCompleted = completedItemIds.includes(currentContentItem!.id);
         const isLastItemInCourse = currentIndex === curriculumItems.length - 1;
 
-        if (type === 'lesson') {
-            const lesson = data as Lesson;
+        if (type === 'lesson' || type === 'brandLesson') {
+            const lesson = itemData as (Lesson | BrandLesson);
             const hasVideo = !!lesson.videoUrl;
             const canMarkComplete = isVideoWatched || !hasVideo;
-            const isLessonEffectivelyComplete = isItemCompleted || (isCourseCompleted && isLastItemInCourse); // If course already marked complete, treat as complete for button
+            const isLessonEffectivelyComplete = isItemCompleted || (isCourseCompleted && isLastItemInCourse);
             
             let buttonText = "Mark Complete & Next";
             if (isLessonEffectivelyComplete && !isLastItemInCourse) buttonText = "Next Item";
@@ -332,8 +387,8 @@ export default function LearnCoursePage() {
             );
         }
 
-        if (type === 'quiz') {
-            const quiz = data as Quiz;
+        if (type === 'quiz' || type === 'brandQuiz') {
+            const quiz = itemData as (Quiz | BrandQuiz);
              return (
                  <div className="p-4 md:p-6 lg:p-8">
                      <QuizTaking quiz={quiz} onComplete={handleQuizComplete} isCompleted={isItemCompleted || isCourseCompleted} />
@@ -358,13 +413,13 @@ export default function LearnCoursePage() {
         <div className="p-4 space-y-4">
              <Link href="/courses/my-courses" className="inline-flex items-center text-sm text-muted-foreground hover:text-primary mb-4"> <ChevronLeft className="h-4 w-4 mr-1" /> Back to My Learning </Link>
             <h3 className="text-lg font-semibold">{course?.title}</h3>
-             <div className="space-y-1"> <div className="flex justify-between text-xs text-muted-foreground mb-1"> <span>Overall Progress</span> <span>{userProgressData?.progress || 0}%</span> </div> <Progress value={userProgressData?.progress || 0} aria-label={`${course?.title} overall progress ${userProgressData?.progress || 0}%`} className="h-2"/> </div>
+             <div className="space-y-1"> <div className="flex justify-between text-xs text-muted-foreground mb-1"> <span>Overall Progress</span> <span>{userProgressData?.progress || 0}%</span> </div> <Progress value={userProgressData?.progress || 0} aria-label={`${course?.title || 'Course'} overall progress ${userProgressData?.progress || 0}%`} className="h-2"/> </div>
              {(isCourseCompleted || (userProgressData?.status === "Completed" && userProgressData.progress === 100)) && ( <Button onClick={() => setShowCertificateDialog(true)} variant="outline" className="w-full mt-2 flex items-center gap-2"> <Award className="h-4 w-4" /> View Certificate </Button> )}
             <h4 className="text-md font-semibold pt-2 border-t mt-4">Curriculum</h4>
-             <ScrollArea className="h-[calc(100vh-320px)]"> {/* Adjusted height */}
+             <ScrollArea className="h-[calc(100vh-320px)]">
               <ul className="space-y-1 mt-2">
                   {curriculumItems.map((item, index) => {
-                      const Icon = item.type === 'lesson' ? FileText : HelpCircle;
+                      const Icon = (item.type === 'lesson' || item.type === 'brandLesson') ? FileText : HelpCircle;
                       const isCompleted = completedItemIds.includes(item.id);
                       const isCurrent = currentContentItem?.id === item.id;
                       const locked = isItemLocked(index);
@@ -405,8 +460,8 @@ export default function LearnCoursePage() {
                             courseName={course.title}
                             userName={currentUser.name}
                             completionDate={userProgressData.lastUpdated instanceof Timestamp ? userProgressData.lastUpdated.toDate() : new Date(userProgressData.lastUpdated || Date.now())}
-                            brandName={brandDetails?.name}
-                            brandLogoUrl={brandDetails?.logoUrl}
+                            brandName={certificateBrandDetails?.name}
+                            brandLogoUrl={certificateBrandDetails?.logoUrl}
                         />
                     </DialogContent>
                 </Dialog>
@@ -415,3 +470,5 @@ export default function LearnCoursePage() {
     );
 }
 
+
+    
