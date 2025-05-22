@@ -10,7 +10,7 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label'; // Ensured Label is imported
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
@@ -22,7 +22,7 @@ import { getCompanyById, updateCompany } from '@/lib/company-data';
 import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data';
 import { getProgramById, getAllCourses } from '@/lib/firestore-data';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Globe, Users, CalendarDays, Palette, BookOpen, PackageCheck } from 'lucide-react';
+import { ArrowLeft, Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Globe, Users, CalendarDays, Palette, BookOpen, PackageCheck, Settings as SettingsIcon } from 'lucide-react';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -32,6 +32,7 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 
+// Schema includes core fields, trial fields, and course management. White-label fields are removed.
 const companyFormSchema = z.object({
   name: z.string().min(2, { message: 'Brand name must be at least 2 characters.' }),
   subdomainSlug: z.string()
@@ -45,10 +46,6 @@ const companyFormSchema = z.object({
   maxUsers: z.coerce.number({ invalid_type_error: "Must be a number" }).int().positive().min(1).optional().nullable(),
   isTrial: z.boolean().default(false),
   trialEndsAt: z.date().nullable().optional(),
-  whiteLabelEnabled: z.boolean().default(false),
-  primaryColor: z.string().optional().or(z.literal('')).nullable(),
-  secondaryColor: z.string().optional().or(z.literal('')).nullable(),
-  accentColor: z.string().optional().or(z.literal('')).nullable(),
   canManageCourses: z.boolean().default(false),
 });
 
@@ -63,7 +60,7 @@ export default function EditCompanyPage() {
   const [company, setCompany] = useState<Company | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any | null>(null); // Using 'any' temporarily if User type is complex
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
   const [isMounted, setIsMounted] = useState(false);
 
   const [isLogoUploading, setIsLogoUploading] = useState(false);
@@ -85,16 +82,11 @@ export default function EditCompanyPage() {
       maxUsers: null,
       isTrial: false,
       trialEndsAt: null,
-      whiteLabelEnabled: false,
-      primaryColor: '',
-      secondaryColor: '',
-      accentColor: '',
       canManageCourses: false,
     },
   });
 
   const isTrialValue = form.watch('isTrial');
-  const whiteLabelEnabledValue = form.watch('whiteLabelEnabled');
   const logoUrlValue = form.watch('logoUrl');
 
   useEffect(() => {
@@ -142,10 +134,6 @@ export default function EditCompanyPage() {
             : companyData.trialEndsAt instanceof Date
             ? companyData.trialEndsAt
             : null,
-          whiteLabelEnabled: companyData.whiteLabelEnabled || false,
-          primaryColor: companyData.primaryColor || '',
-          secondaryColor: companyData.secondaryColor || '',
-          accentColor: companyData.accentColor || '',
           canManageCourses: companyData.canManageCourses || false,
         });
 
@@ -154,7 +142,7 @@ export default function EditCompanyPage() {
           const programData = await getProgramById(purchaseRecord.selectedProgramId);
           setAssignedProgram(programData);
           if (programData && programData.courseIds && programData.courseIds.length > 0) {
-            const allCourses = await getAllCourses(); // Assuming getAllCourses is available
+            const allCourses = await getAllCourses();
             const programCourses = allCourses.filter(course => programData.courseIds.includes(course.id));
             setCoursesInProgram(programCourses);
           }
@@ -213,18 +201,19 @@ export default function EditCompanyPage() {
         maxUsers: data.maxUsers ?? null,
         isTrial: data.isTrial,
         trialEndsAt: data.isTrial && data.trialEndsAt ? Timestamp.fromDate(data.trialEndsAt) : null,
-        whiteLabelEnabled: data.whiteLabelEnabled,
-        primaryColor: data.whiteLabelEnabled && data.primaryColor?.trim() !== '' ? data.primaryColor : null,
-        secondaryColor: data.whiteLabelEnabled && data.secondaryColor?.trim() !== '' ? data.secondaryColor : null,
-        accentColor: data.whiteLabelEnabled && data.accentColor?.trim() !== '' ? data.accentColor : null,
         canManageCourses: data.canManageCourses,
+        // White-label fields are not included in this submission as they are placeholder
+        whiteLabelEnabled: company.whiteLabelEnabled, // Preserve existing value
+        primaryColor: company.primaryColor,
+        secondaryColor: company.secondaryColor,
+        accentColor: company.accentColor,
       };
 
       const updatedCompany = await updateCompany(companyId, metadataToUpdate);
       if (updatedCompany) {
-        setCompany(updatedCompany); // Update local state
+        setCompany(updatedCompany); 
         toast({ title: "Brand Updated", description: `"${updatedCompany.name}" updated successfully.` });
-        fetchCompanyAndRelatedData(); // Re-fetch data to ensure consistency
+        fetchCompanyAndRelatedData(); 
       } else {
         throw new Error("Failed to update brand.");
       }
@@ -318,38 +307,14 @@ export default function EditCompanyPage() {
               
               {/* White-Label Settings Placeholder */}
               <Card>
-                <CardHeader><CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings (Placeholder)</CardTitle></CardHeader>
                 <CardContent>
-                  {isMounted && (
-                    <FormField
-                      control={form.control}
-                      name="whiteLabelEnabled"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm mb-4">
-                          <div className="space-y-0.5"> <FormLabel className="text-base">Enable White-Labeling</FormLabel> <ShadFormDescription>Allow this brand to use custom colors. Logo is set above.</ShadFormDescription> </div>
-                          <FormControl> <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /> </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  )}
-                  {!isMounted && <Skeleton className="h-20 w-full mb-4" />}
-
-                  {isMounted && whiteLabelEnabledValue && (
-                    <div className="space-y-4">
-                      <FormField control={form.control} name="primaryColor" render={({ field }) => (<FormItem><FormLabel>Primary Color (Hex)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="secondaryColor" render={({ field }) => (<FormItem><FormLabel>Secondary Color (Hex)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="accentColor" render={({ field }) => (<FormItem><FormLabel>Accent Color (Hex)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                    </div>
-                  )}
-                  {isMounted && !whiteLabelEnabledValue && (
-                    <p className="text-sm text-muted-foreground italic">Enable white-labeling to set custom colors.</p>
-                  )}
-                  {!isMounted && <Skeleton className="h-32 w-full" />}
+                  <p className="text-sm text-muted-foreground italic">White-labeling settings will be available here soon. This includes enabling custom branding and color schemes.</p>
                 </CardContent>
               </Card>
 
              <Card>
-                <CardHeader><CardTitle className="flex items-center gap-2"><PackageCheck className="h-5 w-5" /> Course Management Ability</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="flex items-center gap-2"><SettingsIcon className="h-5 w-5" /> Course Management Ability</CardTitle></CardHeader> {/* Changed Icon */}
                 <CardContent>
                   {isMounted ? (
                     <FormField
