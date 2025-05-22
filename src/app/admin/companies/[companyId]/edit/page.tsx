@@ -10,19 +10,20 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label'; // Ensure Label is imported
+import { Label } // Ensure Label is imported if used standalone, though FormLabel is preferred
+from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription as ShadFormDescription } from '@/components/ui/form';
+import { Form, FormControl, FormDescription as ShadFormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import type { Company, CompanyFormData } from '@/types/user';
-import type { Program, Course } from '@/types/course'; // Import Program and Course
+import type { Program, Course } from '@/types/course';
 import { getCompanyById, updateCompany } from '@/lib/company-data';
-import { getProgramById, getAllCourses } from '@/lib/firestore-data'; // For fetching program/course details
-import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data'; // For fetching purchase record
+import { getProgramById, getAllCourses } from '@/lib/firestore-data';
+import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Globe, Users, CalendarDays, Settings as SettingsIcon, BookOpen, Layers, PackageCheck } from 'lucide-react';
+import { ArrowLeft, Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Globe, Users, CalendarDays, Settings as SettingsIcon, BookOpen, Layers, PackageCheck, Palette } from 'lucide-react';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -40,17 +41,16 @@ const companyFormSchema = z.object({
     .max(63, { message: "Slug cannot exceed 63 characters."})
     .optional().or(z.literal('')).nullable(),
   customDomain: z.string().optional().or(z.literal('')).nullable(),
-  shortDescription: z.string().max(150, { message: "Description can't exceed 150 characters." }).optional().or(z.literal('')).nullable(),
-  logoUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')).nullable(),
+  shortDescription: z.string().max(150, { message: "Description can't exceed 150 characters." }).optional().or(z.literal('')),
+  logoUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')),
   maxUsers: z.coerce.number({ invalid_type_error: "Must be a number" }).int().positive().min(1).optional().nullable(),
   isTrial: z.boolean().default(false),
   trialEndsAt: z.date().nullable().optional(),
   canManageCourses: z.boolean().default(false),
-  // Placeholder for white-label related fields in schema if direct editing is added back
-  // whiteLabelEnabled: z.boolean().default(false),
-  // primaryColor: z.string().optional().nullable(),
-  // secondaryColor: z.string().optional().nullable(),
-  // accentColor: z.string().optional().nullable(),
+  whiteLabelEnabled: z.boolean().default(false),
+  primaryColor: z.string().regex(/^#([0-9a-f]{3}){1,2}$/i, { message: "Invalid HEX color."}).optional().or(z.literal('')).nullable(),
+  secondaryColor: z.string().regex(/^#([0-9a-f]{3}){1,2}$/i, { message: "Invalid HEX color."}).optional().or(z.literal('')).nullable(),
+  accentColor: z.string().regex(/^#([0-9a-f]{3}){1,2}$/i, { message: "Invalid HEX color."}).optional().or(z.literal('')).nullable(),
 });
 
 type CompanyFormValues = z.infer<typeof companyFormSchema>;
@@ -78,19 +78,24 @@ export default function EditCompanyPage() {
     resolver: zodResolver(companyFormSchema),
     defaultValues: {
       name: '',
-      subdomainSlug: '', // Default to empty string
-      customDomain: '', // Default to empty string
-      shortDescription: '', // Default to empty string
-      logoUrl: '', // Default to empty string
+      subdomainSlug: '',
+      customDomain: '',
+      shortDescription: '',
+      logoUrl: '',
       maxUsers: null,
       isTrial: false,
       trialEndsAt: null,
       canManageCourses: false,
+      whiteLabelEnabled: false,
+      primaryColor: '',
+      secondaryColor: '',
+      accentColor: '',
     },
   });
 
   const isTrialValue = form.watch('isTrial');
   const logoUrlValue = form.watch('logoUrl');
+  const whiteLabelEnabledValue = form.watch('whiteLabelEnabled');
 
   useEffect(() => {
     setIsMounted(true);
@@ -134,9 +139,12 @@ export default function EditCompanyPage() {
             ? companyData.trialEndsAt
             : null,
           canManageCourses: companyData.canManageCourses || false,
+          whiteLabelEnabled: companyData.whiteLabelEnabled || false,
+          primaryColor: companyData.primaryColor || '',
+          secondaryColor: companyData.secondaryColor || '',
+          accentColor: companyData.accentColor || '',
         });
 
-        // Fetch associated program and its courses
         const purchaseRecord = await getCustomerPurchaseRecordByBrandId(companyId);
         if (purchaseRecord && purchaseRecord.selectedProgramId) {
           const program = await getProgramById(purchaseRecord.selectedProgramId);
@@ -207,17 +215,16 @@ export default function EditCompanyPage() {
         isTrial: data.isTrial,
         trialEndsAt: data.isTrial && data.trialEndsAt ? Timestamp.fromDate(data.trialEndsAt) : null,
         canManageCourses: data.canManageCourses,
-        // Preserve existing white-label fields as they are not in this form
-        whiteLabelEnabled: company?.whiteLabelEnabled || false,
-        primaryColor: company?.primaryColor || null,
-        secondaryColor: company?.secondaryColor || null,
-        accentColor: company?.accentColor || null,
+        whiteLabelEnabled: data.whiteLabelEnabled,
+        primaryColor: data.primaryColor?.trim() === '' ? null : data.primaryColor,
+        secondaryColor: data.secondaryColor?.trim() === '' ? null : data.secondaryColor,
+        accentColor: data.accentColor?.trim() === '' ? null : data.accentColor,
       };
 
       const updatedCompany = await updateCompany(companyId, metadataToUpdate);
       if (updatedCompany) {
-        setCompany(updatedCompany); // Update local state
-        form.reset({ // Reset form with fresh data from Firestore
+        setCompany(updatedCompany);
+        form.reset({
           name: updatedCompany.name || '',
           subdomainSlug: updatedCompany.subdomainSlug || '',
           customDomain: updatedCompany.customDomain || '',
@@ -231,6 +238,10 @@ export default function EditCompanyPage() {
             ? updatedCompany.trialEndsAt
             : null,
           canManageCourses: updatedCompany.canManageCourses || false,
+          whiteLabelEnabled: updatedCompany.whiteLabelEnabled || false,
+          primaryColor: updatedCompany.primaryColor || '',
+          secondaryColor: updatedCompany.secondaryColor || '',
+          accentColor: updatedCompany.accentColor || '',
         });
         toast({ title: "Brand Updated", description: `"${updatedCompany.name}" updated successfully.` });
       } else {
@@ -311,7 +322,7 @@ export default function EditCompanyPage() {
                 <CardContent className="space-y-4">
                   <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem><FormLabel>Max Users</FormLabel><FormControl><Input type="number" min="1" placeholder="Leave blank for unlimited" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
                   {isMounted && (
-                    <FormField control={form.control} name="isTrial" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Is Trial Account?</FormLabel></div><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="isTrial" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Is Trial Account?</FormLabel></div><FormControl><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></FormControl><FormMessage /></FormItem>)} />
                   )}
                   {isMounted && isTrialValue && (
                     <FormField control={form.control} name="trialEndsAt" render={({ field }) => (
@@ -361,13 +372,39 @@ export default function EditCompanyPage() {
                 </CardContent>
               </Card>
 
-              {/* White-Label Settings Placeholder */}
+              {/* White-Label Settings Card */}
               <Card>
-                <CardHeader><CardTitle>White-Label Settings</CardTitle></CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground italic">White-labeling settings (colors, etc.) placeholder. This feature will be re-added later.</p>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings</CardTitle>
+                  <CardDescription>Customize the appearance for this brand.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {isMounted && (
+                    <FormField
+                      control={form.control}
+                      name="whiteLabelEnabled"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">Enable White-Labeling</FormLabel>
+                            <ShadFormDescription>Allow this brand to use custom colors. Logo is set above.</ShadFormDescription>
+                          </div>
+                          <FormControl><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                  {isMounted && whiteLabelEnabledValue && (
+                    <>
+                      <FormField control={form.control} name="primaryColor" render={({ field }) => (<FormItem><FormLabel>Primary Color (HEX)</FormLabel><FormControl><Input placeholder="#3498db" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="secondaryColor" render={({ field }) => (<FormItem><FormLabel>Secondary Color (HEX)</FormLabel><FormControl><Input placeholder="#ecf0f1" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="accentColor" render={({ field }) => (<FormItem><FormLabel>Accent Color (HEX)</FormLabel><FormControl><Input placeholder="#2ecc71" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                    </>
+                  )}
+                   {!isMounted && <Skeleton className="h-32 w-full" />}
                 </CardContent>
               </Card>
+
 
               {/* Program Access Card */}
               <Card>
@@ -377,44 +414,18 @@ export default function EditCompanyPage() {
                 </CardHeader>
                 <CardContent>
                   {isLoadingProgramData ? (
-                    <div className="space-y-2">
-                      <Skeleton className="h-6 w-3/4" />
-                      <Skeleton className="h-4 w-full" />
-                      <Skeleton className="h-4 w-5/6" />
-                      <Skeleton className="h-20 w-full mt-2" />
-                    </div>
+                    <div className="space-y-2"> <Skeleton className="h-6 w-3/4" /> <Skeleton className="h-4 w-full" /> <Skeleton className="h-4 w-5/6" /> <Skeleton className="h-20 w-full mt-2" /> </div>
                   ) : assignedProgram ? (
                     <div className="space-y-3">
-                      <div>
-                        <h4 className="font-semibold text-foreground">{assignedProgram.title}</h4>
-                        <p className="text-sm text-muted-foreground">{assignedProgram.description}</p>
-                        <p className="text-sm text-muted-foreground mt-1">Base Price: <Badge variant="outline">{assignedProgram.price}</Badge></p>
-                      </div>
-                      {coursesInProgram.length > 0 && (
-                        <div>
-                          <h5 className="text-sm font-medium text-muted-foreground mb-1">Courses Included:</h5>
-                          <ScrollArea className="h-40 w-full rounded-md border p-2">
-                            <ul className="space-y-1">
-                              {coursesInProgram.map(course => (
-                                <li key={course.id} className="text-xs text-foreground p-1 bg-secondary/50 rounded-sm flex items-center gap-1.5">
-                                  <BookOpen className="h-3 w-3 flex-shrink-0" />
-                                  {course.title} <Badge variant="ghost" className="ml-auto text-xs">{course.level}</Badge>
-                                </li>
-                              ))}
-                            </ul>
-                          </ScrollArea>
-                        </div>
-                      )}
-                      {coursesInProgram.length === 0 && (
-                        <p className="text-xs text-muted-foreground italic">This program currently has no courses assigned to it in the library.</p>
-                      )}
+                      <div> <h4 className="font-semibold text-foreground">{assignedProgram.title}</h4> <p className="text-sm text-muted-foreground">{assignedProgram.description}</p> <p className="text-sm text-muted-foreground mt-1">Base Price: <Badge variant="outline">{assignedProgram.price}</Badge></p> </div>
+                      {coursesInProgram.length > 0 && ( <div> <h5 className="text-sm font-medium text-muted-foreground mb-1">Courses Included:</h5> <ScrollArea className="h-40 w-full rounded-md border p-2"> <ul className="space-y-1"> {coursesInProgram.map(course => ( <li key={course.id} className="text-xs text-foreground p-1 bg-secondary/50 rounded-sm flex items-center gap-1.5"> <BookOpen className="h-3 w-3 flex-shrink-0" /> {course.title} <Badge variant="ghost" className="ml-auto text-xs">{course.level}</Badge> </li> ))} </ul> </ScrollArea> </div> )}
+                      {coursesInProgram.length === 0 && ( <p className="text-xs text-muted-foreground italic">This program currently has no courses assigned to it in the library.</p> )}
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground italic">No program information found for this brand (possibly created before program assignment or manually).</p>
                   )}
                 </CardContent>
               </Card>
-
             </div>
           </div>
 
