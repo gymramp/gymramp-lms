@@ -50,7 +50,7 @@ const brandCourseFormSchema = z.object({
   featuredImageUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')),
   level: z.enum(['Beginner', 'Intermediate', 'Advanced'], { required_error: 'Please select a difficulty level.' }),
   duration: z.string().min(3, { message: 'Please enter an approximate duration.' }),
-  certificateTemplateId: z.string().optional().nullable(), // Added certificateTemplateId
+  certificateTemplateId: z.string().optional().nullable(),
 });
 
 type BrandCourseFormValues = z.infer<typeof brandCourseFormSchema>;
@@ -98,13 +98,13 @@ export function AddEditBrandCourseDialog({ isOpen, setIsOpen, brandId, onCourseS
     if (isOpen) {
         if (initialData) {
           form.reset({
-            title: initialData.title,
-            description: initialData.description,
-            longDescription: initialData.longDescription,
+            title: initialData.title || '',
+            description: initialData.description || '',
+            longDescription: initialData.longDescription || '',
             imageUrl: initialData.imageUrl || '',
             featuredImageUrl: initialData.featuredImageUrl || '',
             level: initialData.level,
-            duration: initialData.duration,
+            duration: initialData.duration || '',
             certificateTemplateId: initialData.certificateTemplateId || null,
           });
         } else {
@@ -136,7 +136,7 @@ export function AddEditBrandCourseDialog({ isOpen, setIsOpen, brandId, onCourseS
 
     try {
         const uniqueFileName = `${brandId}-${isEditing && initialData?.id ? initialData.id : Date.now()}-brandcourseimg-${file.name}`;
-        const storagePath = `${STORAGE_PATHS.COURSE_IMAGES}/${uniqueFileName}`; // Could use a brand-specific path
+        const storagePath = `${STORAGE_PATHS.COURSE_IMAGES}/${uniqueFileName}`;
 
         const downloadURL = await uploadImage(file, storagePath, setUploadProgress);
 
@@ -166,7 +166,7 @@ export function AddEditBrandCourseDialog({ isOpen, setIsOpen, brandId, onCourseS
         title: data.title,
         description: data.description,
         longDescription: data.longDescription,
-        imageUrl: data.imageUrl || `https://placehold.co/600x350.png?text=${encodeURIComponent(data.title)}`,
+        imageUrl: data.imageUrl?.trim() === '' ? `https://placehold.co/600x350.png?text=${encodeURIComponent(data.title)}` : data.imageUrl,
         featuredImageUrl: finalFeaturedImageUrl,
         level: data.level,
         duration: data.duration,
@@ -218,9 +218,10 @@ export function AddEditBrandCourseDialog({ isOpen, setIsOpen, brandId, onCourseS
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
-            <FormField control={form.control} name="title" render={({ field }) => ( <FormItem> <FormLabel>Course Title</FormLabel> <FormControl> <Input placeholder="e.g., Our Gym's Sales Process" {...field} /> </FormControl> <FormMessage /> </FormItem> )}/>
-            <FormField control={form.control} name="description" render={({ field }) => ( <FormItem> <FormLabel>Short Description</FormLabel> <FormControl> <Textarea rows={2} placeholder="Briefly describe the course..." {...field} /> </FormControl> <FormMessage /> </FormItem> )}/>
-            <FormField control={form.control} name="longDescription" render={({ field }) => ( <FormItem> <FormLabel>Detailed Description</FormLabel> <FormControl> <Textarea rows={4} placeholder="Provide a detailed overview..." {...field} /> </FormControl> <FormMessage /> </FormItem> )}/>
+            <FormField control={form.control} name="title" render={({ field }) => ( <FormItem> <FormLabel>Course Title</FormLabel> <FormControl> <Input placeholder="e.g., Our Gym's Sales Process" {...field} value={field.value ?? ''} /> </FormControl> <FormMessage /> </FormItem> )}/>
+            <FormField control={form.control} name="description" render={({ field }) => ( <FormItem> <FormLabel>Short Description</FormLabel> <FormControl> <Textarea rows={2} placeholder="Briefly describe the course..." {...field} value={field.value ?? ''} /> </FormControl> <FormMessage /> </FormItem> )}/>
+            <FormField control={form.control} name="longDescription" render={({ field }) => ( <FormItem> <FormLabel>Detailed Description</FormLabel> <FormControl> <Textarea rows={4} placeholder="Provide a detailed overview..." {...field} value={field.value ?? ''}/> </FormControl> <FormMessage /> </FormItem> )}/>
+            
             <FormItem className="space-y-2">
               <FormLabel className="text-base font-semibold">Featured Image</FormLabel>
               <FormControl>
@@ -239,8 +240,10 @@ export function AddEditBrandCourseDialog({ isOpen, setIsOpen, brandId, onCourseS
               </FormControl>
               <FormField control={form.control} name="featuredImageUrl" render={({ field }) => ( <FormItem className="hidden"><FormControl><Input type="url" {...field} value={field.value ?? ''} readOnly /></FormControl><FormMessage /></FormItem> )}/>
             </FormItem>
+
             <FormField control={form.control} name="level" render={({ field }) => ( <FormItem> <FormLabel>Difficulty Level</FormLabel> <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}> <FormControl><SelectTrigger><SelectValue placeholder="Select a level" /></SelectTrigger></FormControl> <SelectContent><SelectItem value="Beginner">Beginner</SelectItem><SelectItem value="Intermediate">Intermediate</SelectItem><SelectItem value="Advanced">Advanced</SelectItem></SelectContent> </Select> <FormMessage /> </FormItem> )}/>
-            <FormField control={form.control} name="duration" render={({ field }) => ( <FormItem> <FormLabel>Approximate Duration</FormLabel> <FormControl><Input placeholder="e.g., Approx. 2 hours" {...field} /></FormControl> <FormMessage /> </FormItem> )}/>
+            <FormField control={form.control} name="duration" render={({ field }) => ( <FormItem> <FormLabel>Approximate Duration</FormLabel> <FormControl><Input placeholder="e.g., Approx. 2 hours" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )}/>
+            
             <FormField
               control={form.control}
               name="certificateTemplateId"
@@ -252,9 +255,11 @@ export function AddEditBrandCourseDialog({ isOpen, setIsOpen, brandId, onCourseS
                     value={field.value || 'none'}
                   >
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a certificate template" />
-                      </SelectTrigger>
+                      <div> {/* Wrapper for SelectTrigger */}
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a certificate template" />
+                        </SelectTrigger>
+                      </div>
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="none">None (Default)</SelectItem>
@@ -269,6 +274,7 @@ export function AddEditBrandCourseDialog({ isOpen, setIsOpen, brandId, onCourseS
                 </FormItem>
               )}
             />
+
             <DialogFooter>
               <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
               <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isSaving || isUploading}>
