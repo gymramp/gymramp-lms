@@ -17,7 +17,8 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { getUserByEmail, getCompanyById } from '@/lib/user-data';
+import { getUserByEmail } from '@/lib/user-data';
+import { getCompanyById } from '@/lib/company-data';
 
 
 export default function ManageBrandQuizQuestionsPage() {
@@ -50,13 +51,13 @@ export default function ManageBrandQuizQuestionsPage() {
             setCurrentBrand(brandDetails);
             setIsAuthorized(brandDetails?.canManageCourses || false);
             if (!brandDetails?.canManageCourses) {
-                toast({ title: "Access Denied", variant: "destructive" }); router.push('/dashboard');
+                toast({ title: "Access Denied", variant: "destructive", description: "Your brand does not have course management enabled." }); router.push('/dashboard');
             }
           } else {
-            setIsAuthorized(false); toast({ title: "Access Denied", variant: "destructive" }); router.push('/');
+            setIsAuthorized(false); toast({ title: "Access Denied", variant: "destructive", description: "You do not have permission to manage brand quizzes." }); router.push('/');
           }
         } catch (error) {
-          setIsAuthorized(false); toast({ title: "Error", variant: "destructive" }); router.push('/');
+          setIsAuthorized(false); toast({ title: "Error", variant: "destructive", description: "Could not verify your permissions." }); router.push('/');
         }
       } else {
         setCurrentUser(null); setCurrentBrand(null); setIsAuthorized(false); router.push('/');
