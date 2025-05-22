@@ -58,13 +58,14 @@ export interface Lesson {
 export interface Course {
   id: string;
   title: string;
-  description: string; 
-  longDescription: string; 
+  description: string;
+  longDescription: string;
   imageUrl: string;
   featuredImageUrl?: string | null;
   level: 'Beginner' | 'Intermediate' | 'Advanced';
-  duration: string; 
+  duration: string;
   curriculum: string[]; // Array of 'lesson-[id]' or 'quiz-[id]'
+  certificateTemplateId?: string | null; // Added for certificate template
   isDeleted?: boolean;
   deletedAt?: Timestamp | null;
   createdAt?: Timestamp;
@@ -72,7 +73,9 @@ export interface Course {
 }
 
 // Type for the form data when adding/editing a course metadata (global library)
-export type CourseFormData = Omit<Course, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'curriculum'>;
+export type CourseFormData = Omit<Course, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'curriculum'> & {
+    certificateTemplateId?: string | null;
+};
 
 
 // Type for the form data when adding/editing a lesson
@@ -112,11 +115,11 @@ export interface Program {
   title: string;
   description: string;
   courseIds: string[];
-  price: string; 
-  firstSubscriptionPrice?: string | null; 
-  stripeFirstPriceId?: string | null; 
-  secondSubscriptionPrice?: string | null; 
-  stripeSecondPriceId?: string | null; 
+  price: string;
+  firstSubscriptionPrice?: string | null;
+  stripeFirstPriceId?: string | null;
+  secondSubscriptionPrice?: string | null;
+  stripeSecondPriceId?: string | null;
   isDeleted?: boolean;
   deletedAt?: Timestamp | null;
   createdAt?: Timestamp;
@@ -145,13 +148,16 @@ export interface BrandCourse {
     level: 'Beginner' | 'Intermediate' | 'Advanced';
     duration: string;
     curriculum: string[]; // Array of 'brandLesson-[id]' or 'brandQuiz-[id]'
+    certificateTemplateId?: string | null; // Added for certificate template
     isDeleted?: boolean;
     deletedAt?: Timestamp | null;
     createdAt?: Timestamp;
     updatedAt?: Timestamp;
 }
 
-export type BrandCourseFormData = Omit<BrandCourse, 'id' | 'brandId' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'curriculum'>;
+export type BrandCourseFormData = Omit<BrandCourse, 'id' | 'brandId' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'curriculum'> & {
+    certificateTemplateId?: string | null;
+};
 
 export interface BrandLesson {
     id: string;

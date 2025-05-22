@@ -40,9 +40,9 @@ import { addCourse, updateCourseMetadata, getCourseById } from '@/lib/firestore-
 import { useToast } from '@/hooks/use-toast';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { ScrollArea } from '../ui/scroll-area';
-import { Loader2, Upload, ImageIcon, Trash2 } from 'lucide-react';
+import { Loader2, Upload, ImageIcon, Trash2, Award } from 'lucide-react'; // Added Award
 
-// Zod schema updated to remove price and subscriptionPrice
+// Zod schema updated
 const courseFormSchema = z.object({
   title: z.string().min(3, { message: 'Title must be at least 3 characters.' }),
   description: z.string().min(10, { message: 'Short description must be at least 10 characters.' }),
@@ -51,8 +51,7 @@ const courseFormSchema = z.object({
   featuredImageUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')),
   level: z.enum(['Beginner', 'Intermediate', 'Advanced'], { required_error: 'Please select a difficulty level.' }),
   duration: z.string().min(3, { message: 'Please enter an approximate duration.' }),
-  // REMOVED: price field
-  // REMOVED: subscriptionPrice field
+  certificateTemplateId: z.string().optional().nullable(), // Added certificateTemplateId
 });
 
 
@@ -64,6 +63,13 @@ interface AddEditCourseDialogProps {
   onSave: (course: Course) => void;
   initialData: Course | null;
 }
+
+const CERTIFICATE_TEMPLATES = [
+    { value: 'template-a', label: 'Template A - Modern Blue' },
+    { value: 'template-b', label: 'Template B - Classic Gold' },
+    { value: 'template-c', label: 'Template C - Formal Silver' },
+    { value: 'template-d', label: 'Template D - Creative Green' },
+];
 
 export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: AddEditCourseDialogProps) {
   const isEditing = !!initialData;
@@ -83,8 +89,7 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
       featuredImageUrl: '',
       level: undefined,
       duration: '',
-      // REMOVED: price: '',
-      // REMOVED: subscriptionPrice: '',
+      certificateTemplateId: null,
     },
   });
 
@@ -101,8 +106,7 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
             featuredImageUrl: initialData.featuredImageUrl || '',
             level: initialData.level,
             duration: initialData.duration,
-            // REMOVED: price: initialData.price,
-            // REMOVED: subscriptionPrice: initialData.subscriptionPrice || '',
+            certificateTemplateId: initialData.certificateTemplateId || null,
           });
         } else {
           form.reset({
@@ -113,8 +117,7 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
             featuredImageUrl: '',
             level: undefined,
             duration: '',
-            // REMOVED: price: '',
-            // REMOVED: subscriptionPrice: '',
+            certificateTemplateId: null,
           });
         }
          setIsUploading(false);
@@ -162,17 +165,16 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
   const onSubmit = async (data: CourseFormValues) => {
      setIsSaving(true);
      const finalFeaturedImageUrl = data.featuredImageUrl?.trim() === '' ? null : data.featuredImageUrl;
-     // REMOVED: finalSubscriptionPrice
 
      const formData: CourseFormData = {
          title: data.title,
          description: data.description,
          longDescription: data.longDescription,
-         imageUrl: data.imageUrl || `https://placehold.co/600x350.png?text=${encodeURIComponent(data.title)}`, // Updated placeholder
+         imageUrl: data.imageUrl || `https://placehold.co/600x350.png?text=${encodeURIComponent(data.title)}`,
          featuredImageUrl: finalFeaturedImageUrl,
          level: data.level,
          duration: data.duration,
-         // REMOVED: price: data.price, (price and subscriptionPrice are no longer part of CourseFormData)
+         certificateTemplateId: data.certificateTemplateId || null,
      };
 
 
@@ -371,7 +373,34 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
               )}
             />
 
-            {/* REMOVED Price and Subscription Price Fields */}
+            <FormField
+              control={form.control}
+              name="certificateTemplateId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-1"><Award className="h-4 w-4"/> Certificate Template</FormLabel>
+                   <Select
+                    onValueChange={(value) => field.onChange(value === 'none' ? null : value)}
+                    value={field.value || 'none'}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a certificate template" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">None (Default)</SelectItem>
+                      {CERTIFICATE_TEMPLATES.map(template => (
+                        <SelectItem key={template.value} value={template.value}>
+                          {template.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
              <DialogFooter>
                 <DialogClose asChild>
@@ -388,4 +417,3 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
     </Dialog>
   );
 }
-    

@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -110,4 +111,29 @@ body {
     /* Adjust duration as needed (e.g., 40s for slower scroll) */
     animation: scroll 40s linear infinite;
   }
+}
+
+/* Print styles for certificate */
+@media print {
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-hide {
+    display: none !important;
+  }
+  .certificate-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: white; /* Ensure background prints */
+  }
+  .certificate-container > div { /* Assuming the Card is the direct child */
+    margin: 0 !important;
+    border: 2px solid black !important; /* Example: ensure border prints */
+    box-shadow: none !important;
+  }
+  /* Add more specific styles for certificate elements as needed */
 }

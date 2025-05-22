@@ -90,6 +90,7 @@ export async function addCourse(courseData: CourseFormData): Promise<Course | nu
             featuredImageUrl: courseData.featuredImageUrl || null,
             level: courseData.level,
             duration: courseData.duration,
+            certificateTemplateId: courseData.certificateTemplateId || null, // Save certificate template
             curriculum: [],
             isDeleted: false,
             deletedAt: null,
@@ -114,7 +115,7 @@ export async function updateCourseMetadata(courseId: string, courseData: CourseF
         if (!currentDocSnap.exists() || currentDocSnap.data().isDeleted === true) {
              throw new Error("Course not found or is soft-deleted for update.");
         }
-        
+
         const updatedDocData: Partial<Course> = {
             title: courseData.title,
             description: courseData.description,
@@ -123,6 +124,7 @@ export async function updateCourseMetadata(courseId: string, courseData: CourseF
             featuredImageUrl: courseData.featuredImageUrl || null,
             level: courseData.level,
             duration: courseData.duration,
+            certificateTemplateId: courseData.certificateTemplateId === '' ? null : courseData.certificateTemplateId, // Handle empty string from form
             updatedAt: serverTimestamp(),
         };
 
@@ -346,7 +348,7 @@ export async function addQuestionToQuiz(quizId: string, questionData: QuestionPa
         }
 
         const questionId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-        
+
         const questionForFirestore: Question = {
             id: questionId,
             type: questionData.type,
@@ -359,8 +361,8 @@ export async function addQuestionToQuiz(quizId: string, questionData: QuestionPa
         } else {
             questionForFirestore.correctAnswer = questionData.correctAnswer || '';
         }
-        
-        console.log("[addQuestionToQuiz] Object to be added via arrayUnion:", JSON.stringify(questionForFirestore, null, 2));
+
+        console.log("[addQuestionToQuiz] Object to be written/unioned:", JSON.stringify(questionForFirestore, null, 2));
 
         await updateDoc(quizRef, {
             questions: arrayUnion(questionForFirestore),
@@ -410,7 +412,7 @@ export async function updateQuestion(quizId: string, questionId: string, questio
         }
 
         await updateDoc(quizRef, { questions: newQuestionsArray, updatedAt: serverTimestamp() });
-        
+
         // Fetch the updated question from the array to return it
         const updatedQuizSnap = await getDoc(quizRef);
         const updatedQuiz = updatedQuizSnap.data() as Quiz;
@@ -485,7 +487,7 @@ export async function createProgram(programData: ProgramFormData): Promise<Progr
             stripeFirstPriceId: programData.stripeFirstPriceId || null,
             secondSubscriptionPrice: programData.secondSubscriptionPrice || null,
             stripeSecondPriceId: programData.stripeSecondPriceId || null,
-            courseIds: [], 
+            courseIds: [],
             isDeleted: false,
             deletedAt: null,
             createdAt: serverTimestamp(),
@@ -538,25 +540,25 @@ export async function updateProgram(programId: string, programData: Partial<Prog
         if (programData.title !== undefined) dataToUpdate.title = programData.title;
         if (programData.description !== undefined) dataToUpdate.description = programData.description;
         if (programData.price !== undefined) dataToUpdate.price = programData.price;
-        
+
         if (programData.firstSubscriptionPrice !== undefined) dataToUpdate.firstSubscriptionPrice = programData.firstSubscriptionPrice || null;
         if (programData.stripeFirstPriceId !== undefined) dataToUpdate.stripeFirstPriceId = programData.stripeFirstPriceId || null;
         if (programData.secondSubscriptionPrice !== undefined) dataToUpdate.secondSubscriptionPrice = programData.secondSubscriptionPrice || null;
         if (programData.stripeSecondPriceId !== undefined) dataToUpdate.stripeSecondPriceId = programData.stripeSecondPriceId || null;
 
-        if (Object.keys(dataToUpdate).length <= 1 && 
-            !dataToUpdate.title && 
-            !dataToUpdate.description && 
-            !dataToUpdate.price && 
-            dataToUpdate.firstSubscriptionPrice === undefined && 
+        if (Object.keys(dataToUpdate).length <= 1 &&
+            !dataToUpdate.title &&
+            !dataToUpdate.description &&
+            !dataToUpdate.price &&
+            dataToUpdate.firstSubscriptionPrice === undefined &&
             dataToUpdate.stripeFirstPriceId === undefined &&
             dataToUpdate.secondSubscriptionPrice === undefined &&
             dataToUpdate.stripeSecondPriceId === undefined
-        ) { 
+        ) {
             const currentDoc = await getDoc(programRef);
             return currentDoc.exists() ? {id: currentDoc.id, ...currentDoc.data()} as Program : null;
         }
-        
+
         await updateDoc(programRef, dataToUpdate);
         const updatedDocSnap = await getDoc(programRef);
         if (updatedDocSnap.exists()) {
@@ -590,4 +592,3 @@ export async function deleteProgram(programId: string): Promise<boolean> {
         return true;
     }, 3);
 }
-

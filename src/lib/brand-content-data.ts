@@ -58,6 +58,7 @@ export async function createBrandCourse(brandId: string, courseData: BrandCourse
             brandId: brandId,
             imageUrl: courseData.imageUrl || `https://placehold.co/600x350.png?text=${encodeURIComponent(courseData.title)}`,
             featuredImageUrl: courseData.featuredImageUrl || null,
+            certificateTemplateId: courseData.certificateTemplateId || null, // Save certificate template
             curriculum: [], // Initialize with empty curriculum
             isDeleted: false,
             deletedAt: null,
@@ -112,6 +113,7 @@ export async function updateBrandCourseMetadata(courseId: string, courseData: Pa
         const dataToUpdate: Partial<BrandCourse> = { ...courseData, updatedAt: serverTimestamp() as Timestamp };
         if (courseData.imageUrl === '') dataToUpdate.imageUrl = `https://placehold.co/600x350.png?text=${encodeURIComponent(currentDocSnap.data().title)}`;
         if (courseData.featuredImageUrl === '') dataToUpdate.featuredImageUrl = null;
+        if (courseData.certificateTemplateId === '') dataToUpdate.certificateTemplateId = null;
 
         await updateDoc(courseRef, dataToUpdate);
         const updatedDocSnap = await getDoc(courseRef);
@@ -208,7 +210,7 @@ export async function updateBrandLesson(lessonId: string, lessonData: Partial<Br
         for (const key in lessonData) {
             if (Object.prototype.hasOwnProperty.call(lessonData, key)) {
                 const value = lessonData[key as keyof BrandLessonFormData];
-                 if (key === 'brandId' && value === undefined) continue; 
+                 if (key === 'brandId' && value === undefined) continue;
                 if (key === 'videoUrl' || key === 'featuredImageUrl' || key === 'exerciseFilesInfo' || key === 'playbackTime') {
                     (dataToUpdate as any)[key] = (value as string)?.trim() || null;
                 } else {
@@ -216,7 +218,7 @@ export async function updateBrandLesson(lessonId: string, lessonData: Partial<Br
                 }
             }
         }
-        
+
         await updateDoc(lessonRef, dataToUpdate);
         const updatedDocSnap = await getDoc(lessonRef);
         return updatedDocSnap.exists() ? { id: lessonId, ...updatedDocSnap.data() } as BrandLesson : null;
@@ -226,8 +228,8 @@ export async function updateBrandLesson(lessonId: string, lessonData: Partial<Br
 async function removeBrandItemFromBrandCourseCurriculums(brandId: string, prefixedItemId: string): Promise<void> {
    return retryOperation(async () => {
        const coursesRef = collection(db, BRAND_COURSES_COLLECTION);
-       const q = query(coursesRef, 
-                       where("brandId", "==", brandId), 
+       const q = query(coursesRef,
+                       where("brandId", "==", brandId),
                        where("curriculum", "array-contains", prefixedItemId),
                        where("isDeleted", "==", false));
        const snapshot = await getDocs(q);
@@ -249,7 +251,7 @@ export async function deleteBrandLessonAndCleanUp(lessonId: string, brandId: str
     return retryOperation(async () => {
         const prefixedLessonId = `brandLesson-${lessonId}`;
         await removeBrandItemFromBrandCourseCurriculums(brandId, prefixedLessonId);
-        
+
         const lessonRef = doc(db, BRAND_LESSONS_COLLECTION, lessonId);
         await updateDoc(lessonRef, { isDeleted: true, deletedAt: serverTimestamp() });
         return true;
@@ -267,8 +269,7 @@ export async function createBrandQuiz(brandId: string, quizData: BrandQuizFormDa
     return retryOperation(async () => {
         const quizzesRef = collection(db, BRAND_QUIZZES_COLLECTION);
         const newQuizDoc = {
-            ...quizData, // Contains title
-            brandId: brandId,
+            ...quizData, // Contains title and brandId
             questions: [], // Initialize with empty questions array
             isDeleted: false,
             deletedAt: null,
@@ -296,8 +297,8 @@ export async function getBrandQuizzesByBrandId(brandId: string): Promise<BrandQu
         const quizzes: BrandQuiz[] = [];
         querySnapshot.forEach((doc) => {
             const data = doc.data();
-            quizzes.push({ 
-                id: doc.id, 
+            quizzes.push({
+                id: doc.id,
                 ...data,
                 questionCount: data.questions?.length || 0 // Calculate questionCount
             } as BrandQuiz);
@@ -313,9 +314,9 @@ export async function getBrandQuizById(quizId: string): Promise<BrandQuiz | null
         const docSnap = await getDoc(quizRef);
         if (docSnap.exists() && docSnap.data().isDeleted !== true) {
             const data = docSnap.data();
-            return { 
-                id: docSnap.id, 
-                ...data, 
+            return {
+                id: docSnap.id,
+                ...data,
                 questions: data.questions || [] // Ensure questions is always an array
             } as BrandQuiz;
         } else {
@@ -335,9 +336,9 @@ export async function updateBrandQuiz(quizId: string, quizData: Partial<BrandQui
         const updatedDocSnap = await getDoc(quizRef);
         if (updatedDocSnap.exists()) {
             const data = updatedDocSnap.data();
-            return { 
-                id: quizId, 
-                ...data, 
+            return {
+                id: quizId,
+                ...data,
                 questions: data.questions || [] // Ensure questions is always an array
             } as BrandQuiz;
         } else {
@@ -351,7 +352,7 @@ export async function deleteBrandQuizAndCleanUp(quizId: string, brandId: string)
     return retryOperation(async () => {
         const prefixedQuizId = `brandQuiz-${quizId}`;
         await removeBrandItemFromBrandCourseCurriculums(brandId, prefixedQuizId);
-        
+
         const quizRef = doc(db, BRAND_QUIZZES_COLLECTION, quizId);
         await updateDoc(quizRef, { isDeleted: true, deletedAt: serverTimestamp() });
         return true;
@@ -370,7 +371,7 @@ export async function addBrandQuestionToBrandQuiz(brandQuizId: string, questionD
         }
 
         const questionId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-        
+
         const questionForFirestore: BrandQuestion = {
             id: questionId,
             type: questionData.type,
@@ -383,7 +384,7 @@ export async function addBrandQuestionToBrandQuiz(brandQuizId: string, questionD
         } else {
             questionForFirestore.correctAnswer = questionData.correctAnswer || '';
         }
-        
+
         await updateDoc(quizRef, {
             questions: arrayUnion(questionForFirestore),
             updatedAt: serverTimestamp(),
@@ -412,12 +413,17 @@ export async function updateBrandQuestionInBrandQuiz(brandQuizId: string, questi
                 questionFound = true;
                 const updatedQuestionData: BrandQuestion = {
                     ...q, // Spread existing question to preserve ID and other fields
-                    ...questionData, // Override with new data
-                    // Ensure correct answer field is structured based on type
-                    ...(questionData.type && questionData.type === 'multiple-select' 
-                        ? { correctAnswers: questionData.correctAnswers || [], correctAnswer: undefined } 
-                        : { correctAnswer: questionData.correctAnswer || '', correctAnswers: undefined }),
+                    type: questionData.type !== undefined ? questionData.type : q.type,
+                    text: questionData.text !== undefined ? questionData.text : q.text,
+                    options: questionData.options !== undefined ? questionData.options : q.options,
                 };
+                if (updatedQuestionData.type === 'multiple-select') {
+                    updatedQuestionData.correctAnswers = questionData.correctAnswers !== undefined ? questionData.correctAnswers : q.correctAnswers;
+                    delete updatedQuestionData.correctAnswer; // Ensure only one correct answer field
+                } else {
+                    updatedQuestionData.correctAnswer = questionData.correctAnswer !== undefined ? questionData.correctAnswer : q.correctAnswer;
+                    delete updatedQuestionData.correctAnswers; // Ensure only one correct answer field
+                }
                 return updatedQuestionData;
             }
             return q;
@@ -428,7 +434,7 @@ export async function updateBrandQuestionInBrandQuiz(brandQuizId: string, questi
         }
 
         await updateDoc(quizRef, { questions: newQuestionsArray, updatedAt: serverTimestamp() });
-        
+
         const updatedQuizSnap = await getDoc(quizRef);
         const updatedQuiz = updatedQuizSnap.data() as BrandQuiz;
         const updatedQuestion = updatedQuiz?.questions?.find(q => q.id === questionId);

@@ -4,10 +4,10 @@ import type { User, UserRole, Company } from '@/types/user';
 import {
     BarChartBig, Building, Layers, CreditCard, BookOpen, FileText,
     ListChecks, UserPlus, ShoppingCart, Gift, TestTube2, Percent,
-    LayoutDashboard, Users, MapPin, Settings, Award, HelpCircle, LogOut, Package, Cog // Added Cog
+    LayoutDashboard, Users, MapPin, Settings, Award, HelpCircle, LogOut, Package, Cog
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { getCompanyById } from '@/lib/company-data'; // Corrected import path
+import { getCompanyById } from '@/lib/company-data';
 
 export interface NavItemType {
   label: string;
@@ -15,7 +15,7 @@ export interface NavItemType {
   icon?: LucideIcon;
   isDropdown?: boolean;
   subItems?: NavItemType[];
-  requiresCompanyId?: boolean; 
+  requiresCompanyId?: boolean;
   requiresCanManageCourses?: boolean;
 }
 
@@ -109,9 +109,9 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
     }
     return true;
   });
-  
-  if (user.role !== 'Super Admin') { 
-    filteredRoleSpecificItems.push({ href: '/badges', label: 'My Badges', icon: Award });
+
+  if (user.role !== 'Super Admin') {
+    filteredRoleSpecificItems.push({ href: '/certificates', label: 'My Certificates', icon: Award });
   }
 
   return [...baseItems, ...filteredRoleSpecificItems];
@@ -127,7 +127,7 @@ export function getUserDropdownItems(user: User | null): NavItemType[] {
     if (user.role === 'Super Admin') {
         items.push(
             { href: '/admin/dashboard', label: 'Super Admin Dashboard', icon: BarChartBig },
-            { href: '/admin/users', label: 'Users', icon: Users },
+            // Users link removed from SA dropdown as it's in main nav for them
             { href: '/admin/settings', label: 'Settings', icon: Cog }
         );
     } else if (user.role === 'Admin' || user.role === 'Owner') {
@@ -139,9 +139,10 @@ export function getUserDropdownItems(user: User | null): NavItemType[] {
             { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }
          );
     }
-    
+
+    items.push({ href: '/certificates', label: 'My Certificates', icon: Award });
     items.push({ href: '/site-help', label: 'Site Help', icon: HelpCircle });
-    
+
     return items.filter(item => {
         if (item.requiresCompanyId) {
             return !!user.companyId;
