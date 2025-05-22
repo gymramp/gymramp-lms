@@ -68,7 +68,7 @@ export async function createDefaultCompany(): Promise<Company | null> {
             }
 
             console.log(`Default brand "${DEFAULT_COMPANY_NAME}" not found or soft-deleted, creating it.`);
-            const newCompanyData: CompanyFormData = {
+            const newCompanyData: Omit<Company, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt'> = { // Use Omit for stricter type
                 name: DEFAULT_COMPANY_NAME,
                 subdomainSlug: null,
                 customDomain: null,
@@ -82,11 +82,15 @@ export async function createDefaultCompany(): Promise<Company | null> {
                 primaryColor: null,
                 secondaryColor: null,
                 accentColor: null,
-                canManageCourses: false, // Initialize
+                brandBackgroundColor: null,
+                brandForegroundColor: null,
+                canManageCourses: false,
                 stripeCustomerId: null,
                 stripeSubscriptionId: null,
+                logoUrl: null,
+                shortDescription: null,
             };
-            const docRef = await addDoc(companiesRef, { ...newCompanyData, isDeleted: false, deletedAt: null, createdAt: serverTimestamp() });
+            const docRef = await addDoc(companiesRef, { ...newCompanyData, isDeleted: false, deletedAt: null, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
             const newDocSnap = await getDoc(docRef);
             if (newDocSnap.exists()) {
                 console.log(`Default brand "${DEFAULT_COMPANY_NAME}" created with ID: ${docRef.id}`);
@@ -171,8 +175,8 @@ export async function getCompanyByCustomDomain(domain: string): Promise<Company 
 export async function addCompany(companyData: CompanyFormData): Promise<Company | null> {
     return retryOperation(async () => {
         const companiesRef = collection(db, COMPANIES_COLLECTION);
-        const docData = {
-            ...companyData,
+        const docData: Omit<Company, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt'> & { isDeleted: boolean; deletedAt: null | Timestamp; createdAt: Timestamp; updatedAt: Timestamp } = {
+            name: companyData.name,
             subdomainSlug: companyData.subdomainSlug?.trim().toLowerCase() || null,
             customDomain: companyData.customDomain?.trim().toLowerCase() || null,
             shortDescription: companyData.shortDescription?.trim() || null,
@@ -180,19 +184,22 @@ export async function addCompany(companyData: CompanyFormData): Promise<Company 
             maxUsers: companyData.maxUsers ?? null,
             assignedCourseIds: companyData.assignedCourseIds || [],
             isTrial: companyData.isTrial || false,
-            trialEndsAt: companyData.trialEndsAt instanceof Date ? Timestamp.fromDate(companyData.trialEndsAt) : companyData.trialEndsAt,
+            trialEndsAt: companyData.trialEndsAt instanceof Date ? Timestamp.fromDate(companyData.trialEndsAt) : companyData.trialEndsAt, // Already a Timestamp or null
             saleAmount: companyData.saleAmount ?? null,
             revenueSharePartners: companyData.revenueSharePartners || null,
             whiteLabelEnabled: companyData.whiteLabelEnabled || false,
-            primaryColor: companyData.primaryColor || null,
-            secondaryColor: companyData.secondaryColor || null,
-            accentColor: companyData.accentColor || null,
-            canManageCourses: companyData.canManageCourses || false, // Ensure this is set
+            primaryColor: companyData.primaryColor?.trim() || null,
+            secondaryColor: companyData.secondaryColor?.trim() || null,
+            accentColor: companyData.accentColor?.trim() || null,
+            brandBackgroundColor: companyData.brandBackgroundColor?.trim() || null,
+            brandForegroundColor: companyData.brandForegroundColor?.trim() || null,
+            canManageCourses: companyData.canManageCourses || false,
             stripeCustomerId: companyData.stripeCustomerId || null,
             stripeSubscriptionId: companyData.stripeSubscriptionId || null,
-            isDeleted: false,
-            deletedAt: null,
-            createdAt: serverTimestamp(),
+            isDeleted: false, // Default value for new companies
+            deletedAt: null,  // Default value for new companies
+            createdAt: serverTimestamp() as Timestamp, // Placeholder, will be set by Firestore
+            updatedAt: serverTimestamp() as Timestamp, // Placeholder, will be set by Firestore
          };
         const docRef = await addDoc(companiesRef, docData);
         const newDocSnap = await getDoc(docRef);
@@ -214,50 +221,39 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
         const companyRef = doc(db, COMPANIES_COLLECTION, companyId);
         const dataToUpdate: Partial<Company> = { updatedAt: serverTimestamp() as Timestamp };
 
+        // Explicitly check and add each field from CompanyFormData
         if (companyData.name !== undefined) dataToUpdate.name = companyData.name;
         if (companyData.subdomainSlug !== undefined) dataToUpdate.subdomainSlug = companyData.subdomainSlug?.trim().toLowerCase() || null;
         if (companyData.customDomain !== undefined) dataToUpdate.customDomain = companyData.customDomain?.trim().toLowerCase() || null;
         if (companyData.shortDescription !== undefined) dataToUpdate.shortDescription = companyData.shortDescription?.trim() || null;
         if (companyData.logoUrl !== undefined) dataToUpdate.logoUrl = companyData.logoUrl?.trim() || null;
-        if (companyData.maxUsers !== undefined) dataToUpdate.maxUsers = companyData.maxUsers ?? null; // Ensure null if undefined
+        if (companyData.maxUsers !== undefined) dataToUpdate.maxUsers = companyData.maxUsers ?? null;
         if (companyData.assignedCourseIds !== undefined) dataToUpdate.assignedCourseIds = companyData.assignedCourseIds;
         if (companyData.isTrial !== undefined) dataToUpdate.isTrial = companyData.isTrial;
-        if (companyData.saleAmount !== undefined) dataToUpdate.saleAmount = companyData.saleAmount ?? null;
-
-        if (companyData.trialEndsAt === null) { // Explicitly allow setting to null
-            dataToUpdate.trialEndsAt = null;
-        } else if (companyData.trialEndsAt instanceof Date) {
-            dataToUpdate.trialEndsAt = Timestamp.fromDate(companyData.trialEndsAt);
-        } else if (companyData.trialEndsAt instanceof Timestamp) { // Should not happen from client form, but good check
-            dataToUpdate.trialEndsAt = companyData.trialEndsAt;
-        } else if (companyData.trialEndsAt !== undefined) { // If it's defined but not Date/Timestamp/null, keep existing
-            const currentDoc = await getDoc(companyRef);
-            dataToUpdate.trialEndsAt = currentDoc.data()?.trialEndsAt || null;
+        if (companyData.trialEndsAt !== undefined) {
+            dataToUpdate.trialEndsAt = companyData.trialEndsAt instanceof Date
+                ? Timestamp.fromDate(companyData.trialEndsAt)
+                : companyData.trialEndsAt; // Handles null or existing Timestamp
         }
-
-
+        if (companyData.saleAmount !== undefined) dataToUpdate.saleAmount = companyData.saleAmount ?? null;
         if (companyData.revenueSharePartners !== undefined) dataToUpdate.revenueSharePartners = companyData.revenueSharePartners || null;
         if (companyData.whiteLabelEnabled !== undefined) dataToUpdate.whiteLabelEnabled = companyData.whiteLabelEnabled;
-        if (companyData.primaryColor !== undefined) dataToUpdate.primaryColor = companyData.primaryColor || null;
-        if (companyData.secondaryColor !== undefined) dataToUpdate.secondaryColor = companyData.secondaryColor || null;
-        if (companyData.accentColor !== undefined) dataToUpdate.accentColor = companyData.accentColor || null;
-        if (companyData.canManageCourses !== undefined) dataToUpdate.canManageCourses = companyData.canManageCourses; // Explicitly handle
+        if (companyData.primaryColor !== undefined) dataToUpdate.primaryColor = companyData.primaryColor?.trim() || null;
+        if (companyData.secondaryColor !== undefined) dataToUpdate.secondaryColor = companyData.secondaryColor?.trim() || null;
+        if (companyData.accentColor !== undefined) dataToUpdate.accentColor = companyData.accentColor?.trim() || null;
+        if (companyData.brandBackgroundColor !== undefined) dataToUpdate.brandBackgroundColor = companyData.brandBackgroundColor?.trim() || null;
+        if (companyData.brandForegroundColor !== undefined) dataToUpdate.brandForegroundColor = companyData.brandForegroundColor?.trim() || null;
+        if (companyData.canManageCourses !== undefined) dataToUpdate.canManageCourses = companyData.canManageCourses;
         if (companyData.stripeCustomerId !== undefined) dataToUpdate.stripeCustomerId = companyData.stripeCustomerId || null;
         if (companyData.stripeSubscriptionId !== undefined) dataToUpdate.stripeSubscriptionId = companyData.stripeSubscriptionId || null;
 
-
-        // Check if anything is actually being updated beyond just 'updatedAt'
-        const updateKeys = Object.keys(dataToUpdate);
-        if (updateKeys.length <= 1 && updateKeys.includes('updatedAt')) {
-            console.warn("updateCompany called with no valid data to update for company:", companyId);
-            const currentDocSnap = await getDoc(companyRef);
-            if (currentDocSnap.exists() && currentDocSnap.data().isDeleted !== true) {
-                 return { id: companyId, ...currentDocSnap.data() } as Company;
-            }
-            return null;
+        // Simplified check: if there's more than just 'updatedAt', then update.
+        if (Object.keys(dataToUpdate).length > 1) {
+            await updateDoc(companyRef, dataToUpdate);
+        } else {
+            console.warn("updateCompany called with no actual data changes for company:", companyId);
         }
-
-        await updateDoc(companyRef, dataToUpdate);
+        
         const updatedDocSnap = await getDoc(companyRef);
          if (updatedDocSnap.exists() && updatedDocSnap.data().isDeleted !== true) {
              return { id: companyId, ...updatedDocSnap.data() } as Company;
@@ -389,12 +385,14 @@ export async function addLocation(locationData: LocationFormData): Promise<Locat
     }
     return retryOperation(async () => {
         const locationsRef = collection(db, LOCATIONS_COLLECTION);
-        const dataToSave = {
-            ...locationData,
+        const dataToSave: Omit<Location, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt'> & { isDeleted: boolean; deletedAt: null | Timestamp; createdAt: Timestamp; updatedAt: Timestamp } = {
+            name: locationData.name,
+            companyId: locationData.companyId,
             createdBy: locationData.createdBy || null,
-            isDeleted: false,
-            deletedAt: null,
-            createdAt: serverTimestamp(), // Added createdAt
+            isDeleted: false, // Default value
+            deletedAt: null,  // Default value
+            createdAt: serverTimestamp() as Timestamp, // Placeholder
+            updatedAt: serverTimestamp() as Timestamp, // Placeholder
         };
         const docRef = await addDoc(locationsRef, dataToSave);
         const newDocSnap = await getDoc(docRef);
@@ -414,7 +412,7 @@ export async function updateLocation(locationId: string, locationData: Partial<L
      }
     return retryOperation(async () => {
         const locationRef = doc(db, LOCATIONS_COLLECTION, locationId);
-        const dataToUpdate: Partial<Pick<Location, 'name'>> = {}; // Only allow name update for now
+        const dataToUpdate: Partial<Pick<Location, 'name'>> = {}; 
         if (locationData.name) {
             dataToUpdate.name = locationData.name;
         }
@@ -427,7 +425,7 @@ export async function updateLocation(locationId: string, locationData: Partial<L
             return null;
         }
 
-        await updateDoc(locationRef, {...dataToUpdate, updatedAt: serverTimestamp()}); // Added updatedAt
+        await updateDoc(locationRef, {...dataToUpdate, updatedAt: serverTimestamp()}); 
         const updatedDocSnap = await getDoc(locationRef);
          if (updatedDocSnap.exists() && updatedDocSnap.data().isDeleted !== true) {
              return { id: locationId, ...updatedDocSnap.data() } as Location;

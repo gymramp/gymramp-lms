@@ -10,12 +10,11 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } // Ensure Label is imported if used standalone, though FormLabel is preferred
-from '@/components/ui/label';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
-import { Form, FormControl, FormDescription as ShadFormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import type { Company, CompanyFormData } from '@/types/user';
 import type { Program, Course } from '@/types/course';
@@ -32,18 +31,15 @@ import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { hexToHslString } from '@/lib/utils';
 
 const companyFormSchema = z.object({
-  name: z.string().min(2, { message: 'Brand name must be at least 2 characters.' }),
-  subdomainSlug: z.string()
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug must be lowercase alphanumeric with hyphens, not at start/end.' })
-    .min(3, { message: "Slug must be at least 3 characters." })
-    .max(63, { message: "Slug cannot exceed 63 characters."})
-    .optional().or(z.literal('')).nullable(),
+  name: z.string().min(2, "Brand name must be at least 2 characters."),
+  subdomainSlug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug must be lowercase alphanumeric with hyphens, not at start/end.' }).min(3, "Slug must be at least 3 characters.").max(63, "Slug cannot exceed 63 characters.").optional().or(z.literal('')).nullable(),
   customDomain: z.string().optional().or(z.literal('')).nullable(),
   shortDescription: z.string().max(150, { message: "Description can't exceed 150 characters." }).optional().or(z.literal('')),
-  logoUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')),
-  maxUsers: z.coerce.number({ invalid_type_error: "Must be a number" }).int().positive().min(1).optional().nullable(),
+  logoUrl: z.string().url({ message: "Invalid URL for logo." }).optional().or(z.literal('')),
+  maxUsers: z.coerce.number({ invalid_type_error: "Must be a number" }).int().positive().min(1, "Min 1 user").optional().nullable(),
   isTrial: z.boolean().default(false),
   trialEndsAt: z.date().nullable().optional(),
   canManageCourses: z.boolean().default(false),
@@ -51,6 +47,8 @@ const companyFormSchema = z.object({
   primaryColor: z.string().regex(/^#([0-9a-f]{3}){1,2}$/i, { message: "Invalid HEX color."}).optional().or(z.literal('')).nullable(),
   secondaryColor: z.string().regex(/^#([0-9a-f]{3}){1,2}$/i, { message: "Invalid HEX color."}).optional().or(z.literal('')).nullable(),
   accentColor: z.string().regex(/^#([0-9a-f]{3}){1,2}$/i, { message: "Invalid HEX color."}).optional().or(z.literal('')).nullable(),
+  brandBackgroundColor: z.string().regex(/^#([0-9a-f]{3}){1,2}$/i, { message: "Invalid HEX color."}).optional().or(z.literal('')).nullable(),
+  brandForegroundColor: z.string().regex(/^#([0-9a-f]{3}){1,2}$/i, { message: "Invalid HEX color."}).optional().or(z.literal('')).nullable(),
 });
 
 type CompanyFormValues = z.infer<typeof companyFormSchema>;
@@ -62,10 +60,7 @@ export default function EditCompanyPage() {
   const { toast } = useToast();
 
   const [company, setCompany] = useState<Company | null>(null);
-  const [assignedProgram, setAssignedProgram] = useState<Program | null>(null);
-  const [coursesInProgram, setCoursesInProgram] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingProgramData, setIsLoadingProgramData] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -73,6 +68,12 @@ export default function EditCompanyPage() {
   const [isLogoUploading, setIsLogoUploading] = useState(false);
   const [logoUploadProgress, setLogoUploadProgress] = useState(0);
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
+
+  // State for Program Access section
+  const [assignedProgram, setAssignedProgram] = useState<Program | null>(null);
+  const [coursesInProgram, setCoursesInProgram] = useState<Course[]>([]);
+  const [isLoadingProgramData, setIsLoadingProgramData] = useState(false);
+
 
   const form = useForm<CompanyFormValues>({
     resolver: zodResolver(companyFormSchema),
@@ -90,6 +91,8 @@ export default function EditCompanyPage() {
       primaryColor: '',
       secondaryColor: '',
       accentColor: '',
+      brandBackgroundColor: '',
+      brandForegroundColor: '',
     },
   });
 
@@ -117,6 +120,7 @@ export default function EditCompanyPage() {
   const fetchCompanyAndRelatedData = useCallback(async () => {
     if (!companyId || !currentUser || currentUser.role !== 'Super Admin') {
       setIsLoading(false);
+      setIsLoadingProgramData(false);
       return;
     }
     setIsLoading(true);
@@ -143,6 +147,8 @@ export default function EditCompanyPage() {
           primaryColor: companyData.primaryColor || '',
           secondaryColor: companyData.secondaryColor || '',
           accentColor: companyData.accentColor || '',
+          brandBackgroundColor: companyData.brandBackgroundColor || '',
+          brandForegroundColor: companyData.brandForegroundColor || '',
         });
 
         const purchaseRecord = await getCustomerPurchaseRecordByBrandId(companyId);
@@ -205,12 +211,15 @@ export default function EditCompanyPage() {
     if (!companyId) return;
     setIsSaving(true);
     try {
+      // Explicitly get the latest logoUrl from the form state
+      const currentLogoUrl = form.getValues('logoUrl');
+
       const metadataToUpdate: Partial<CompanyFormData> = {
         name: data.name,
         subdomainSlug: data.subdomainSlug?.trim() === '' ? null : (data.subdomainSlug || '').toLowerCase(),
         customDomain: data.customDomain?.trim() === '' ? null : (data.customDomain || '').toLowerCase(),
         shortDescription: data.shortDescription?.trim() === '' ? null : data.shortDescription,
-        logoUrl: data.logoUrl?.trim() === '' ? null : data.logoUrl,
+        logoUrl: currentLogoUrl?.trim() === '' ? null : currentLogoUrl,
         maxUsers: data.maxUsers ?? null,
         isTrial: data.isTrial,
         trialEndsAt: data.isTrial && data.trialEndsAt ? Timestamp.fromDate(data.trialEndsAt) : null,
@@ -219,11 +228,14 @@ export default function EditCompanyPage() {
         primaryColor: data.primaryColor?.trim() === '' ? null : data.primaryColor,
         secondaryColor: data.secondaryColor?.trim() === '' ? null : data.secondaryColor,
         accentColor: data.accentColor?.trim() === '' ? null : data.accentColor,
+        brandBackgroundColor: data.brandBackgroundColor?.trim() === '' ? null : data.brandBackgroundColor,
+        brandForegroundColor: data.brandForegroundColor?.trim() === '' ? null : data.brandForegroundColor,
       };
 
       const updatedCompany = await updateCompany(companyId, metadataToUpdate);
       if (updatedCompany) {
-        setCompany(updatedCompany);
+        setCompany(updatedCompany); // Update local state
+        // Reset form with the new, authoritative data from Firestore
         form.reset({
           name: updatedCompany.name || '',
           subdomainSlug: updatedCompany.subdomainSlug || '',
@@ -242,6 +254,8 @@ export default function EditCompanyPage() {
           primaryColor: updatedCompany.primaryColor || '',
           secondaryColor: updatedCompany.secondaryColor || '',
           accentColor: updatedCompany.accentColor || '',
+          brandBackgroundColor: updatedCompany.brandBackgroundColor || '',
+          brandForegroundColor: updatedCompany.brandForegroundColor || '',
         });
         toast({ title: "Brand Updated", description: `"${updatedCompany.name}" updated successfully.` });
       } else {
@@ -289,8 +303,8 @@ export default function EditCompanyPage() {
                 <CardHeader><CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" /> Core Brand Information</CardTitle><CardDescription>Basic identification and descriptive details for the brand.</CardDescription></CardHeader>
                 <CardContent className="space-y-4">
                   <FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Brand Name</FormLabel><FormControl><Input placeholder="Brand Name" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="subdomainSlug" render={({ field }) => (<FormItem><FormLabel>Subdomain Slug (Optional)</FormLabel><FormControl><Input placeholder="e.g., brand-slug" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /></FormControl><ShadFormDescription>Used for branded URLs. Lowercase alphanumeric and hyphens only.</ShadFormDescription><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="customDomain" render={({ field }) => (<FormItem><FormLabel>Custom Domain (Optional)</FormLabel><FormControl><Input placeholder="e.g., learn.brand.com" {...field} value={field.value ?? ''} /></FormControl><ShadFormDescription>Requires DNS CNAME pointing to your platform.</ShadFormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="subdomainSlug" render={({ field }) => (<FormItem><FormLabel>Subdomain Slug (Optional)</FormLabel><FormControl><Input placeholder="e.g., brand-slug" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="customDomain" render={({ field }) => (<FormItem><FormLabel>Custom Domain (Optional)</FormLabel><FormControl><Input placeholder="e.g., learn.brand.com" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                   <FormField control={form.control} name="shortDescription" render={({ field }) => (<FormItem><FormLabel>Short Description (Optional)</FormLabel><FormControl><Textarea rows={3} placeholder="A brief description (max 150 chars)" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                 </CardContent>
               </Card>
@@ -309,10 +323,27 @@ export default function EditCompanyPage() {
                         <Label htmlFor="brand-logo-upload" className="cursor-pointer block"><ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Click to upload logo</p><Input id="brand-logo-upload" type="file" accept="image/*" className="hidden" onChange={handleLogoFileChange} disabled={isLogoUploading} /></Label>
                       )}
                     </div>
-                    <FormField control={form.control} name="logoUrl" render={({ field }) => (<FormItem className="hidden"><FormControl><Input type="url" {...field} value={field.value ?? ''} readOnly /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="logoUrl" render={({ field }) => (<FormItem className="hidden"><FormLabel>Logo URL</FormLabel><FormControl><Input type="url" {...field} value={field.value ?? ''} readOnly /></FormControl><FormMessage /></FormItem>)} />
                   </FormItem>
                 </CardContent>
               </Card>
+
+              {/* White-Label Settings - Placeholder */}
+               <Card>
+                 <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings</CardTitle>
+                    <CardDescription>Customize the appearance for this brand.</CardDescription>
+                 </CardHeader>
+                 <CardContent>
+                    <p className="text-sm text-muted-foreground italic">White-label settings UI will be implemented here.</p>
+                     {/*
+                        When re-implementing, ensure the FormField for whiteLabelEnabled, primaryColor, etc.
+                        are correctly structured and guarded by isMounted && whiteLabelEnabledValue
+                        as in the previous full version.
+                     */}
+                 </CardContent>
+               </Card>
+
             </div>
 
             <div className="lg:col-span-1 space-y-6">
@@ -344,88 +375,34 @@ export default function EditCompanyPage() {
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><PackageCheck className="h-5 w-5" /> Course Management Ability</CardTitle></CardHeader>
                 <CardContent>
-                  {isMounted ? (
+                  {isMounted && (
                     <FormField
                       control={form.control}
                       name="canManageCourses"
                       render={({ field }) => (
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                           <div className="space-y-0.5">
-                            <FormLabel className="text-base" id="canManageCourses-label">Enable Course Management</FormLabel>
-                            <ShadFormDescription>
-                              Allow Admins/Owners of this brand to create and manage their own courses, lessons, and quizzes.
-                            </ShadFormDescription>
-                          </div>
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value ?? false}
-                              onCheckedChange={field.onChange}
-                              aria-labelledby="canManageCourses-label"
-                            />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  ) : (
-                    <Skeleton className="h-20 w-full" />
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* White-Label Settings Card */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings</CardTitle>
-                  <CardDescription>Customize the appearance for this brand.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {isMounted && (
-                    <FormField
-                      control={form.control}
-                      name="whiteLabelEnabled"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Enable White-Labeling</FormLabel>
-                            <ShadFormDescription>Allow this brand to use custom colors. Logo is set above.</ShadFormDescription>
+                            <FormLabel className="text-base">Enable Course Management</FormLabel>
                           </div>
                           <FormControl><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></FormControl>
                         </FormItem>
                       )}
                     />
                   )}
-                  {isMounted && whiteLabelEnabledValue && (
-                    <>
-                      <FormField control={form.control} name="primaryColor" render={({ field }) => (<FormItem><FormLabel>Primary Color (HEX)</FormLabel><FormControl><Input placeholder="#3498db" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="secondaryColor" render={({ field }) => (<FormItem><FormLabel>Secondary Color (HEX)</FormLabel><FormControl><Input placeholder="#ecf0f1" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="accentColor" render={({ field }) => (<FormItem><FormLabel>Accent Color (HEX)</FormLabel><FormControl><Input placeholder="#2ecc71" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                    </>
-                  )}
-                   {!isMounted && <Skeleton className="h-32 w-full" />}
                 </CardContent>
               </Card>
 
-
-              {/* Program Access Card */}
+              {/* Program Access Card - Placeholder */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2"><Layers className="h-5 w-5" /> Program Access</CardTitle>
-                  <CardDescription>The Program assigned to this brand during checkout.</CardDescription>
+                  <CardDescription>Details of the Program assigned to this brand during checkout.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {isLoadingProgramData ? (
-                    <div className="space-y-2"> <Skeleton className="h-6 w-3/4" /> <Skeleton className="h-4 w-full" /> <Skeleton className="h-4 w-5/6" /> <Skeleton className="h-20 w-full mt-2" /> </div>
-                  ) : assignedProgram ? (
-                    <div className="space-y-3">
-                      <div> <h4 className="font-semibold text-foreground">{assignedProgram.title}</h4> <p className="text-sm text-muted-foreground">{assignedProgram.description}</p> <p className="text-sm text-muted-foreground mt-1">Base Price: <Badge variant="outline">{assignedProgram.price}</Badge></p> </div>
-                      {coursesInProgram.length > 0 && ( <div> <h5 className="text-sm font-medium text-muted-foreground mb-1">Courses Included:</h5> <ScrollArea className="h-40 w-full rounded-md border p-2"> <ul className="space-y-1"> {coursesInProgram.map(course => ( <li key={course.id} className="text-xs text-foreground p-1 bg-secondary/50 rounded-sm flex items-center gap-1.5"> <BookOpen className="h-3 w-3 flex-shrink-0" /> {course.title} <Badge variant="ghost" className="ml-auto text-xs">{course.level}</Badge> </li> ))} </ul> </ScrollArea> </div> )}
-                      {coursesInProgram.length === 0 && ( <p className="text-xs text-muted-foreground italic">This program currently has no courses assigned to it in the library.</p> )}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground italic">No program information found for this brand (possibly created before program assignment or manually).</p>
-                  )}
+                  <p className="text-sm text-muted-foreground italic">Program access details will be displayed here.</p>
                 </CardContent>
               </Card>
+
             </div>
           </div>
 
