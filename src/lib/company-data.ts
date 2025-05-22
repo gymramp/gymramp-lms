@@ -19,7 +19,7 @@ import { getUsersWithoutCompany, deleteUser as softDeleteUser } from './user-dat
 
 const COMPANIES_COLLECTION = 'companies';
 const LOCATIONS_COLLECTION = 'locations';
-const DEFAULT_COMPANY_NAME = "Gymramp"; // This should remain "Gymramp" for the default internal brand
+const DEFAULT_COMPANY_NAME = "Gymramp";
 
 // --- Retry Logic Helper ---
 const MAX_RETRIES = 5;
@@ -70,7 +70,7 @@ export async function createDefaultCompany(): Promise<Company | null> {
             console.log(`Default brand "${DEFAULT_COMPANY_NAME}" not found or soft-deleted, creating it.`);
             const newCompanyData: CompanyFormData = {
                 name: DEFAULT_COMPANY_NAME,
-                subdomainSlug: null, 
+                subdomainSlug: null,
                 customDomain: null,
                 maxUsers: null,
                 assignedCourseIds: [],
@@ -78,10 +78,11 @@ export async function createDefaultCompany(): Promise<Company | null> {
                 trialEndsAt: null,
                 saleAmount: null,
                 revenueSharePartners: null,
-                whiteLabelEnabled: false, 
+                whiteLabelEnabled: false,
                 primaryColor: null,
                 secondaryColor: null,
                 accentColor: null,
+                canManageCourses: false, // Initialize
                 stripeCustomerId: null,
                 stripeSubscriptionId: null,
             };
@@ -139,11 +140,11 @@ export async function getCompanyBySubdomainSlug(slug: string): Promise<Company |
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
             const docSnap = querySnapshot.docs[0];
-            if (docSnap.exists()) { 
+            if (docSnap.exists()) {
                 return { id: docSnap.id, ...docSnap.data() } as Company;
             }
         }
-        return null; 
+        return null;
     });
 }
 
@@ -186,6 +187,7 @@ export async function addCompany(companyData: CompanyFormData): Promise<Company 
             primaryColor: companyData.primaryColor || null,
             secondaryColor: companyData.secondaryColor || null,
             accentColor: companyData.accentColor || null,
+            canManageCourses: companyData.canManageCourses || false, // Ensure this is set
             stripeCustomerId: companyData.stripeCustomerId || null,
             stripeSubscriptionId: companyData.stripeSubscriptionId || null,
             isDeleted: false,
@@ -210,39 +212,49 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
      }
     return retryOperation(async () => {
         const companyRef = doc(db, COMPANIES_COLLECTION, companyId);
-        const dataToUpdate: Partial<Company> = {};
+        const dataToUpdate: Partial<Company> = { updatedAt: serverTimestamp() as Timestamp };
 
         if (companyData.name !== undefined) dataToUpdate.name = companyData.name;
         if (companyData.subdomainSlug !== undefined) dataToUpdate.subdomainSlug = companyData.subdomainSlug?.trim().toLowerCase() || null;
         if (companyData.customDomain !== undefined) dataToUpdate.customDomain = companyData.customDomain?.trim().toLowerCase() || null;
-        dataToUpdate.shortDescription = companyData.shortDescription?.trim() || null;
-        dataToUpdate.logoUrl = companyData.logoUrl?.trim() || null;
-        dataToUpdate.maxUsers = companyData.maxUsers ?? null;
+        if (companyData.shortDescription !== undefined) dataToUpdate.shortDescription = companyData.shortDescription?.trim() || null;
+        if (companyData.logoUrl !== undefined) dataToUpdate.logoUrl = companyData.logoUrl?.trim() || null;
+        if (companyData.maxUsers !== undefined) dataToUpdate.maxUsers = companyData.maxUsers ?? null; // Ensure null if undefined
         if (companyData.assignedCourseIds !== undefined) dataToUpdate.assignedCourseIds = companyData.assignedCourseIds;
         if (companyData.isTrial !== undefined) dataToUpdate.isTrial = companyData.isTrial;
         if (companyData.saleAmount !== undefined) dataToUpdate.saleAmount = companyData.saleAmount ?? null;
 
-        if (companyData.trialEndsAt === null) {
+        if (companyData.trialEndsAt === null) { // Explicitly allow setting to null
             dataToUpdate.trialEndsAt = null;
         } else if (companyData.trialEndsAt instanceof Date) {
             dataToUpdate.trialEndsAt = Timestamp.fromDate(companyData.trialEndsAt);
-        } else if (companyData.trialEndsAt instanceof Timestamp) {
+        } else if (companyData.trialEndsAt instanceof Timestamp) { // Should not happen from client form, but good check
             dataToUpdate.trialEndsAt = companyData.trialEndsAt;
+        } else if (companyData.trialEndsAt !== undefined) { // If it's defined but not Date/Timestamp/null, keep existing
+            const currentDoc = await getDoc(companyRef);
+            dataToUpdate.trialEndsAt = currentDoc.data()?.trialEndsAt || null;
         }
-        
-        if (companyData.revenueSharePartners !== undefined) dataToUpdate.revenueSharePartners = companyData.revenueSharePartners || null;
 
+
+        if (companyData.revenueSharePartners !== undefined) dataToUpdate.revenueSharePartners = companyData.revenueSharePartners || null;
         if (companyData.whiteLabelEnabled !== undefined) dataToUpdate.whiteLabelEnabled = companyData.whiteLabelEnabled;
-        if (companyData.primaryColor !== undefined) dataToUpdate.primaryColor = companyData.primaryColor;
-        if (companyData.secondaryColor !== undefined) dataToUpdate.secondaryColor = companyData.secondaryColor;
-        if (companyData.accentColor !== undefined) dataToUpdate.accentColor = companyData.accentColor;
+        if (companyData.primaryColor !== undefined) dataToUpdate.primaryColor = companyData.primaryColor || null;
+        if (companyData.secondaryColor !== undefined) dataToUpdate.secondaryColor = companyData.secondaryColor || null;
+        if (companyData.accentColor !== undefined) dataToUpdate.accentColor = companyData.accentColor || null;
+        if (companyData.canManageCourses !== undefined) dataToUpdate.canManageCourses = companyData.canManageCourses; // Explicitly handle
         if (companyData.stripeCustomerId !== undefined) dataToUpdate.stripeCustomerId = companyData.stripeCustomerId || null;
         if (companyData.stripeSubscriptionId !== undefined) dataToUpdate.stripeSubscriptionId = companyData.stripeSubscriptionId || null;
 
 
-        if (Object.keys(dataToUpdate).length === 0) {
-            console.warn("updateCompany called with no valid data to update.");
-            return getCompanyById(companyId);
+        // Check if anything is actually being updated beyond just 'updatedAt'
+        const updateKeys = Object.keys(dataToUpdate);
+        if (updateKeys.length <= 1 && updateKeys.includes('updatedAt')) {
+            console.warn("updateCompany called with no valid data to update for company:", companyId);
+            const currentDocSnap = await getDoc(companyRef);
+            if (currentDocSnap.exists() && currentDocSnap.data().isDeleted !== true) {
+                 return { id: companyId, ...currentDocSnap.data() } as Company;
+            }
+            return null;
         }
 
         await updateDoc(companyRef, dataToUpdate);
@@ -382,6 +394,7 @@ export async function addLocation(locationData: LocationFormData): Promise<Locat
             createdBy: locationData.createdBy || null,
             isDeleted: false,
             deletedAt: null,
+            createdAt: serverTimestamp(), // Added createdAt
         };
         const docRef = await addDoc(locationsRef, dataToSave);
         const newDocSnap = await getDoc(docRef);
@@ -401,7 +414,7 @@ export async function updateLocation(locationId: string, locationData: Partial<L
      }
     return retryOperation(async () => {
         const locationRef = doc(db, LOCATIONS_COLLECTION, locationId);
-        const dataToUpdate: Partial<Pick<Location, 'name'>> = {};
+        const dataToUpdate: Partial<Pick<Location, 'name'>> = {}; // Only allow name update for now
         if (locationData.name) {
             dataToUpdate.name = locationData.name;
         }
@@ -414,7 +427,7 @@ export async function updateLocation(locationId: string, locationData: Partial<L
             return null;
         }
 
-        await updateDoc(locationRef, dataToUpdate);
+        await updateDoc(locationRef, {...dataToUpdate, updatedAt: serverTimestamp()}); // Added updatedAt
         const updatedDocSnap = await getDoc(locationRef);
          if (updatedDocSnap.exists() && updatedDocSnap.data().isDeleted !== true) {
              return { id: locationId, ...updatedDocSnap.data() } as Location;
@@ -516,3 +529,5 @@ export async function getSalesTotalLastNDays(days: number): Promise<number> {
         return totalSales;
     });
 }
+
+    
