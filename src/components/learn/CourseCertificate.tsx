@@ -11,9 +11,8 @@ interface CourseCertificateProps {
     courseName: string;
     userName: string;
     completionDate: Date;
-    brandName?: string | null; // Optional brand name for certificate
-    brandLogoUrl?: string | null; // Optional brand logo
-    // templateId?: string | null; // For future use if templates have distinct visual styles
+    brandName?: string | null;
+    brandLogoUrl?: string | null;
 }
 
 export function CourseCertificate({ courseName, userName, completionDate, brandName, brandLogoUrl }: CourseCertificateProps) {
@@ -27,14 +26,13 @@ export function CourseCertificate({ courseName, userName, completionDate, brandN
         window.print();
     };
 
-    // Basic template styling - can be expanded based on templateId
     const certificateStyle = "w-full max-w-2xl border-2 border-primary/50 bg-gradient-to-br from-background to-secondary/10 shadow-xl overflow-hidden my-8 mx-auto";
     const headerStyle = "text-center p-6 border-b-2 border-primary/30";
     const contentStyle = "p-8 text-center space-y-4";
     const issuingEntityStyle = "pt-6 text-sm text-muted-foreground";
 
     return (
-        <div className="certificate-container p-4"> {/* Outer div for print control and some padding */}
+        <div className="certificate-container p-4">
             <Card className={certificateStyle}>
                 <CardHeader className={headerStyle}>
                      <Award className="h-20 w-20 mx-auto text-accent mb-4" />
