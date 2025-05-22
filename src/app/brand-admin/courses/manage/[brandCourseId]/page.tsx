@@ -12,7 +12,8 @@ import { useToast } from '@/hooks/use-toast';
 import type { BrandCourse, BrandLesson, BrandQuiz, Course } from '@/types/course';
 import type { User, Company } from '@/types/user';
 import { getBrandCourseById, getBrandLessonsByBrandId, getBrandQuizzesByBrandId, updateBrandCourseCurriculum } from '@/lib/brand-content-data';
-import { getCompanyById } from '@/lib/user-data'; // getCompanyById is from user-data
+import { getCompanyById } from '@/lib/company-data'; // Corrected import path
+import { getUserByEmail } from '@/lib/user-data'; // getUserByEmail is from user-data
 
 import { AddBrandLessonToCurriculumDialog } from '@/components/brand-admin/AddBrandLessonToCurriculumDialog';
 import { AddBrandQuizToCurriculumDialog } from '@/components/brand-admin/AddBrandQuizToCurriculumDialog'; // Import AddBrandQuizToCurriculumDialog
@@ -22,11 +23,11 @@ import { cn } from '@/lib/utils';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { getUserByEmail } from '@/lib/user-data';
+
 
 type BrandCurriculumItem = {
     id: string;
-    type: 'brandLesson' | 'brandQuiz'; // Removed globalCourse for now
+    type: 'brandLesson' | 'brandQuiz';
     data: BrandLesson | BrandQuiz;
 };
 
@@ -45,10 +46,10 @@ export default function ManageBrandCourseCurriculumPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isAddLessonDialogOpen, setIsAddLessonDialogOpen] = useState(false);
-  const [isAddQuizDialogOpen, setIsAddQuizDialogOpen] = useState(false); // State for Add Quiz Dialog
+  const [isAddQuizDialogOpen, setIsAddQuizDialogOpen] = useState(false);
 
   const [availableBrandLessonsForDialog, setAvailableBrandLessonsForDialog] = useState<BrandLesson[]>([]);
-  const [availableBrandQuizzesForDialog, setAvailableBrandQuizzesForDialog] = useState<BrandQuiz[]>([]); // State for available quizzes
+  const [availableBrandQuizzesForDialog, setAvailableBrandQuizzesForDialog] = useState<BrandQuiz[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -269,3 +270,5 @@ export default function ManageBrandCourseCurriculumPage() {
     </DragDropContext>
   );
 }
+
+    
