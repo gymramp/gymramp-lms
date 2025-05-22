@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, TrendingUp, Award, UserCheck, BookOpen, MapPin, Building, UserPlus, Activity, ChevronLeft, ChevronRight } from "lucide-react"; // Added Chevron icons
+import { Users, TrendingUp, Award, UserCheck, BookOpen, MapPin, Building, UserPlus, Activity, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"; // Added Chevron icons
 import { EmployeeTable } from "@/components/dashboard/EmployeeTable";
 import { AddUserDialog } from '@/components/admin/AddUserDialog';
 import { EditUserDialog } from '@/components/admin/EditUserDialog';
@@ -12,7 +12,8 @@ import type { User, Company, Location } from '@/types/user';
 import type { Course } from '@/types/course';
 import type { ActivityLog } from '@/types/activity';
 import { getUserByEmail, toggleUserStatus as toggleUserDataStatus, getAllUsers, toggleUserCourseAssignments, getUserOverallProgress, updateUser } from '@/lib/user-data';
-import { getCompanyById, getLocationsByCompanyId, getAllLocations, getCustomerPurchaseRecordByBrandId } from '@/lib/company-data'; // Added getCustomerPurchaseRecordByBrandId
+import { getCompanyById, getLocationsByCompanyId, getAllLocations } from '@/lib/company-data';
+import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data'; // Corrected import
 import { getAllCourses, getCourseById, getAllPrograms } from '@/lib/firestore-data'; // Import getAllPrograms
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,6 +28,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Timestamp } from 'firebase/firestore';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useRouter } from 'next/navigation'; // Import useRouter
 
 type EmployeeWithOverallProgress = User & {
     overallProgress: number;
@@ -52,6 +54,7 @@ export default function DashboardPage() {
   const [userToAssignCourse, setUserToAssignCourse] = useState<User | null>(null);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
   const { toast } = useToast();
+  const router = useRouter(); // Initialize useRouter
 
   const [activeCurrentPage, setActiveCurrentPage] = useState(1);
   const [inactiveCurrentPage, setInactiveCurrentPage] = useState(1);
@@ -118,10 +121,7 @@ export default function DashboardPage() {
                 if (purchaseRecord?.selectedProgramId) {
                     brandProgramIds.add(purchaseRecord.selectedProgramId);
                 }
-                // Note: If brands can be assigned programs through other means (not just initial purchase),
-                // that logic would need to be incorporated here. For example, reading a 'assignedProgramIds'
-                // field from the companyDetails if it exists.
-
+                
                 const brandAccessibleCourseIds = new Set<string>();
                 allPrograms.forEach(program => {
                     if (brandProgramIds.has(program.id)) {
@@ -129,8 +129,6 @@ export default function DashboardPage() {
                     }
                 });
                 
-                // Additionally, include any courses directly assigned to the company,
-                // though this might be phased out or managed differently with programs.
                 (companyDetails.assignedCourseIds || []).forEach(courseId => brandAccessibleCourseIds.add(courseId));
 
                 const globalCoursesForBrand = allLibraryCourses.filter(course => brandAccessibleCourseIds.has(course.id));
@@ -157,7 +155,7 @@ export default function DashboardPage() {
                        const progressData = emp.courseProgress[courseId];
                        if (progressData?.lastUpdated && progressData.lastUpdated instanceof Timestamp) {
                            if (!courseTitleCache[courseId]) {
-                                const course = await getCourseById(courseId); // This might be global or brand course
+                                const course = await getCourseById(courseId); 
                                 courseTitleCache[courseId] = course?.title || 'Unknown Course';
                            }
                             const courseTitle = courseTitleCache[courseId];
@@ -184,7 +182,7 @@ export default function DashboardPage() {
         } finally {
              setIsLoading(false); setIsLoadingActivity(false);
         }
-   }, [toast]);
+   }, [toast]); // Removed router from dependencies as it's not used inside this callback
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -208,7 +206,7 @@ export default function DashboardPage() {
 
     const filteredActivity = React.useMemo(() => {
         if (selectedLocationId === 'all') return recentActivity;
-        return recentActivity.filter(log => log.locationIds.includes(selectedLocationId));
+        return recentActivity.filter(log => (log.locationIds || []).includes(selectedLocationId));
     }, [recentActivity, selectedLocationId]);
 
    const refreshEmployees = () => {
@@ -236,7 +234,7 @@ export default function DashboardPage() {
         if (currentUser.id === targetUser.id) {
              toast({ title: "Action Denied", description: "You cannot change your own status.", variant: "destructive" }); return;
         }
-        if (currentUser.role === 'Manager' && targetUser.role !== 'Staff') { // Managers can only manage Staff
+        if (currentUser.role === 'Manager' && targetUser.role !== 'Staff') { 
             toast({ title: "Permission Denied", description: "Managers can only manage Staff.", variant: "destructive" }); return;
         }
 
@@ -256,12 +254,8 @@ export default function DashboardPage() {
      if (currentUser.role === 'Manager' && employee.role !== 'Staff') {
          toast({ title: "Permission Denied", description: "Managers can only assign courses to Staff.", variant: "destructive" }); return;
      }
-     // Check if any courses are available for assignment (either global or brand-specific if canManageCourses)
      const hasGlobalCourses = availableGlobalCourses.length > 0;
      const canManageBrandCourses = company?.canManageCourses;
-     // If neither global courses exist NOR can the brand manage its own (implying brand courses might exist but aren't fetched here yet),
-     // then it's likely no courses can be assigned from this dialog's perspective.
-     // A more robust check would involve fetching brand courses if canManageCourses is true.
      if (!hasGlobalCourses && !canManageBrandCourses) {
          toast({ title: "No Courses Available", description: "No courses are available for assignment to users in this brand.", variant: "destructive" }); return;
      }
@@ -278,8 +272,8 @@ export default function DashboardPage() {
     const updatedUser = await toggleUserCourseAssignments(userToAssignCourse.id, [courseId], action);
     if (updatedUser) {
         refreshEmployees();
-        const courseTitle = availableGlobalCourses.find(c => c.id === courseId)?.title || 
-                            (company?.canManageCourses ? "a brand course" : "a course");
+        const courseDetails = await getCourseById(courseId); // Fetch details to get title
+        const courseTitle = courseDetails?.title || "a course";
         toast({ title: action === 'assign' ? "Course Assigned" : "Course Unassigned", description: `${action === 'assign' ? `"${courseTitle}" assigned to` : `Course removed from`} ${userToAssignCourse.name}.` });
     } else {
         toast({ title: "Error", description: `Failed to ${action} course.`, variant: "destructive" });
@@ -297,15 +291,15 @@ export default function DashboardPage() {
 
   const paginatedActiveEmployees = useMemo(() => {
     if (rowsPerPage === 'all') return activeEmployees;
-    const startIndex = (activeCurrentPage - 1) * rowsPerPage;
-    return activeEmployees.slice(startIndex, startIndex + rowsPerPage);
-  }, [activeEmployees, activeCurrentPage, rowsPerPage]);
+    const startIndex = (activeCurrentPage - 1) * rowsToShow;
+    return activeEmployees.slice(startIndex, startIndex + rowsToShow);
+  }, [activeEmployees, activeCurrentPage, rowsToShow]);
 
   const paginatedInactiveEmployees = useMemo(() => {
     if (rowsPerPage === 'all') return inactiveEmployees;
-    const startIndex = (inactiveCurrentPage - 1) * rowsPerPage;
-    return inactiveEmployees.slice(startIndex, startIndex + rowsPerPage);
-  }, [inactiveEmployees, inactiveCurrentPage, rowsPerPage]);
+    const startIndex = (inactiveCurrentPage - 1) * rowsToShow;
+    return inactiveEmployees.slice(startIndex, startIndex + rowsToShow);
+  }, [inactiveEmployees, inactiveCurrentPage, rowsToShow]);
 
   const totalActiveFiltered = activeEmployees.length;
   const totalOverallProgress = activeEmployees.reduce((sum, emp) => sum + emp.overallProgress, 0);
@@ -396,13 +390,13 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-       {userToAssignCourse && company && ( // Ensure company is not null
+       {userToAssignCourse && company && ( 
         <AssignCourseDialog 
           isOpen={isAssignCourseDialogOpen} 
           setIsOpen={setIsAssignCourseDialogOpen} 
           employee={userToAssignCourse} 
           courses={availableGlobalCourses} 
-          company={company} // Pass the company object
+          company={company} 
           onAssignCourse={handleAssignCourse} 
         />
       )}
@@ -413,3 +407,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
