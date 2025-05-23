@@ -13,7 +13,8 @@ import {
     writeBatch,
     serverTimestamp,
     Timestamp,
-    or // Import 'or' for complex queries
+    or,
+    getCountFromServer
 } from 'firebase/firestore';
 import type { Company, Location, CompanyFormData, LocationFormData, User } from '@/types/user';
 import { getUsersWithoutCompany, deleteUser as softDeleteUser } from './user-data';
@@ -90,8 +91,8 @@ export async function createDefaultCompany(): Promise<Company | null> {
                 stripeSubscriptionId: null,
                 logoUrl: null,
                 shortDescription: null,
-                parentBrandId: null, // Default company is a parent
-                createdByUserId: null, // Not created by a user in the hierarchical sense
+                parentBrandId: null,
+                createdByUserId: null,
             };
             const docRef = await addDoc(companiesRef, { ...newCompanyData, isDeleted: false, deletedAt: null, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
             const newDocSnap = await getDoc(docRef);
@@ -106,58 +107,39 @@ export async function createDefaultCompany(): Promise<Company | null> {
     });
 }
 
-// Modified getAllCompanies to accept currentUser for role-based fetching
 export async function getAllCompanies(currentUser: User | null): Promise<Company[]> {
     return retryOperation(async () => {
         const companiesRef = collection(db, COMPANIES_COLLECTION);
-        let q;
+        const companiesMap = new Map<string, Company>();
 
         if (currentUser?.role === 'Super Admin') {
-            q = query(companiesRef, where("isDeleted", "==", false));
-        } else if (currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Owner') && currentUser.companyId) {
-            // Fetch the user's own primary brand AND any child brands of their primary brand
-            // This requires two queries or an 'OR' query if Firestore supports it well for this case.
-            // Using 'OR' query for simplicity here.
-             q = query(companiesRef,
-                where("isDeleted", "==", false),
-                or(
-                    where("id", "==", currentUser.companyId), // Their own primary brand (using 'id' which isn't directly queryable this way, so we filter later or adjust model)
-                                                            // Correct approach: fetch user's brand by ID separately, then child brands
-                    where("parentBrandId", "==", currentUser.companyId)
-                )
-            );
-            // Post-filter for user's own brand if 'id' equality is not efficient with 'or'
+            const q = query(companiesRef, where("isDeleted", "==", false));
             const querySnapshot = await getDocs(q);
-            const companies: Company[] = [];
-            let userPrimaryBrandFetched = false;
             querySnapshot.forEach((doc) => {
-                const company = { id: doc.id, ...doc.data() } as Company;
-                if (doc.id === currentUser.companyId) {
-                    userPrimaryBrandFetched = true;
-                }
-                companies.push(company);
+                companiesMap.set(doc.id, { id: doc.id, ...doc.data() } as Company);
             });
-            // If user's primary brand wasn't included in the 'or' query (e.g., if parentBrandId is null), fetch it separately
-            if (!userPrimaryBrandFetched) {
-                const primaryBrandDoc = await getDoc(doc(companiesRef, currentUser.companyId));
-                if (primaryBrandDoc.exists() && !primaryBrandDoc.data().isDeleted) {
-                    companies.push({ id: primaryBrandDoc.id, ...primaryBrandDoc.data() } as Company);
-                }
+        } else if (currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Owner') && currentUser.companyId) {
+            // Fetch the user's primary brand
+            const primaryBrandDoc = await getDoc(doc(companiesRef, currentUser.companyId));
+            if (primaryBrandDoc.exists() && primaryBrandDoc.data().isDeleted === false) {
+                companiesMap.set(primaryBrandDoc.id, { id: primaryBrandDoc.id, ...primaryBrandDoc.data() } as Company);
             }
-            // Remove duplicates if any (though with current logic, less likely)
-            const uniqueCompanies = Array.from(new Map(companies.map(c => [c.id, c])).values());
-            return uniqueCompanies;
+
+            // Fetch child brands
+            const childBrandsQuery = query(
+                companiesRef,
+                where("isDeleted", "==", false),
+                where("parentBrandId", "==", currentUser.companyId)
+            );
+            const childBrandsSnapshot = await getDocs(childBrandsQuery);
+            childBrandsSnapshot.forEach((doc) => {
+                companiesMap.set(doc.id, { id: doc.id, ...doc.data() } as Company);
+            });
         } else {
             // Other roles see no brands in this list, or implement specific logic
             return [];
         }
-
-        const querySnapshot = await getDocs(q);
-        const companies: Company[] = [];
-        querySnapshot.forEach((doc) => {
-            companies.push({ id: doc.id, ...doc.data() } as Company);
-        });
-        return companies;
+        return Array.from(companiesMap.values());
     });
 }
 
@@ -216,11 +198,10 @@ export async function getCompanyByCustomDomain(domain: string): Promise<Company 
     });
 }
 
-// Modified addCompany to accept parentBrandId and createdByUserId
 export async function addCompany(
     companyData: CompanyFormData,
-    creatingUserId?: string | null, // Optional: ID of user creating this brand
-    parentBrandIdForChild?: string | null // Optional: ID of parent if this is a child brand
+    creatingUserId?: string | null,
+    parentBrandIdForChild?: string | null
 ): Promise<Company | null> {
     return retryOperation(async () => {
         const companiesRef = collection(db, COMPANIES_COLLECTION);
@@ -249,8 +230,8 @@ export async function addCompany(
             deletedAt: null,
             createdAt: serverTimestamp() as Timestamp,
             updatedAt: serverTimestamp() as Timestamp,
-            parentBrandId: parentBrandIdForChild || null, // Set parentBrandId
-            createdByUserId: creatingUserId || null, // Set createdByUserId
+            parentBrandId: parentBrandIdForChild || null,
+            createdByUserId: creatingUserId || null,
          };
         const docRef = await addDoc(companiesRef, docData);
         const newDocSnap = await getDoc(docRef);
@@ -296,15 +277,13 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
         if (companyData.canManageCourses !== undefined) dataToUpdate.canManageCourses = companyData.canManageCourses;
         if (companyData.stripeCustomerId !== undefined) dataToUpdate.stripeCustomerId = companyData.stripeCustomerId || null;
         if (companyData.stripeSubscriptionId !== undefined) dataToUpdate.stripeSubscriptionId = companyData.stripeSubscriptionId || null;
-        // ParentBrandId and createdByUserId are generally not updatable after creation through this function
-        // but if needed, similar checks can be added.
 
-        if (Object.keys(dataToUpdate).length > 1) { // Ensure there's more than just updatedAt
+        if (Object.keys(dataToUpdate).length > 1) {
             await updateDoc(companyRef, dataToUpdate);
         } else {
             console.warn("updateCompany called with no actual data changes (besides updatedAt) for brand:", companyId);
         }
-        
+
         const updatedDocSnap = await getDoc(companyRef);
          if (updatedDocSnap.exists() && updatedDocSnap.data().isDeleted !== true) {
              return { id: companyId, ...updatedDocSnap.data() } as Company;
@@ -326,7 +305,6 @@ export async function deleteCompany(companyId: string): Promise<boolean> {
         const companyRef = doc(db, COMPANIES_COLLECTION, companyId);
         batch.update(companyRef, { isDeleted: true, deletedAt: serverTimestamp() });
 
-        // Soft delete associated locations
         const locationsRef = collection(db, LOCATIONS_COLLECTION);
         const locationsQuery = query(locationsRef, where("companyId", "==", companyId), where("isDeleted", "==", false));
         const locationsSnapshot = await getDocs(locationsQuery);
@@ -334,20 +312,12 @@ export async function deleteCompany(companyId: string): Promise<boolean> {
             batch.update(locationDoc.ref, { isDeleted: true, deletedAt: serverTimestamp() });
         });
 
-        // Soft delete associated users
         const usersRef = collection(db, 'users');
         const usersQuery = query(usersRef, where("companyId", "==", companyId), where("isDeleted", "==", false));
         const usersSnapshot = await getDocs(usersQuery);
         usersSnapshot.forEach((userDoc) => {
              batch.update(userDoc.ref, { isDeleted: true, deletedAt: serverTimestamp(), isActive: false });
         });
-        
-        // TODO: Consider what to do with Child Brands if this is a Parent Brand.
-        // For now, they will be orphaned. A more robust solution might involve:
-        // 1. Preventing deletion if child brands exist.
-        // 2. Cascading soft-delete to child brands.
-        // 3. Allowing re-parenting of child brands.
-        // This is out of scope for the current change.
 
         await batch.commit();
         console.log(`Brand ${companyId} and its direct locations/users soft-deleted.`);
@@ -409,9 +379,8 @@ export const updateCompanyCourseAssignments = async (companyId: string, courseId
 
 
 // --- Location Functions ---
-// Locations are now tied to a specific Brand (Parent or Child) via their companyId (brandId)
 
-export async function getLocationsByCompanyId(companyId: string): Promise<Location[]> { // companyId here means brandId
+export async function getLocationsByCompanyId(companyId: string): Promise<Location[]> {
      if (!companyId) {
          console.warn("getLocationsByCompanyId called with empty brand ID.");
          return [];
@@ -429,7 +398,7 @@ export async function getLocationsByCompanyId(companyId: string): Promise<Locati
 }
 
 
-export async function getAllLocations(): Promise<Location[]> { // This might need rethinking for a Super Admin context, or filtering by non-deleted parent brands
+export async function getAllLocations(): Promise<Location[]> {
     return retryOperation(async () => {
         const locationsRef = collection(db, LOCATIONS_COLLECTION);
         const q = query(locationsRef, where("isDeleted", "==", false));
@@ -444,7 +413,7 @@ export async function getAllLocations(): Promise<Location[]> { // This might nee
 
 
 export async function addLocation(locationData: LocationFormData): Promise<Location | null> {
-    if (!locationData.companyId) { // companyId here is the brandId
+    if (!locationData.companyId) {
         console.error("Cannot add location without a brandId (companyId).");
         return null;
     }
@@ -482,7 +451,7 @@ export async function updateLocation(locationId: string, locationData: Partial<L
         if (locationData.name) {
             dataToUpdate.name = locationData.name;
         }
-         if (Object.keys(dataToUpdate).length <= 1) { // only updatedAt
+         if (Object.keys(dataToUpdate).length <= 1) {
             console.warn("updateLocation called with no valid data to update (besides updatedAt).");
             const currentDocSnap = await getDoc(locationRef);
             if (currentDocSnap.exists() && currentDocSnap.data().isDeleted !== true) {
@@ -496,7 +465,7 @@ export async function updateLocation(locationId: string, locationData: Partial<L
         const updatedDocSnap = await getDoc(locationRef);
          if (updatedDocSnap.exists() && updatedDocSnap.data().isDeleted !== true) {
              const updatedLoc = updatedDocSnap.data();
-             return { id: locationId, ...updatedLoc, createdAt: updatedLoc.createdAt?.toDate(), updatedAt: updatedLoc.updatedAt?.toDate() } as Location;
+             return { id: locationId, ...updatedLoc, createdAt: updatedLoc.createdAt?.toDate(), updatedAt: updatedDocSnap.updatedAt?.toDate() } as Location;
          } else {
               console.error("Failed to fetch updated location doc or location is soft-deleted.");
              return null;
@@ -534,7 +503,7 @@ export async function deleteLocation(locationId: string): Promise<boolean> {
     }, 3);
 }
 
-export async function createDefaultLocation(companyId: string): Promise<Location | null> { // companyId is brandId
+export async function createDefaultLocation(companyId: string): Promise<Location | null> {
     if (!companyId) {
         console.warn("createDefaultLocation called with empty companyId.");
         return null;
@@ -555,8 +524,8 @@ export async function createDefaultLocation(companyId: string): Promise<Location
         console.log(`Brand ${companyId} has no active locations. Creating "Main Location".`);
         const defaultLocationData: LocationFormData = {
             name: "Main Location",
-            companyId: companyId, // This is the Brand ID
-            createdBy: null, // Or system user ID if you have one
+            companyId: companyId,
+            createdBy: null,
         };
         const newLocation = await addLocation(defaultLocationData);
         if (newLocation) {
@@ -581,8 +550,6 @@ export async function getSalesTotalLastNDays(days: number): Promise<number> {
             where("isDeleted", "==", false),
             where("isTrial", "==", false),
             where("createdAt", ">=", timestampNDaysAgo)
-            // We are not filtering by parentBrandId === null here, so this includes sales from child brands too.
-            // If you only want sales from Parent/Primary Brands, add: where("parentBrandId", "==", null)
         );
 
         const querySnapshot = await getDocs(q);
