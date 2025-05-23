@@ -21,9 +21,17 @@ Table.displayName = "Table"
 const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
->(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn("[&_tr]:border-b", className)} {...props} />
-))
+>(({ className, children, ...props }, ref) => {
+  // Filter out children that are just whitespace text nodes
+  const filteredChildren = React.Children.toArray(children).filter(
+    (child) => !(typeof child === "string" && /^\s*$/.test(child))
+  );
+  return (
+    <thead ref={ref} className={cn("[&_tr]:border-b", className)} {...props}>
+      {filteredChildren}
+    </thead>
+  );
+})
 TableHeader.displayName = "TableHeader"
 
 const TableBody = React.forwardRef<
