@@ -67,16 +67,14 @@ export async function processCheckout(data: CheckoutFormData): Promise<
     if (!selectedProgram) {
         throw new Error(`Selected Program (ID: ${data.selectedProgramId}) not found.`);
     }
-    // Courses are derived from the program, no longer directly from form data
     const coursesToAssignToBrand = selectedProgram.courseIds || [];
 
     const newCompanyData = {
         name: data.companyName,
-        // assignedCourseIds: coursesToAssignToBrand, // This will be set by assigning the program
         maxUsers: data.maxUsers ?? null,
         isTrial: false,
         trialEndsAt: null,
-        saleAmount: data.finalTotalAmount ?? 0, // Based on Program base price
+        saleAmount: data.finalTotalAmount ?? 0,
         revenueSharePartners: data.revenueSharePartners || null,
         whiteLabelEnabled: false,
         primaryColor: null,
@@ -93,21 +91,17 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         stripeSubscriptionId: null,
         createdAt: Timestamp.now(),
         parentBrandId: null,
-        createdByUserId: null, // This would be the Super Admin's ID, if tracking
-        assignedProgramIds: [], // Initialize, will be updated
+        createdByUserId: null, 
+        assignedProgramIds: [data.selectedProgramId], // Assign program ID at creation
     };
     const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
       throw new Error("Failed to create the brand in the database.");
     }
     newCompanyId = newCompany.id;
-    console.log(`[Server Action] Brand "${newCompany.name}" (Paid Program) created with ID: ${newCompany.id}`);
+    console.log(`[Server Action] Brand "${newCompany.name}" (Paid Program) created with ID: ${newCompany.id} and program ${data.selectedProgramId} assigned.`);
 
-    // Assign the selected program to the new company
-    if (newCompanyId && data.selectedProgramId) {
-        await updateCompany(newCompanyId, { assignedProgramIds: [data.selectedProgramId] });
-        console.log(`[Server Action] Program ${data.selectedProgramId} assigned to brand ${newCompanyId}`);
-    }
+    // Removed subsequent updateCompany call for assignedProgramIds as it's now handled during addCompany
 
 
     const defaultLocation = await createDefaultLocation(newCompany.id);
@@ -121,6 +115,11 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         console.log(`[Server Action] Admin user created in Firebase Auth with UID: ${authUserUid} for email ${data.adminEmail} (Paid Program) using local auth instance`);
     } catch (authError: any) {
         console.error("[Server Action] Failed to create admin user in Firebase Auth (Paid Program):", authError);
+        // Attempt to clean up company if auth creation fails
+        if (newCompanyId) {
+            console.warn(`[Server Action] Auth creation failed. Attempting to soft-delete company ${newCompanyId}`);
+            await deleteDoc(doc(db, 'companies', newCompanyId)); // Or a proper soft-delete if implemented
+        }
         throw new Error(`AuthCreationError: ${authError.code || 'UnknownCode'} - ${authError.message || 'Failed to create user in authentication service.'}`);
     }
 
@@ -135,6 +134,15 @@ export async function processCheckout(data: CheckoutFormData): Promise<
     const newAdminUser = await addUser(newAdminUserData);
     if (!newAdminUser) {
       console.warn(`[Server Action] Firestore user creation failed for Auth UID ${authUserUid}. Manual Auth user cleanup might be needed.`);
+      // Attempt to clean up company & auth user if Firestore user creation fails
+      if (newCompanyId) {
+            console.warn(`[Server Action] Firestore user creation failed. Attempting to soft-delete company ${newCompanyId}`);
+            await deleteDoc(doc(db, 'companies', newCompanyId));
+      }
+      const authUserToDelete = getAuth(getApps().find(app => app.name === localAuthAppName) || undefined)?.currentUser;
+      if (authUserToDelete && authUserToDelete.uid === authUserUid) {
+          await authUserToDelete.delete().catch(e => console.error("Failed to delete auth user on cleanup:", e));
+      }
       throw new Error("Failed to create the admin user account in Firestore (Paid Program).");
     }
     newAdminUserId = newAdminUser.id;
@@ -162,7 +170,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
                 const subscription = await stripe.subscriptions.create({
                     customer: stripeCustomerId,
                     items: [{ price: selectedProgram.stripeFirstPriceId }],
-                    trial_period_days: 30, // Placeholder trial
+                    trial_period_days: 30, 
                 });
                 stripeSubscriptionId = subscription.id;
                 console.log(`[Server Action] Stripe Subscription created with ID: ${stripeSubscriptionId}`);
@@ -224,6 +232,22 @@ export async function processCheckout(data: CheckoutFormData): Promise<
   } catch (error: any) {
     console.error("[Server Action] Error during paid checkout processing (Program):", error);
     await cleanupFirebaseApp(localAuthAppName);
+    // Attempt to clean up brand if it was created and an error occurred later
+    if (newCompanyId && !error.message?.includes('AuthCreationError') && !error.message?.includes('Firestore user creation failed')) {
+        // Only delete if the error wasn't due to auth/user creation where cleanup might have already run
+        try {
+            console.warn(`[Server Action] Cleaning up brand ${newCompanyId} due to error: ${error.message}`);
+            // You might want a soft delete function here instead of hard deleteDoc
+            const companyDocRef = doc(db, 'companies', newCompanyId);
+            const companyDoc = await getDoc(companyDocRef);
+            if (companyDoc.exists()) {
+                 await deleteDoc(companyDocRef);
+                 console.log(`[Server Action] Brand ${newCompanyId} deleted on cleanup.`);
+            }
+        } catch (cleanupError) {
+            console.error(`[Server Action] Error during brand cleanup for ${newCompanyId}:`, cleanupError);
+        }
+    }
     return { success: false, error: error.message || "An unexpected error occurred during paid checkout." };
   }
 }
@@ -237,6 +261,8 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
   const localAuthAppName = `freeTrialAuthApp-${Date.now()}`;
   let localAuthInstance: Auth | undefined;
   const tempPassword = generateRandomPassword();
+  let newCompanyId: string | undefined;
+
 
   try {
     const selectedProgram: Program | null = await getProgramById(data.selectedProgramId);
@@ -272,19 +298,16 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
         createdAt: Timestamp.now(),
         parentBrandId: null,
         createdByUserId: null,
-        assignedProgramIds: [], // Initialize, will be updated
+        assignedProgramIds: [data.selectedProgramId], // Assign program ID at creation
     };
     const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
       throw new Error("Failed to create the trial brand in the database.");
     }
-    console.log(`[Server Action] Trial Brand "${newCompany.name}" created with ID: ${newCompany.id}, ends: ${trialEndsDate.toLocaleDateString()}`);
+    newCompanyId = newCompany.id;
+    console.log(`[Server Action] Trial Brand "${newCompany.name}" created with ID: ${newCompany.id}, ends: ${trialEndsDate.toLocaleDateString()} and program ${data.selectedProgramId} assigned.`);
 
-    // Assign the selected program to the new trial company
-    if (newCompany.id && data.selectedProgramId) {
-        await updateCompany(newCompany.id, { assignedProgramIds: [data.selectedProgramId] });
-        console.log(`[Server Action] Program ${data.selectedProgramId} assigned to trial brand ${newCompany.id}`);
-    }
+    // Removed subsequent updateCompany call for assignedProgramIds
 
     const defaultLocation = await createDefaultLocation(newCompany.id);
     const defaultLocationId = defaultLocation ? [defaultLocation.id] : [];
@@ -295,9 +318,11 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
         const userCredential = await createUserWithEmailAndPassword(localAuthInstance, data.adminEmail, tempPassword);
         authUserUid = userCredential.user.uid;
         console.log(`[Server Action] Trial Admin user created in Firebase Auth with UID: ${authUserUid} for email ${data.adminEmail} using local auth instance`);
-    } catch (authError: any)
- {
+    } catch (authError: any) {
         console.error("[Server Action] Failed to create trial admin user in Firebase Auth:", authError);
+        if (newCompanyId) {
+            await deleteDoc(doc(db, 'companies', newCompanyId));
+        }
         throw new Error(`AuthCreationError: ${authError.code || 'UnknownCode'} - ${authError.message || 'Failed to create user in authentication service.'}`);
     }
 
@@ -312,6 +337,13 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
     const newAdminUser = await addUser(newAdminUserData);
     if (!newAdminUser) {
       console.warn(`[Server Action] Firestore user creation failed for trial Auth UID ${authUserUid}. Manual Auth user cleanup might be needed.`);
+       if (newCompanyId) {
+            await deleteDoc(doc(db, 'companies', newCompanyId));
+      }
+      const authUserToDelete = getAuth(getApps().find(app => app.name === localAuthAppName) || undefined)?.currentUser;
+      if (authUserToDelete && authUserToDelete.uid === authUserUid) {
+          await authUserToDelete.delete().catch(e => console.error("Failed to delete auth user on cleanup:", e));
+      }
       throw new Error("Failed to create the trial admin user account in Firestore.");
     }
     console.log(`[Server Action] Trial Admin user "${newAdminUser.name}" created in Firestore`);
@@ -329,7 +361,21 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
   } catch (error: any) {
     console.error("[Server Action] Error during free trial checkout processing:", error);
     await cleanupFirebaseApp(localAuthAppName);
+    if (newCompanyId && !error.message?.includes('AuthCreationError') && !error.message?.includes('Firestore user creation failed')) {
+        try {
+            console.warn(`[Server Action] Cleaning up brand ${newCompanyId} due to error: ${error.message}`);
+            const companyDocRef = doc(db, 'companies', newCompanyId);
+            const companyDoc = await getDoc(companyDocRef);
+            if (companyDoc.exists()) {
+                 await deleteDoc(companyDocRef);
+                 console.log(`[Server Action] Brand ${newCompanyId} deleted on cleanup.`);
+            }
+        } catch (cleanupError) {
+            console.error(`[Server Action] Error during brand cleanup for ${newCompanyId}:`, cleanupError);
+        }
+    }
     return { success: false, error: error.message || "An unexpected error occurred during free trial checkout." };
   }
 }
 
+    
