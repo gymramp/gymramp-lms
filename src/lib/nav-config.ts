@@ -3,8 +3,8 @@
 import type { User, UserRole, Company } from '@/types/user';
 import {
     BarChartBig, Building, Layers, CreditCard, BookOpen, FileText,
-    ListChecks, UserPlus, ShoppingCart, Gift, TestTube2, Percent,
-    LayoutDashboard, Users, MapPin, Settings, Award, HelpCircle, LogOut, Package, Cog
+    ListChecks, UserPlus, ShoppingCart, Gift,
+    TestTube2, Percent, HelpCircle, LayoutDashboard, Users, MapPin, Settings, Award, Cog, Package
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { getCompanyById } from '@/lib/company-data';
@@ -23,10 +23,10 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
   const baseItems: NavItemType[] = [];
   if (!user) return baseItems; // No nav items if no user
 
-  let userCompany: Company | null = null;
+  let userCompanyDetails: Company | null = null;
   if (user.companyId) {
       try {
-          userCompany = await getCompanyById(user.companyId);
+          userCompanyDetails = await getCompanyById(user.companyId);
       } catch (error) {
           console.error("[nav-config] Error fetching company details for nav:", error);
       }
@@ -38,6 +38,7 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
     roleSpecificItems.push(
       { href: '/admin/dashboard', label: 'Dashboard', icon: BarChartBig },
       { href: '/admin/companies', label: 'Brands', icon: Building },
+      { href: '/admin/users', label: 'Users', icon: Users }, // Added Users link back
       { href: '/admin/programs', label: 'Programs', icon: Layers },
       { href: '/admin/customers', label: 'Customers', icon: CreditCard },
       {
@@ -65,14 +66,14 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
   } else if (user.role === 'Admin' || user.role === 'Owner') {
     roleSpecificItems.push(
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { href: '/admin/companies', label: 'Brands', icon: Building, requiresCompanyId: true }, // Added Brands link here
+      { href: '/admin/companies', label: 'Brands', icon: Building, requiresCompanyId: true },
       { href: '/admin/users', label: 'Users', icon: Users, requiresCompanyId: true },
       { href: `/admin/companies/${user.companyId}/locations`, label: 'Locations', icon: MapPin, requiresCompanyId: true },
       {
         label: 'Brand Content',
         isDropdown: true,
         icon: Package,
-        requiresCanManageCourses: true, // This implies requiresCompanyId is also true
+        requiresCanManageCourses: true,
         subItems: [
             { href: '/brand-admin/courses', label: "My Brand's Courses", icon: BookOpen },
             { href: '/brand-admin/lessons', label: "My Brand's Lessons", icon: FileText },
@@ -96,21 +97,19 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
     );
   }
 
-  // Filter items based on conditions like requiresCompanyId or requiresCanManageCourses
   const filteredRoleSpecificItems = roleSpecificItems.filter(item => {
     if (item.requiresCompanyId && !user.companyId) {
       return false;
     }
-    if (item.requiresCanManageCourses && !(userCompany?.canManageCourses === true)) {
+    if (item.requiresCanManageCourses && !(userCompanyDetails?.canManageCourses === true)) {
         return false;
     }
     if (item.subItems) {
         item.subItems = item.subItems.filter(subItem => {
              if (subItem.requiresCompanyId && !user.companyId) return false;
-             if (subItem.requiresCanManageCourses && !(userCompany?.canManageCourses === true)) return false;
+             if (subItem.requiresCanManageCourses && !(userCompanyDetails?.canManageCourses === true)) return false;
              return true;
         });
-        // Hide main dropdown if all its sub-items are filtered out due to conditions
         if (item.isDropdown && item.subItems.length === 0 && (item.requiresCanManageCourses || item.requiresCompanyId)) return false;
     }
     return true;
@@ -128,29 +127,12 @@ export function getUserDropdownItems(user: User | null): NavItemType[] {
 
     if (user.role === 'Super Admin') {
         items.push(
-            // Dashboard link is already main nav
             { href: '/admin/settings', label: 'Settings', icon: Cog }
         );
-    } else if (user.role === 'Admin' || user.role === 'Owner') {
-        items.push(
-            // Dashboard link is already main nav
-        );
-         if (user.companyId) {
-            // Locations link is already main nav
-            // Brands link is already main nav
-        }
-    } else if (user.role === 'Manager') {
-         // Dashboard link is already main nav
     }
-
+    // No specific items for Admin/Owner/Manager in user dropdown beyond default account/help
     items.push({ href: '/certificates', label: 'My Certificates', icon: Award });
     items.push({ href: '/site-help', label: 'Site Help', icon: HelpCircle });
 
-    return items.filter(item => {
-        // Redundant check, requiresCompanyId not used in user dropdown items currently
-        // if (item.requiresCompanyId) {
-        //     return !!user.companyId;
-        // }
-        return true;
-    });
+    return items;
 }
