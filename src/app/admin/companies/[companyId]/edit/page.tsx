@@ -15,21 +15,21 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import type { Company, CompanyFormData, User } from '@/types/user';
 import type { Program, Course } from '@/types/course';
 import { getCompanyById, updateCompany } from '@/lib/company-data';
 import { getAllPrograms, getProgramById, getAllCourses } from '@/lib/firestore-data';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Globe, Users, CalendarDays, Settings as SettingsIcon, BookOpen, Layers, PackageCheck, Palette, Briefcase, Package, Save } from 'lucide-react';
+import { ArrowLeft, Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Globe, Users, CalendarDays, Palette, Briefcase, Package, Save, Layers, BookOpen } from 'lucide-react';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Timestamp } from 'firebase/firestore';
+import { cn } from '@/lib/utils';
 
 const companyFormSchema = z.object({
   name: z.string().min(2, "Brand name must be at least 2 characters."),
@@ -41,6 +41,12 @@ const companyFormSchema = z.object({
   isTrial: z.boolean().default(false),
   trialEndsAt: z.date().nullable().optional(),
   canManageCourses: z.boolean().default(false),
+  whiteLabelEnabled: z.boolean().default(false),
+  primaryColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$/, { message: 'Invalid HEX color (e.g., #RRGGBB or #RGB)'}).optional().or(z.literal('')).nullable(),
+  secondaryColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$/, { message: 'Invalid HEX color'}).optional().or(z.literal('')).nullable(),
+  accentColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$/, { message: 'Invalid HEX color'}).optional().or(z.literal('')).nullable(),
+  brandBackgroundColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$/, { message: 'Invalid HEX color'}).optional().or(z.literal('')).nullable(),
+  brandForegroundColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$/, { message: 'Invalid HEX color'}).optional().or(z.literal('')).nullable(),
 });
 
 type CompanyFormValues = z.infer<typeof companyFormSchema>;
@@ -63,11 +69,9 @@ export default function EditCompanyPage() {
   const [logoUploadProgress, setLogoUploadProgress] = useState(0);
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
 
-  // State for program and course display
   const [assignedProgramsDetails, setAssignedProgramsDetails] = useState<Program[]>([]);
   const [allLibraryCourses, setAllLibraryCourses] = useState<Course[]>([]);
   const [isLoadingProgramData, setIsLoadingProgramData] = useState(true);
-
 
   const form = useForm<CompanyFormValues>({
     resolver: zodResolver(companyFormSchema),
@@ -81,11 +85,18 @@ export default function EditCompanyPage() {
       isTrial: false,
       trialEndsAt: null,
       canManageCourses: false,
+      whiteLabelEnabled: false,
+      primaryColor: '',
+      secondaryColor: '',
+      accentColor: '',
+      brandBackgroundColor: '',
+      brandForegroundColor: '',
     },
   });
 
   const isTrialValue = form.watch('isTrial');
   const logoUrlValue = form.watch('logoUrl');
+  const whiteLabelEnabledValue = form.watch('whiteLabelEnabled');
 
   const fetchCompanyData = useCallback(async (user: User | null) => {
     if (!companyId || !user) {
@@ -132,6 +143,12 @@ export default function EditCompanyPage() {
         isTrial: companyData.isTrial || false,
         trialEndsAt: companyData.trialEndsAt ? new Date(companyData.trialEndsAt as string) : null,
         canManageCourses: companyData.canManageCourses || false,
+        whiteLabelEnabled: companyData.whiteLabelEnabled || false,
+        primaryColor: companyData.primaryColor || '',
+        secondaryColor: companyData.secondaryColor || '',
+        accentColor: companyData.accentColor || '',
+        brandBackgroundColor: companyData.brandBackgroundColor || '',
+        brandForegroundColor: companyData.brandForegroundColor || '',
       });
 
       if (companyData.parentBrandId) {
@@ -142,21 +159,22 @@ export default function EditCompanyPage() {
       }
       setIsLoadingParentBrand(false);
 
-      // Fetch program details
-      console.log('[EditBrand] Fetched companyData.assignedProgramIds:', companyData.assignedProgramIds);
+      console.log('[EditBrand] companyData.assignedProgramIds:', companyData.assignedProgramIds);
       if (companyData.assignedProgramIds && companyData.assignedProgramIds.length > 0) {
-        const [programs, courses] = await Promise.all([
-          Promise.all(companyData.assignedProgramIds.map(id => getProgramById(id))),
-          getAllCourses() // Fetch all courses to map IDs to names
+        const [fetchedAllPrograms, fetchedAllCourses] = await Promise.all([
+          getAllPrograms(),
+          getAllCourses()
         ]);
-        const fetchedPrograms = programs.filter(Boolean) as Program[];
-        console.log('[EditBrand] Fetched program details:', fetchedPrograms);
-        setAssignedProgramsDetails(fetchedPrograms);
-        setAllLibraryCourses(courses);
+        setAllLibraryCourses(fetchedAllCourses);
+        const details = companyData.assignedProgramIds
+            .map(id => fetchedAllPrograms.find(p => p.id === id))
+            .filter(Boolean) as Program[];
+        setAssignedProgramsDetails(details);
+        console.log('[EditBrand] Fetched program details:', details);
       } else {
         setAssignedProgramsDetails([]);
         setAllLibraryCourses([]);
-         console.log('[EditBrand] No assigned programs for this brand.');
+        console.log('[EditBrand] No assigned programs found or library empty for brand:', companyId);
       }
 
     } catch (error: any) {
@@ -177,7 +195,7 @@ export default function EditCompanyPage() {
         if (details) {
           fetchCompanyData(details);
         } else {
-          router.push('/'); // Should not happen if firebaseUser is present
+          router.push('/');
         }
       } else {
         setCurrentUser(null);
@@ -185,7 +203,7 @@ export default function EditCompanyPage() {
       }
     });
     return () => unsubscribe();
-  }, [router, toast, fetchCompanyData]); // Removed companyId from here
+  }, [router, toast, fetchCompanyData]);
 
 
   const handleLogoFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -196,7 +214,7 @@ export default function EditCompanyPage() {
     setLogoUploadError(null);
     try {
       const uniqueFileName = `${companyId}-logo-${Date.now()}-${file.name}`;
-      const storagePath = `${STORAGE_PATHS.COMPANY_LOGOS}/${uniqueFileName}`;
+      const storagePath = `companies/logos/${uniqueFileName}`;
       const downloadURL = await uploadImage(file, storagePath, setLogoUploadProgress);
       form.setValue('logoUrl', downloadURL, { shouldValidate: true });
       toast({ title: "Logo Uploaded", description: "Brand logo uploaded successfully." });
@@ -226,15 +244,36 @@ export default function EditCompanyPage() {
         isTrial: data.isTrial,
         trialEndsAt: data.isTrial && data.trialEndsAt ? (data.trialEndsAt instanceof Date ? data.trialEndsAt.toISOString() : data.trialEndsAt) : null,
         canManageCourses: data.canManageCourses,
-        // assignedProgramIds are managed on a separate page
+        whiteLabelEnabled: data.whiteLabelEnabled,
+        primaryColor: data.primaryColor?.trim() === '' ? null : data.primaryColor,
+        secondaryColor: data.secondaryColor?.trim() === '' ? null : data.secondaryColor,
+        accentColor: data.accentColor?.trim() === '' ? null : data.accentColor,
+        brandBackgroundColor: data.brandBackgroundColor?.trim() === '' ? null : data.brandBackgroundColor,
+        brandForegroundColor: data.brandForegroundColor?.trim() === '' ? null : data.brandForegroundColor,
       };
 
       const updatedCompany = await updateCompany(companyId, metadataToUpdate);
       if (updatedCompany) {
-        setCompany(updatedCompany); // Update local state
-        // Re-fetch company data to ensure everything is fresh, especially assignedProgramIds
+        setCompany(updatedCompany);
+        form.reset({
+            name: updatedCompany.name || '',
+            subdomainSlug: updatedCompany.subdomainSlug || '',
+            customDomain: updatedCompany.customDomain || '',
+            shortDescription: updatedCompany.shortDescription || '',
+            logoUrl: updatedCompany.logoUrl || '',
+            maxUsers: updatedCompany.maxUsers ?? null,
+            isTrial: updatedCompany.isTrial || false,
+            trialEndsAt: updatedCompany.trialEndsAt ? new Date(updatedCompany.trialEndsAt as string) : null,
+            canManageCourses: updatedCompany.canManageCourses || false,
+            whiteLabelEnabled: updatedCompany.whiteLabelEnabled || false,
+            primaryColor: updatedCompany.primaryColor || '',
+            secondaryColor: updatedCompany.secondaryColor || '',
+            accentColor: updatedCompany.accentColor || '',
+            brandBackgroundColor: updatedCompany.brandBackgroundColor || '',
+            brandForegroundColor: updatedCompany.brandForegroundColor || '',
+        });
         if (currentUser) {
-          await fetchCompanyData(currentUser);
+          fetchCompanyData(currentUser);
         }
         toast({ title: "Brand Updated", description: `"${updatedCompany.name}" updated successfully.` });
       } else {
@@ -254,7 +293,7 @@ export default function EditCompanyPage() {
         <Skeleton className="h-8 w-1/4 mb-6" />
         <Skeleton className="h-10 w-1/2 mb-8" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6"> <Skeleton className="h-96" /> <Skeleton className="h-64" /> <Skeleton className="h-64" /> <Skeleton className="h-64" /> </div>
+          <div className="lg:col-span-2 space-y-6"> <Skeleton className="h-96" /> <Skeleton className="h-64" /> <Skeleton className="h-64" /> </div>
           <div className="lg:col-span-1 space-y-6"> <Skeleton className="h-80" /> <Skeleton className="h-48" /> <Skeleton className="h-48" /> </div>
         </div>
       </div>
@@ -305,17 +344,44 @@ export default function EditCompanyPage() {
                   </FormItem>
                 </CardContent>
               </Card>
-
-              {/* White-Label Settings Placeholder */}
+              
+              {/* White-Label Settings Card */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings</CardTitle>
-                  <CardDescription>Customize the appearance for this brand. (Placeholder - to be implemented)</CardDescription>
+                  <CardDescription>Customize the appearance for this brand.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-muted-foreground italic">White-label settings UI will be implemented here.</p>
+                  {isMounted && currentUser?.role === 'Super Admin' && (
+                    <FormField
+                      control={form.control}
+                      name="whiteLabelEnabled"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm mb-4">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">Enable White-Labeling</FormLabel>
+                            <FormDescription>Allow this brand to use custom colors and branding. Logo is set above.</FormDescription>
+                          </div>
+                          <FormControl>
+                            <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                  {isMounted && whiteLabelEnabledValue && currentUser?.role === 'Super Admin' && (
+                    <div className="space-y-4 pl-2">
+                      <FormField control={form.control} name="primaryColor" render={({ field }) => (<FormItem><FormLabel>Primary Color (HEX)</FormLabel><FormControl><Input placeholder="#000000" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="secondaryColor" render={({ field }) => (<FormItem><FormLabel>Secondary Color (HEX)</FormLabel><FormControl><Input placeholder="#F1F5F9" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="accentColor" render={({ field }) => (<FormItem><FormLabel>Accent Color (HEX)</FormLabel><FormControl><Input placeholder="#3B82F6" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="brandBackgroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Background Color (HEX)</FormLabel><FormControl><Input placeholder="#FFFFFF" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="brandForegroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Foreground Color (HEX)</FormLabel><FormControl><Input placeholder="#030712" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                    </div>
+                  )}
+                  {(!isMounted || currentUser?.role !== 'Super Admin') && <p className="text-sm text-muted-foreground italic">White-label settings can only be managed by Super Admins.</p>}
                 </CardContent>
               </Card>
+
             </div>
 
             <div className="lg:col-span-1 space-y-6">
@@ -324,8 +390,33 @@ export default function EditCompanyPage() {
                 <CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> User &amp; Trial Settings</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem><FormLabel>Max Users</FormLabel><FormControl><Input type="number" min="1" placeholder="Leave blank for unlimited" {...field} value={field.value === null || field.value === undefined ? '' : String(field.value)} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
-                  {isMounted && currentUser?.role === 'Super Admin' && ( <FormField control={form.control} name="isTrial" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Is Trial Account?</FormLabel></div><FormControl><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></FormControl><FormMessage /></FormItem>)} /> )}
-                  {isMounted && currentUser?.role === 'Super Admin' && isTrialValue && ( <FormField control={form.control} name="trialEndsAt" render={({ field }) => ( <FormItem> <FormLabel className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Trial End Date</FormLabel> <FormControl><div><DatePickerWithPresets date={field.value} setDate={(date) => field.onChange(date)} /></div></FormControl> <FormMessage /> </FormItem> )} /> )}
+                  {isMounted && currentUser?.role === 'Super Admin' && (
+                    <FormField
+                      control={form.control}
+                      name="isTrial"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                          <div className="space-y-0.5"><FormLabel>Is Trial Account?</FormLabel></div>
+                          <FormControl><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                  {isMounted && isTrialValue && currentUser?.role === 'Super Admin' && (
+                    <FormField
+                      control={form.control}
+                      name="trialEndsAt"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Trial End Date</FormLabel>
+                          <FormControl>
+                            <div><DatePickerWithPresets date={field.value} setDate={field.onChange} /></div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                 </CardContent>
               </Card>
 
@@ -341,10 +432,9 @@ export default function EditCompanyPage() {
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                           <div className="space-y-0.5">
                             <FormLabel className="text-base">Enable Course Management</FormLabel>
-                            <CardDescription>Allow this brand's Admins/Owners to create and manage their own courses.</CardDescription>
+                            <FormDescription>Allow this brand's Admins/Owners to create and manage their own courses.</FormDescription>
                           </div>
                           <FormControl><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></FormControl>
-                          <FormMessage />
                         </FormItem>
                       )}
                     />
@@ -415,4 +505,4 @@ export default function EditCompanyPage() {
   );
 }
 
-
+    

@@ -1,17 +1,19 @@
 
 'use server';
 
-import type { CheckoutFormData } from '@/types/user';
+import type { CheckoutFormData, RevenueSharePartner } from '@/types/user';
 import { addCompany, updateCompany, createDefaultLocation } from '@/lib/company-data';
-import { addUser } from '@/lib/user-data';
+import { addUser, getUserByEmail } from '@/lib/user-data'; // Added getUserByEmail here for consistency
 import { addCustomerPurchaseRecord } from '@/lib/customer-data';
 import { getProgramById, getCourseById } from '@/lib/firestore-data';
 import { stripe } from '@/lib/stripe';
 import { initializeApp, deleteApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, Auth } from 'firebase/auth';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, doc, getDoc, deleteDoc } from 'firebase/firestore'; // Added doc, getDoc, deleteDoc
+import { db } from '@/lib/firebase'; // Added db import
 import type { CustomerPurchaseRecordFormData } from '@/types/customer';
 import type { Program } from '@/types/course';
+import type { CompanyFormData } from '@/types/user'; // Added CompanyFormData
 import { generateRandomPassword } from '@/lib/utils';
 import { sendNewUserWelcomeEmail } from '@/lib/email';
 
@@ -69,7 +71,9 @@ export async function processCheckout(data: CheckoutFormData): Promise<
     }
     const coursesToAssignToBrand = selectedProgram.courseIds || [];
 
-    const newCompanyData = {
+    console.log("[Server Action processCheckout] Selected Program ID for assignment:", data.selectedProgramId);
+
+    const newCompanyData: CompanyFormData = { // Ensure this matches CompanyFormData
         name: data.companyName,
         maxUsers: data.maxUsers ?? null,
         isTrial: false,
@@ -84,25 +88,23 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         brandForegroundColor: null,
         logoUrl: null,
         shortDescription: null,
-        subdomainSlug: null,
-        customDomain: null,
-        canManageCourses: false,
-        stripeCustomerId: null,
-        stripeSubscriptionId: null,
-        createdAt: Timestamp.now(),
-        parentBrandId: null,
-        createdByUserId: null, 
-        assignedProgramIds: [data.selectedProgramId], // Assign program ID at creation
+        subdomainSlug: null, // Will be set via edit page if needed
+        customDomain: null, // Will be set via edit page if needed
+        canManageCourses: false, // Default
+        stripeCustomerId: null, // Will be set later
+        stripeSubscriptionId: null, // Will be set later
+        parentBrandId: null, 
+        createdByUserId: null, // Or the Super Admin's ID if tracking this
+        assignedProgramIds: data.selectedProgramId ? [data.selectedProgramId] : [],
     };
+    console.log("[Server Action processCheckout] newCompanyData to be passed to addCompany:", JSON.stringify(newCompanyData, null, 2));
+
     const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
       throw new Error("Failed to create the brand in the database.");
     }
     newCompanyId = newCompany.id;
-    console.log(`[Server Action] Brand "${newCompany.name}" (Paid Program) created with ID: ${newCompany.id} and program ${data.selectedProgramId} assigned.`);
-
-    // Removed subsequent updateCompany call for assignedProgramIds as it's now handled during addCompany
-
+    console.log(`[Server Action] Brand "${newCompany.name}" (Paid Program) created with ID: ${newCompany.id} and initial programs assigned directly.`);
 
     const defaultLocation = await createDefaultLocation(newCompany.id);
     const defaultLocationId = defaultLocation ? [defaultLocation.id] : [];
@@ -115,10 +117,9 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         console.log(`[Server Action] Admin user created in Firebase Auth with UID: ${authUserUid} for email ${data.adminEmail} (Paid Program) using local auth instance`);
     } catch (authError: any) {
         console.error("[Server Action] Failed to create admin user in Firebase Auth (Paid Program):", authError);
-        // Attempt to clean up company if auth creation fails
         if (newCompanyId) {
-            console.warn(`[Server Action] Auth creation failed. Attempting to soft-delete company ${newCompanyId}`);
-            await deleteDoc(doc(db, 'companies', newCompanyId)); // Or a proper soft-delete if implemented
+            console.warn(`[Server Action] Auth creation failed. Attempting to soft-delete brand ${newCompanyId}`);
+            await deleteDoc(doc(db, 'companies', newCompanyId));
         }
         throw new Error(`AuthCreationError: ${authError.code || 'UnknownCode'} - ${authError.message || 'Failed to create user in authentication service.'}`);
     }
@@ -134,9 +135,8 @@ export async function processCheckout(data: CheckoutFormData): Promise<
     const newAdminUser = await addUser(newAdminUserData);
     if (!newAdminUser) {
       console.warn(`[Server Action] Firestore user creation failed for Auth UID ${authUserUid}. Manual Auth user cleanup might be needed.`);
-      // Attempt to clean up company & auth user if Firestore user creation fails
       if (newCompanyId) {
-            console.warn(`[Server Action] Firestore user creation failed. Attempting to soft-delete company ${newCompanyId}`);
+            console.warn(`[Server Action] Firestore user creation failed. Attempting to soft-delete brand ${newCompanyId}`);
             await deleteDoc(doc(db, 'companies', newCompanyId));
       }
       const authUserToDelete = getAuth(getApps().find(app => app.name === localAuthAppName) || undefined)?.currentUser;
@@ -177,7 +177,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
             } else {
                 console.log(`[Server Action] No Stripe Price ID found for first subscription tier of Program "${selectedProgram.title}", or Stripe Customer not created. Skipping Stripe Subscription creation.`);
             }
-
+            // Update the company with stripe customer and subscription IDs
             await updateCompany(newCompany.id, { stripeCustomerId, stripeSubscriptionId });
             console.log(`[Server Action] Brand ${newCompany.id} updated with Stripe Customer ID: ${stripeCustomerId} and Subscription ID: ${stripeSubscriptionId}`);
 
@@ -232,12 +232,9 @@ export async function processCheckout(data: CheckoutFormData): Promise<
   } catch (error: any) {
     console.error("[Server Action] Error during paid checkout processing (Program):", error);
     await cleanupFirebaseApp(localAuthAppName);
-    // Attempt to clean up brand if it was created and an error occurred later
     if (newCompanyId && !error.message?.includes('AuthCreationError') && !error.message?.includes('Firestore user creation failed')) {
-        // Only delete if the error wasn't due to auth/user creation where cleanup might have already run
         try {
             console.warn(`[Server Action] Cleaning up brand ${newCompanyId} due to error: ${error.message}`);
-            // You might want a soft delete function here instead of hard deleteDoc
             const companyDocRef = doc(db, 'companies', newCompanyId);
             const companyDoc = await getDoc(companyDocRef);
             if (companyDoc.exists()) {
@@ -275,7 +272,9 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
     trialEndsDate.setDate(trialEndsDate.getDate() + trialDurationDays);
     const trialEndsAtTimestamp = Timestamp.fromDate(trialEndsDate);
 
-    const newCompanyData = {
+    console.log("[Server Action processFreeTrialCheckout] Selected Program ID for assignment:", data.selectedProgramId);
+
+    const newCompanyData: CompanyFormData = { // Ensure this matches CompanyFormData
         name: data.companyName,
         maxUsers: data.maxUsers ?? null,
         isTrial: true,
@@ -295,19 +294,18 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
         canManageCourses: false,
         stripeCustomerId: null,
         stripeSubscriptionId: null,
-        createdAt: Timestamp.now(),
         parentBrandId: null,
         createdByUserId: null,
-        assignedProgramIds: [data.selectedProgramId], // Assign program ID at creation
+        assignedProgramIds: data.selectedProgramId ? [data.selectedProgramId] : [],
     };
+    console.log("[Server Action processFreeTrialCheckout] newCompanyData to be passed to addCompany:", JSON.stringify(newCompanyData, null, 2));
+
     const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
       throw new Error("Failed to create the trial brand in the database.");
     }
     newCompanyId = newCompany.id;
-    console.log(`[Server Action] Trial Brand "${newCompany.name}" created with ID: ${newCompany.id}, ends: ${trialEndsDate.toLocaleDateString()} and program ${data.selectedProgramId} assigned.`);
-
-    // Removed subsequent updateCompany call for assignedProgramIds
+    console.log(`[Server Action] Trial Brand "${newCompany.name}" created with ID: ${newCompany.id}, ends: ${trialEndsDate.toLocaleDateString()} and initial programs assigned directly.`);
 
     const defaultLocation = await createDefaultLocation(newCompany.id);
     const defaultLocationId = defaultLocation ? [defaultLocation.id] : [];
