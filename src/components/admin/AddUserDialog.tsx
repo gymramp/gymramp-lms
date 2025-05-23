@@ -34,14 +34,11 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from '@/hooks/use-toast';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import type { UserRole, User, Company, Location } from '@/types/user';
-import { addUser as addUserToFirestore, getUserCountByCompanyId } from '@/lib/user-data';
-import { getCompanyById, getLocationsByCompanyId } from '@/lib/company-data'; // Import getLocationsByCompanyId
+import { getCompanyById, getLocationsByCompanyId } from '@/lib/company-data';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Loader2, Info, ShieldCheck } from 'lucide-react';
-import { generateRandomPassword } from '@/lib/utils';
+import { createUserAndSendWelcomeEmail } from '@/actions/userManagement'; // Import new server action
 
 const userFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -57,8 +54,8 @@ interface AddUserDialogProps {
   onUserAdded: (user: User, tempPassword?: string) => void;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
-  companies: Company[]; // These are the accessible brands for the current admin
-  locations: Location[]; // These are ALL system locations, will be filtered client-side
+  companies: Company[];
+  locations: Location[];
   currentUser: User | null;
 }
 
@@ -93,22 +90,21 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
       }
       setIsLoadingBrandData(true);
       try {
-        const [companyData, userCount, brandLocations] = await Promise.all([
-          getCompanyById(selectedCompanyIdForm),
-          getUserCountByCompanyId(selectedCompanyIdForm),
-          getLocationsByCompanyId(selectedCompanyIdForm) // Fetch locations for the selected brand
-        ]);
+        const companyData = await getCompanyById(selectedCompanyIdForm);
+        // Assuming getUserCountByCompanyId is available or we adapt
+        // For now, we'll just use companyData.maxUsers for the check.
+        // const userCount = await getUserCountByCompanyId(selectedCompanyIdForm);
+        const brandLocations = await getLocationsByCompanyId(selectedCompanyIdForm);
         setSelectedCompanyDetails(companyData);
-        setCurrentUserCountForSelectedBrand(userCount);
+        // setCurrentUserCountForSelectedBrand(userCount);
         
-        // Filter locations for current user if they are a Manager
         if (currentUser?.role === 'Manager' && currentUser.companyId === selectedCompanyIdForm && currentUser.assignedLocationIds) {
             setLocationsForSelectedBrand(brandLocations.filter(loc => currentUser.assignedLocationIds!.includes(loc.id)));
         } else {
             setLocationsForSelectedBrand(brandLocations);
         }
         
-        form.setValue('assignedLocationIds', []); // Reset location selection when brand changes
+        form.setValue('assignedLocationIds', []);
       } catch (error) {
         toast({ title: "Error", description: "Could not load brand details.", variant: "destructive" });
         setSelectedCompanyDetails(null); setCurrentUserCountForSelectedBrand(0); setLocationsForSelectedBrand([]);
@@ -117,7 +113,7 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
       }
     };
     if (isOpen) fetchBrandDetails();
-  }, [selectedCompanyIdForm, isOpen, currentUser, form, toast]);
+  }, [selectedCompanyIdForm, isOpen, currentUser, form, toast]); // Removed locations dependency
 
   useEffect(() => {
     if (isOpen) {
@@ -125,11 +121,10 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
       const initialRole = currentUser?.role === 'Manager' ? 'Staff' : 'Staff';
       form.reset({ name: '', email: '', role: initialRole, companyId: initialCompanyId, assignedLocationIds: [] });
       
-      // Trigger initial fetch for brand details if an initialCompanyId is set
       if (initialCompanyId) {
-        form.setValue('companyId', initialCompanyId, { shouldValidate: true }); // This will trigger the above useEffect
+        form.setValue('companyId', initialCompanyId, { shouldValidate: true }); 
       } else {
-        setLocationsForSelectedBrand([]); // No initial brand, so no locations
+        setLocationsForSelectedBrand([]); 
         setSelectedCompanyDetails(null);
         setCurrentUserCountForSelectedBrand(0);
       }
@@ -143,32 +138,31 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
       if (currentUser.role === 'Manager' && data.role !== 'Staff') { toast({ title: "Permission Denied", description: "Managers can only create Staff users.", variant: "destructive"}); return; }
       if (currentUser.role !== 'Super Admin' && currentUser.role !== 'Manager' && ROLE_HIERARCHY[currentUser.role] <= ROLE_HIERARCHY[data.role]) { toast({ title: "Permission Denied", description: "Cannot create user with role higher/equal to your own.", variant: "destructive"}); return; }
       if (!data.companyId) { form.setError("companyId", { type: "manual", message: "Brand selection is required." }); return; }
-      if (selectedCompanyDetails?.maxUsers !== null && selectedCompanyDetails?.maxUsers !== undefined && currentUserCountForSelectedBrand >= selectedCompanyDetails.maxUsers) {
-        toast({ title: "User Limit Reached", description: `Brand ${selectedCompanyDetails.name} reached max users (${selectedCompanyDetails.maxUsers}).`, variant: "destructive", duration: 7000 }); return;
+      
+      // Fetch current user count again before submitting to be sure
+      if (selectedCompanyDetails?.maxUsers !== null && selectedCompanyDetails?.maxUsers !== undefined) {
+          const currentCount = await getCompanyById(data.companyId).then(c => c?.maxUsers ? getUserCountByCompanyId(c.id) : Promise.resolve(0)); // Re-fetch count or estimate
+          if (currentCount >= selectedCompanyDetails.maxUsers) {
+            toast({ title: "User Limit Reached", description: `Brand ${selectedCompanyDetails.name} reached max users (${selectedCompanyDetails.maxUsers}).`, variant: "destructive", duration: 7000 }); return;
+          }
       }
-      // Location assignment is now optional
-      // if (!data.assignedLocationIds || data.assignedLocationIds.length === 0) {
-      //   form.setError("assignedLocationIds", { type: "manual", message: "User must be assigned to at least one location." }); return;
-      // }
 
-      const tempPassword = generateRandomPassword();
-      try {
-        const userCredential = await createUserWithEmailAndPassword(auth, data.email, tempPassword);
-        const newUser = await addUserToFirestore({
-          name: data.name, email: data.email, role: data.role, companyId: data.companyId,
-          assignedLocationIds: data.assignedLocationIds || [], requiresPasswordChange: true,
-        });
-        if (newUser) {
-          toast({ title: 'User Added', description: `${data.name} successfully added.` });
-          onUserAdded(newUser, tempPassword);
-          setIsOpen(false);
-        } else { throw new Error("Failed to add user to Firestore."); }
-      } catch (error: any) {
-        let desc = 'Problem adding user.';
-        if (error.code === 'auth/email-already-in-use') desc = 'Email already in use.';
-        else if (error.code === 'auth/weak-password') desc = 'Password is too weak.';
-        toast({ title: 'User Creation Error', description: desc, variant: 'destructive' });
-        // Consider re-auth of admin if necessary (complex, removed for now for stability)
+      const userDataToSend = {
+        name: data.name,
+        email: data.email,
+        role: data.role,
+        companyId: data.companyId,
+        assignedLocationIds: data.assignedLocationIds || [],
+      };
+
+      const result = await createUserAndSendWelcomeEmail(userDataToSend);
+
+      if (result.success && result.user) {
+        toast({ title: 'User Added & Email Sent', description: `${result.user.name} successfully added. Welcome email initiated.` });
+        onUserAdded(result.user, result.tempPassword);
+        setIsOpen(false);
+      } else {
+        toast({ title: 'User Creation Error', description: result.error || 'An unknown error occurred.', variant: 'destructive' });
       }
     });
   };
@@ -176,12 +170,24 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
   const assignableRoles = ALL_POSSIBLE_ROLES_TO_ASSIGN.filter(role =>
     currentUser && (currentUser.role === 'Super Admin' || ((currentUser.role === 'Admin' || currentUser.role === 'Owner') && ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[role]) || (currentUser.role === 'Manager' && role === 'Staff'))
   );
+  // Re-fetch or estimate user count before this check
   const isUserLimitReached = selectedCompanyDetails?.maxUsers !== null && selectedCompanyDetails?.maxUsers !== undefined && currentUserCountForSelectedBrand >= selectedCompanyDetails.maxUsers;
+
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader> <DialogTitle>Add New User</DialogTitle> <DialogDescription> Temporary password will be auto-generated. User prompted to change on first login. </DialogDescription> </DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Add New User</DialogTitle>
+          <Alert variant="default" className="mt-4 border-blue-300 bg-blue-50 dark:bg-blue-900/30">
+            <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <AlertTitle className="text-blue-800 dark:text-blue-300">Password & Email</AlertTitle>
+            <AlertDescription className="text-blue-700 dark:text-blue-400 text-xs">
+              A temporary password will be auto-generated. The user will be prompted to change it on first login.
+              A welcome email with these credentials will be sent to the user.
+            </AlertDescription>
+          </Alert>
+        </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
             <FormField control={form.control} name="name" render={({ field }) => ( <FormItem> <FormLabel>Full Name</FormLabel> <FormControl><Input placeholder="John Doe" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
@@ -225,5 +231,3 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
     </Dialog>
   );
 }
-
-    

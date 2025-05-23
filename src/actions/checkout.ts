@@ -12,7 +12,8 @@ import { getAuth, createUserWithEmailAndPassword, Auth } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
 import type { CustomerPurchaseRecordFormData } from '@/types/customer';
 import type { Program } from '@/types/course';
-import { generateRandomPassword } from '@/lib/utils'; // Import password generator
+import { generateRandomPassword } from '@/lib/utils';
+import { sendNewUserWelcomeEmail } from '@/lib/email'; // Import email function
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -59,7 +60,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
   let localAuthInstance: Auth | undefined;
   let newCompanyId: string | undefined;
   let newAdminUserId: string | undefined;
-  const tempPassword = generateRandomPassword(); // Generate password
+  const tempPassword = generateRandomPassword();
 
   try {
     const selectedProgram: Program | null = await getProgramById(data.selectedProgramId);
@@ -80,11 +81,18 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         primaryColor: null,
         secondaryColor: null,
         accentColor: null,
+        brandBackgroundColor: null,
+        brandForegroundColor: null,
         logoUrl: null,
         shortDescription: null,
-        createdAt: Timestamp.now(),
+        subdomainSlug: null,
+        customDomain: null,
+        canManageCourses: false,
         stripeCustomerId: null,
         stripeSubscriptionId: null,
+        createdAt: Timestamp.now(),
+        parentBrandId: null,
+        createdByUserId: null,
     };
     const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
@@ -113,7 +121,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         role: 'Admin' as const,
         companyId: newCompany.id,
         assignedLocationIds: defaultLocationId,
-        requiresPasswordChange: true, // Mark for password change
+        requiresPasswordChange: true,
     };
     const newAdminUser = await addUser(newAdminUserData);
     if (!newAdminUser) {
@@ -145,7 +153,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
                 const subscription = await stripe.subscriptions.create({
                     customer: stripeCustomerId,
                     items: [{ price: selectedProgram.stripeFirstPriceId }],
-                    trial_period_days: 30,
+                    trial_period_days: 30, // Placeholder trial
                 });
                 stripeSubscriptionId = subscription.id;
                 console.log(`[Server Action] Stripe Subscription created with ID: ${stripeSubscriptionId}`);
@@ -158,6 +166,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
 
         } catch (stripeError: any) {
             console.error("[Server Action] Error creating Stripe Customer/Subscription or updating Brand:", stripeError);
+            // Don't fail the whole checkout if Stripe part fails, just log it.
         }
     }
 
@@ -194,6 +203,15 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         console.log(`[Server Action] Customer purchase record created with ID: ${customerPurchaseRecord.id}`);
     }
 
+    // Send welcome email
+    try {
+        await sendNewUserWelcomeEmail(newAdminUser.email, newAdminUser.name, tempPassword);
+        console.log(`[Server Action] Welcome email sent to ${newAdminUser.email}`);
+    } catch (emailError) {
+        console.error(`[Server Action] Failed to send welcome email to ${newAdminUser.email}:`, emailError);
+        // Do not fail the entire checkout for email sending failure
+    }
+
     await cleanupFirebaseApp(localAuthAppName);
     return { success: true, companyId: newCompany.id, adminUserId: newAdminUser.id, customerPurchaseId: customerPurchaseRecord?.id, tempPassword };
 
@@ -212,7 +230,7 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
 
   const localAuthAppName = `freeTrialAuthApp-${Date.now()}`;
   let localAuthInstance: Auth | undefined;
-  const tempPassword = generateRandomPassword(); // Generate password
+  const tempPassword = generateRandomPassword();
 
   try {
     const selectedProgram: Program | null = await getProgramById(data.selectedProgramId);
@@ -238,11 +256,18 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
         primaryColor: null,
         secondaryColor: null,
         accentColor: null,
+        brandBackgroundColor: null,
+        brandForegroundColor: null,
         logoUrl: null,
         shortDescription: null,
-        createdAt: Timestamp.now(),
+        subdomainSlug: null,
+        customDomain: null,
+        canManageCourses: false,
         stripeCustomerId: null,
         stripeSubscriptionId: null,
+        createdAt: Timestamp.now(),
+        parentBrandId: null,
+        createdByUserId: null,
     };
     const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
@@ -270,7 +295,7 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
         role: 'Admin' as const,
         companyId: newCompany.id,
         assignedLocationIds: defaultLocationId,
-        requiresPasswordChange: true, // Mark for password change
+        requiresPasswordChange: true,
     };
     const newAdminUser = await addUser(newAdminUserData);
     if (!newAdminUser) {
@@ -278,6 +303,14 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
       throw new Error("Failed to create the trial admin user account in Firestore.");
     }
     console.log(`[Server Action] Trial Admin user "${newAdminUser.name}" created in Firestore`);
+
+    // Send welcome email
+    try {
+        await sendNewUserWelcomeEmail(newAdminUser.email, newAdminUser.name, tempPassword);
+        console.log(`[Server Action] Welcome email sent to trial user ${newAdminUser.email}`);
+    } catch (emailError) {
+        console.error(`[Server Action] Failed to send welcome email to trial user ${newAdminUser.email}:`, emailError);
+    }
 
     await cleanupFirebaseApp(localAuthAppName);
     return { success: true, companyId: newCompany.id, adminUserId: newAdminUser.id, tempPassword };
@@ -288,5 +321,3 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
     return { success: false, error: error.message || "An unexpected error occurred during free trial checkout." };
   }
 }
-
-    
