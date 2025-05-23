@@ -21,14 +21,14 @@ export interface NavItemType {
 
 export async function getNavigationStructure(user: User | null): Promise<NavItemType[]> {
   const baseItems: NavItemType[] = [];
-  if (!user) return baseItems;
+  if (!user) return baseItems; // No nav items if no user
 
   let userCompany: Company | null = null;
   if (user.companyId) {
       try {
           userCompany = await getCompanyById(user.companyId);
       } catch (error) {
-          console.error("Error fetching company details for nav config:", error);
+          console.error("[nav-config] Error fetching company details for nav:", error);
       }
   }
 
@@ -65,13 +65,14 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
   } else if (user.role === 'Admin' || user.role === 'Owner') {
     roleSpecificItems.push(
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { href: '/admin/users', label: 'Users', icon: Users },
+      { href: '/admin/companies', label: 'Brands', icon: Building, requiresCompanyId: true }, // Added Brands link here
+      { href: '/admin/users', label: 'Users', icon: Users, requiresCompanyId: true },
       { href: `/admin/companies/${user.companyId}/locations`, label: 'Locations', icon: MapPin, requiresCompanyId: true },
       {
         label: 'Brand Content',
         isDropdown: true,
         icon: Package,
-        requiresCanManageCourses: true,
+        requiresCanManageCourses: true, // This implies requiresCompanyId is also true
         subItems: [
             { href: '/brand-admin/courses', label: "My Brand's Courses", icon: BookOpen },
             { href: '/brand-admin/lessons', label: "My Brand's Lessons", icon: FileText },
@@ -79,22 +80,23 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
         ]
       },
       { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },
-      { href: '/certificates', label: 'My Certificates', icon: Award }, // Added here
+      { href: '/certificates', label: 'My Certificates', icon: Award },
     );
   } else if (user.role === 'Manager') {
     roleSpecificItems.push(
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { href: '/admin/users', label: 'Users', icon: Users },
+      { href: '/admin/users', label: 'Users', icon: Users, requiresCompanyId: true },
       { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },
-      { href: '/certificates', label: 'My Certificates', icon: Award }, // Added here
+      { href: '/certificates', label: 'My Certificates', icon: Award },
     );
   } else if (user.role === 'Staff') {
     roleSpecificItems.push(
       { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },
-      { href: '/certificates', label: 'My Certificates', icon: Award }, // Added here
+      { href: '/certificates', label: 'My Certificates', icon: Award },
     );
   }
 
+  // Filter items based on conditions like requiresCompanyId or requiresCanManageCourses
   const filteredRoleSpecificItems = roleSpecificItems.filter(item => {
     if (item.requiresCompanyId && !user.companyId) {
       return false;
@@ -126,29 +128,29 @@ export function getUserDropdownItems(user: User | null): NavItemType[] {
 
     if (user.role === 'Super Admin') {
         items.push(
-            { href: '/admin/dashboard', label: 'Super Admin Dashboard', icon: BarChartBig },
+            // Dashboard link is already main nav
             { href: '/admin/settings', label: 'Settings', icon: Cog }
         );
     } else if (user.role === 'Admin' || user.role === 'Owner') {
         items.push(
-            { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }
+            // Dashboard link is already main nav
         );
          if (user.companyId) {
-            items.push({ href: `/admin/companies/${user.companyId}/locations`, label: 'Manage Locations', icon: MapPin, requiresCompanyId: true });
+            // Locations link is already main nav
+            // Brands link is already main nav
         }
     } else if (user.role === 'Manager') {
-         items.push(
-            { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }
-         );
+         // Dashboard link is already main nav
     }
 
     items.push({ href: '/certificates', label: 'My Certificates', icon: Award });
     items.push({ href: '/site-help', label: 'Site Help', icon: HelpCircle });
 
     return items.filter(item => {
-        if (item.requiresCompanyId) {
-            return !!user.companyId;
-        }
+        // Redundant check, requiresCompanyId not used in user dropdown items currently
+        // if (item.requiresCompanyId) {
+        //     return !!user.companyId;
+        // }
         return true;
     });
 }
