@@ -21,7 +21,7 @@ import {
 } from 'firebase/firestore';
 import type { User, UserFormData, UserRole, UserCourseProgressData, Company } from '@/types/user';
 import { auth } from './firebase';
-import { createDefaultCompany, getCompanyById as getCompanyDataById, getCompanyBySubdomainSlug } from './company-data'; // Renamed import
+import { createDefaultCompany, getCompanyById as getCompanyDataById, getCompanyBySubdomainSlug, getCompanyByCustomDomain } from './company-data'; // Renamed import
 import { getCourseById } from './firestore-data';
 import { getBrandCourseById } from './brand-content-data'; // Import for brand courses
 import type { Course, BrandCourse } from '@/types/course'; // Import BrandCourse type
@@ -639,26 +639,35 @@ export const updateUserVideoProgress = async (
 
 
 export async function getUserCompany(identifier: string | null): Promise<Company | null> {
-  console.warn(
-    "[getUserCompany] in user-data.ts is called. For RootLayout theming, this function relies on `identifier` (hostname/slug) being passed correctly from a server context. It will attempt to find a brand by customDomain or subdomainSlug."
-  );
+  console.log(`[getUserCompany] Attempting to find brand with identifier: "${identifier}"`);
   if (!identifier) {
+    console.log("[getUserCompany] Identifier is null, returning null.");
     return null;
   }
   try {
-    let company = await getCompanyDataById(identifier); 
-    if (company && company.customDomain === identifier) {
+    // Attempt to find by customDomain first
+    let company = await getCompanyByCustomDomain(identifier);
+    if (company) {
       console.log(`[getUserCompany] Found brand by customDomain "${identifier}": ${company.name}`);
       return company;
     }
+    console.log(`[getUserCompany] No brand found by customDomain "${identifier}".`);
 
-    const slug = identifier.includes('.') ? identifier.split('.')[0] : identifier; 
-    if (slug && slug !== 'www' && slug !== 'localhost' && !slug.startsWith('gymramp-lms')) { 
-        company = await getCompanyBySubdomainSlug(slug);
-        if (company) {
-        console.log(`[getUserCompany] Found brand by subdomainSlug "${slug}" (from host "${identifier}"): ${company.name}`);
+    // If not found by customDomain, try by subdomainSlug
+    // A simple way to extract a potential slug if identifier is a full hostname
+    const slug = identifier.includes('.') ? identifier.split('.')[0] : identifier;
+    // Add more robust slug extraction if needed, e.g., based on your primary app domain
+    // This basic check avoids trying to use "www" or "localhost" as a slug
+    if (slug && slug !== 'www' && slug !== 'localhost' && !slug.startsWith('gymramp-lms')) { // Added !slug.startsWith('gymramp-lms')
+      console.log(`[getUserCompany] Attempting to find brand by potential subdomainSlug: "${slug}" (derived from identifier "${identifier}")`);
+      company = await getCompanyBySubdomainSlug(slug);
+      if (company) {
+        console.log(`[getUserCompany] Found brand by subdomainSlug "${slug}": ${company.name}`);
         return company;
-        }
+      }
+      console.log(`[getUserCompany] No brand found by subdomainSlug "${slug}".`);
+    } else {
+        console.log(`[getUserCompany] Identifier "${identifier}" does not appear to be a processable subdomain slug.`);
     }
     
     console.log(`[getUserCompany] No brand found for identifier "${identifier}" as custom domain or subdomain slug.`);

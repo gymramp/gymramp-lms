@@ -51,30 +51,35 @@ export function Navbar({ brandLogoUrl, brandName }: NavbarProps) {
 
   const fetchNavAndUserData = useCallback(async (firebaseUser: import('firebase/auth').User | null) => {
     setIsLoadingNav(true);
+    console.log('[Navbar] Fetching nav and user data. Firebase user:', firebaseUser?.email);
     if (firebaseUser && firebaseUser.email) {
       try {
         const userDetails = await getUserByEmail(firebaseUser.email);
         setCurrentUser(userDetails);
+        console.log('[Navbar] User details fetched:', userDetails ? {name: userDetails.name, role: userDetails.role} : null);
         if (userDetails) {
           const mainNav = await getNavigationStructure(userDetails);
           const userNav = await getUserDropdownItems(userDetails);
           setNavItems(mainNav);
           setUserMenuItems(userNav);
+           console.log('[Navbar] Main nav items set:', mainNav.length, 'User menu items set:', userNav.length);
         } else {
           setNavItems([]);
           setUserMenuItems([]);
+          console.log('[Navbar] No user details found, nav items cleared.');
         }
       } catch (error) {
-        console.error("Error fetching user data for Navbar:", error);
+        console.error("[Navbar] Error fetching user data for Navbar:", error);
         setCurrentUser(null);
         setNavItems([]);
         setUserMenuItems([]);
       }
     } else {
       setCurrentUser(null);
-      const publicNav = await getNavigationStructure(null); // Get public nav items if any
+      const publicNav = await getNavigationStructure(null); 
       setNavItems(publicNav);
-      setUserMenuItems([]); // No user items if not logged in
+      setUserMenuItems([]); 
+      console.log('[Navbar] No Firebase user, public nav items set:', publicNav.length);
     }
     setIsLoadingNav(false);
   }, []);
@@ -90,13 +95,12 @@ export function Navbar({ brandLogoUrl, brandName }: NavbarProps) {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      // No need to manually set currentUser to null, onAuthStateChanged will handle it
       if (typeof window !== 'undefined') {
           localStorage.removeItem('isLoggedIn');
           localStorage.removeItem('userEmail');
       }
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
-      router.push('/'); // Redirect to login page
+      router.push('/'); 
     } catch (error) {
       console.error("Logout failed:", error);
       toast({ title: "Logout Failed", description: "Could not log you out.", variant: "destructive" });
@@ -134,6 +138,8 @@ export function Navbar({ brandLogoUrl, brandName }: NavbarProps) {
   
   const displayLogoUrl = brandLogoUrl || "/images/newlogo.png";
   const displayLogoAlt = brandName ? `${brandName} Logo` : "GYMRAMP Logo";
+  console.log('[Navbar] Rendering Navbar. BrandLogoUrl prop:', brandLogoUrl, 'Displaying logo:', displayLogoUrl);
+
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -214,7 +220,7 @@ export function Navbar({ brandLogoUrl, brandName }: NavbarProps) {
                     width={150}
                     height={45}
                     priority
-                    className="max-h-[30px] object-contain" // Ensure logo fits nicely
+                    className="max-h-[30px] object-contain" 
                     onError={(e) => { (e.target as HTMLImageElement).src = '/images/newlogo.png'; }}
                 />
             </Link>
@@ -278,7 +284,7 @@ export function Navbar({ brandLogoUrl, brandName }: NavbarProps) {
                           <Link href="/contact">Schedule A Call</Link>
                         </Button>
                      </>
-                 ) : null /* Handles the case where isMounted is true but still loading nav, or no user */
+                 ) : null 
                 }
             </div>
         </div>
