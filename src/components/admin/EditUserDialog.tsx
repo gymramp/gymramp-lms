@@ -38,7 +38,7 @@ import type { UserRole, User, Company, Location } from '@/types/user';
 import { updateUser as updateFirestoreUser } from '@/lib/user-data';
 import { cn } from '@/lib/utils';
 import { AlertCircle, Loader2, KeyRound } from 'lucide-react';
-import { getLocationsByCompanyId } from '@/lib/company-data'; // For fetching locations
+import { getLocationsByCompanyId } from '@/lib/company-data';
 
 const ROLE_HIERARCHY: Record<UserRole, number> = {
   'Super Admin': 5, 'Admin': 4, 'Owner': 3, 'Manager': 2, 'Staff': 1,
@@ -54,10 +54,7 @@ const editUserFormSchema = z.object({
     message: "New password must be at least 6 characters if provided.",
   }),
 }).refine(data => {
-    // Location assignment is now optional, so remove this specific cross-field validation if roles other than Super Admin don't require a location when a company is selected.
-    // For simplicity, let's assume locations are optional for all roles when a company IS selected, but a company itself is required for non-SuperAdmins.
-    // The main check for non-SuperAdmins needing a companyId is handled by the companyId field itself.
-    if (data.role !== 'Super Admin' && !data.companyId) return false; // Non-Super Admins must have a brand
+    if (data.role !== 'Super Admin' && !data.companyId) return false;
     return true;
 }, {
     message: "Non-Super Admin users must be assigned to a brand.",
@@ -73,8 +70,8 @@ interface EditUserDialogProps {
   user: User;
   onUserUpdated: (user: User) => void;
   currentUser: User;
-  companies: Company[]; // Accessible brands for the current admin
-  locations: Location[]; // ALL system locations (will be filtered client-side in dialog)
+  companies: Company[];
+  locations: Location[];
 }
 
 export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, currentUser, companies = [], locations = [] }: EditUserDialogProps) {
@@ -100,7 +97,6 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
         newTemporaryPassword: '',
       });
 
-      // Initialize locations based on the user's current companyId
       const initialCompanyId = user.companyId;
       if (initialCompanyId) {
         let filtered: Location[] = [];
@@ -116,25 +112,20 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
     }
   }, [user, form, isOpen, locations, currentUser]);
 
-  // Effect to update available locations when selectedCompanyIdInDialog changes
   useEffect(() => {
     if (isOpen) {
       if (selectedCompanyIdInDialog) {
         let filtered: Location[] = [];
-         if (currentUser?.role === 'Super Admin' || ((currentUser?.role === 'Admin' || currentUser?.role === 'Owner') && currentUser.companyId === selectedCompanyIdInDialog) || companies.some(c => c.id === selectedCompanyIdInDialog && c.parentBrandId === currentUser.companyId)) {
-            // Super Admin, or Admin/Owner viewing their own brand or a child brand's user
+         if (currentUser?.role === 'Super Admin' || ((currentUser?.role === 'Admin' || currentUser?.role === 'Owner') && (currentUser.companyId === selectedCompanyIdInDialog || companies.some(c => c.id === selectedCompanyIdInDialog && c.parentBrandId === currentUser.companyId)))) {
             filtered = locations.filter(loc => loc.companyId === selectedCompanyIdInDialog);
         } else if (currentUser?.role === 'Manager' && currentUser.companyId === selectedCompanyIdInDialog) {
-            // Manager viewing user within their own brand
             filtered = locations.filter(loc => loc.companyId === selectedCompanyIdInDialog && (currentUser.assignedLocationIds || []).includes(loc.id));
         }
         setLocationsForSelectedBrandInDialog(filtered);
-        // Keep existing assigned locations if they are valid for the new brand, otherwise clear
         const currentAssigned = form.getValues('assignedLocationIds') || [];
         const validAssigned = currentAssigned.filter(locId => filtered.some(filteredLoc => filteredLoc.id === locId));
         form.setValue('assignedLocationIds', validAssigned, { shouldValidate: true });
-
-      } else { // No company selected (only possible for Super Admin role editing another Super Admin)
+      } else {
         setLocationsForSelectedBrandInDialog([]);
         form.setValue('assignedLocationIds', []);
       }
@@ -144,7 +135,7 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
   const canEditRole = currentUser && user && currentUser.id !== user.id && !isTargetUserSuperAdmin &&
     (currentUser.role === 'Super Admin' || (currentUser.companyId && (user.companyId === currentUser.companyId || companies.find(c => c.id === user.companyId)?.parentBrandId === currentUser.companyId) && ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[user.role] && !(currentUser.role === 'Manager' && user.role !== 'Staff')));
   const isRoleSelectDisabled = !canEditRole;
-  const isCompanySelectDisabled = !currentUser || currentUser.role !== 'Super Admin' || user.role === 'Super Admin'; // SA cannot have company changed
+  const isCompanySelectDisabled = !currentUser || currentUser.role !== 'Super Admin' || user.role === 'Super Admin';
   const canSetPassword = currentUser && currentUser.role === 'Super Admin' && currentUser.id !== user.id && !isTargetUserSuperAdmin;
 
   const onSubmit = async (data: EditUserFormValues) => {
@@ -152,19 +143,14 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
       if (data.role !== user.role && isRoleSelectDisabled) { toast({ title: "Permission Denied", description: "Cannot change this user's role.", variant: "destructive" }); return; }
       if (data.companyId !== user.companyId && isCompanySelectDisabled) { toast({ title: "Permission Denied", description: "Only Super Admins can change brand for non-Super Admins.", variant: "destructive" }); return; }
       if (currentUser?.role === 'Manager' && user.role === 'Staff' && data.role !== 'Staff') { toast({ title: "Permission Denied", description: "Managers can only edit Staff users, role cannot be changed.", variant: "destructive" }); return; }
-      // Location assignment is optional now, so specific validation if company is selected but no locations might be needed if required by business logic
-      // if (data.companyId && data.role !== 'Super Admin' && (!data.assignedLocationIds || data.assignedLocationIds.length === 0)) {
-      //   form.setError("assignedLocationIds", { type: "manual", message: "User must be assigned to at least one location if a brand is selected." }); return;
-      // }
       if (data.role !== 'Super Admin' && !data.companyId) {
           form.setError("companyId", {type: "manual", message: "Non-Super Admin users must be assigned to a brand."}); return;
       }
 
-
       try {
         const updateData: Partial<User> = {
             name: data.name, role: data.role,
-            companyId: data.role === 'Super Admin' ? '' : (data.companyId || ''), // Super Admins have no company
+            companyId: data.role === 'Super Admin' ? null : (data.companyId || null),
             assignedLocationIds: (data.role === 'Super Admin' || !data.companyId) ? [] : (data.assignedLocationIds || []),
         };
         let passwordMessage = "";
@@ -201,13 +187,14 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
         <DialogHeader> <DialogTitle>Edit User: {user.name}</DialogTitle> <DialogDescription> Update user info. Role/Brand changes require specific permissions. </DialogDescription> </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
-            <FormField control={form.control} name="name" render={({ field }) => ( <FormItem> <FormLabel>Full Name</FormLabel> <FormControl><Input placeholder="John Doe" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+            <FormField control={form.control} name="name" render={({ field }) => ( <FormItem> <FormLabel>Full Name</FormLabel> <FormControl><Input placeholder="John Doe" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} />
             <FormItem> <FormLabel>Email Address</FormLabel> <FormControl><Input type="email" value={user.email} disabled className="opacity-60" /></FormControl> </FormItem>
+            
             <FormField control={form.control} name="companyId" render={({ field }) => (
               <FormItem> <FormLabel>Brand</FormLabel>
                 {user.role !== 'Super Admin' && !field.value && currentUser?.role === 'Super Admin' && ( <div className="text-sm text-muted-foreground p-2 border rounded-md flex items-center gap-2 h-10"> <AlertCircle className="h-4 w-4 text-yellow-500" /> Assign a brand. </div> )}
                 <Select onValueChange={(value) => field.onChange(value === 'no-company' || value === 'placeholder-company' ? null : value)} value={field.value || 'placeholder-company'} disabled={isCompanySelectDisabled}>
-                  <FormControl><SelectTrigger><SelectValue placeholder={user.role === 'Super Admin' ? "No Brand (Super Admin)" : "Select a brand"} /></SelectTrigger></FormControl>
+                  <FormControl><div><SelectTrigger><SelectValue placeholder={user.role === 'Super Admin' ? "No Brand (Super Admin)" : "Select a brand"} /></SelectTrigger></div></FormControl>
                   <SelectContent> <SelectItem value="placeholder-company" disabled>Select a brand...</SelectItem>
                     {currentUser?.role === 'Super Admin' && <SelectItem value="no-company">No Brand Assigned</SelectItem>}
                     {companies.map((c) => ( <SelectItem key={c.id} value={c.id}>{c.name} {c.parentBrandId ? "(Child)" : ""}</SelectItem> ))}
@@ -217,17 +204,23 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
                 {user.role === 'Super Admin' && <p className="text-xs text-muted-foreground pt-1">Super Admins are not assigned to a brand.</p>}
                 <FormMessage />
               </FormItem> )} />
+
             <FormField control={form.control} name="assignedLocationIds" render={() => (
               <FormItem> <FormLabel>Assigned Locations (Optional)</FormLabel>
-                <FormControl> <ScrollArea className="h-40 w-full rounded-md border p-4">
-                    {selectedCompanyIdInDialog && locationsForSelectedBrandInDialog.length > 0 ? ( <div className="space-y-2"> {locationsForSelectedBrandInDialog.map((loc) => ( <FormItem key={loc.id} className="flex flex-row items-start space-x-3 space-y-0"> <FormControl><Checkbox checked={form.getValues('assignedLocationIds')?.includes(loc.id)} onCheckedChange={c => { const current = form.getValues('assignedLocationIds') || []; const newVals = c ? [...current, loc.id] : current.filter(v => v !== loc.id); form.setValue('assignedLocationIds', newVals, { shouldValidate: true }); }} id={`edit-loc-${loc.id}`} /></FormControl> <FormLabel htmlFor={`edit-loc-${loc.id}`} className="font-normal">{loc.name}</FormLabel> </FormItem> ))} </div>
-                    ) : ( <div className="text-sm text-muted-foreground italic flex items-center justify-center h-full"> {selectedCompanyIdInDialog ? 'No locations for this brand or your access.' : (user.role !== 'Super Admin' ? 'Select a brand to assign locations.' : 'Super Admins are not assigned to locations.')} </div> )}
-                </ScrollArea> </FormControl> <FormMessage />
+                <FormControl>
+                  <div>
+                    <ScrollArea className="h-40 w-full rounded-md border p-4">
+                        {selectedCompanyIdInDialog && locationsForSelectedBrandInDialog.length > 0 ? ( <div className="space-y-2"> {locationsForSelectedBrandInDialog.map((loc) => ( <FormItem key={loc.id} className="flex flex-row items-start space-x-3 space-y-0"> <FormControl><Checkbox checked={form.getValues('assignedLocationIds')?.includes(loc.id)} onCheckedChange={c => { const current = form.getValues('assignedLocationIds') || []; const newVals = c ? [...current, loc.id] : current.filter(v => v !== loc.id); form.setValue('assignedLocationIds', newVals, { shouldValidate: true }); }} id={`edit-loc-${loc.id}`} /></FormControl> <FormLabel htmlFor={`edit-loc-${loc.id}`} className="font-normal">{loc.name}</FormLabel> </FormItem> ))} </div>
+                        ) : ( <div className="text-sm text-muted-foreground italic flex items-center justify-center h-full"> {selectedCompanyIdInDialog ? 'No locations for this brand or your access.' : (user.role !== 'Super Admin' ? 'Select a brand to assign locations.' : 'Super Admins are not assigned to locations.')} </div> )}
+                    </ScrollArea>
+                  </div>
+                </FormControl> <FormMessage />
               </FormItem> )} />
+
             <FormField control={form.control} name="role" render={({ field }) => (
               <FormItem> <FormLabel>User Role</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value} disabled={isRoleSelectDisabled}>
-                  <FormControl><SelectTrigger><SelectValue placeholder="Select a user role" /></SelectTrigger></FormControl>
+                  <FormControl><div><SelectTrigger><SelectValue placeholder="Select a user role" /></SelectTrigger></div></FormControl>
                   <SelectContent> <SelectItem value={user.role} disabled={!assignableRolesForDropdown.includes(user.role) && user.role !== field.value && user.role !== 'Super Admin'}>{user.role} {user.role === 'Super Admin' ? '(Cannot Change)' : ''}</SelectItem>
                     {assignableRolesForDropdown.filter(r => r !== user.role).map(r => ( <SelectItem key={r} value={r}>{r}</SelectItem> ))}
                     {ALL_POSSIBLE_ROLES_TO_ASSIGN.filter(r => r !== user.role && !assignableRolesForDropdown.includes(r) && r !== 'Super Admin').map(r => ( <SelectItem key={r} value={r} disabled>{r} (Permission Denied)</SelectItem> ))}
@@ -237,7 +230,9 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
                 {isTargetUserSuperAdmin && <p className="text-xs text-muted-foreground pt-1">Super Admin role cannot be changed.</p>}
                 <FormMessage />
               </FormItem> )} />
-            {canSetPassword && ( <FormField control={form.control} name="newTemporaryPassword" render={({ field }) => ( <FormItem className="pt-2 border-t mt-6"> <FormLabel className="text-base font-semibold flex items-center gap-2"><KeyRound className="h-4 w-4 text-orange-500" />Set New Temporary Password</FormLabel> <FormControl><Input type="text" placeholder="Leave blank to keep current password" {...field} /></FormControl> <p className="text-xs text-muted-foreground"> User will be forced to change on next login if set. </p> <FormMessage /> </FormItem> )} /> )}
+
+            {canSetPassword && ( <FormField control={form.control} name="newTemporaryPassword" render={({ field }) => ( <FormItem className="pt-2 border-t mt-6"> <FormLabel className="text-base font-semibold flex items-center gap-2"><KeyRound className="h-4 w-4 text-orange-500" />Set New Temporary Password</FormLabel> <FormControl><Input type="text" placeholder="Leave blank to keep current password" {...field} value={field.value ?? ''} /></FormControl> <p className="text-xs text-muted-foreground"> User will be forced to change on next login if set. </p> <FormMessage /> </FormItem> )} /> )}
+            
             <DialogFooter> <DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button></DialogClose> <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isPending}> {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} {isPending ? 'Saving...' : 'Save Changes'} </Button> </DialogFooter>
           </form>
         </Form>
@@ -245,5 +240,3 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
     </Dialog>
   );
 }
-
-    
