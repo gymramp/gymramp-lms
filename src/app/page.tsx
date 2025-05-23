@@ -23,46 +23,81 @@ import { getCompanyById, getCompanyBySubdomainSlug } from '@/lib/company-data';
 import { getUserByEmail } from '@/lib/user-data';
 import { Loader2 } from "lucide-react";
 import { Timestamp } from "firebase/firestore";
+import type { Company } from '@/types/user';
 
 // Interface for conceptual brand props
 interface LoginPageProps {
-  brandName?: string | null;
-  brandLogoUrl?: string | null;
+  initialBrandName?: string | null;
+  initialBrandLogoUrl?: string | null;
 }
 
 // Main component logic
-function LoginPageContent({ brandName: initialBrandName, brandLogoUrl: initialBrandLogoUrl }: LoginPageProps) {
+function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPageProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [displayBrandName, setDisplayBrandName] = useState(initialBrandName || "GYMRAMP");
-  const [displayBrandLogoUrl, setDisplayBrandLogoUrl] = useState(initialBrandLogoUrl || "/images/newlogo.png");
+  const [displayBrandName, setDisplayBrandName] = useState(initialBrandName || "Gymramp");
+  const [displayBrandLogoUrl, setDisplayBrandLogoUrl] = useState(initialBrandLogoUrl || "/images/gymramp-logo.png");
   const { toast } = useToast();
   const router = useRouter();
-  const [isClientLoadingBrand, setIsClientLoadingBrand] = useState(true);
+  const [isClientLoadingBrand, setIsClientLoadingBrand] = useState(true); // To show loader only on client
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && !initialBrandName) {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !initialBrandName && isMounted) {
       const hostnameParts = window.location.hostname.split('.');
-      if (hostnameParts.length > 2 && hostnameParts[0] !== 'www' && hostnameParts[0] !== 'localhost' && !hostnameParts[0].startsWith('gymramp-lms')) {
-        const slug = hostnameParts[0];
+      let potentialSlug: string | null = null;
+
+      if (hostnameParts[0] === 'localhost' || hostnameParts.join('.').startsWith(process.env.NEXT_PUBLIC_APP_URL?.replace(/^https?:\/\//, '') || 'learn.gymramp.com')) {
+        // This handles localhost or the main app URL, no specific brand slug
+        potentialSlug = null;
+      } else if (hostnameParts.length > 1 && hostnameParts[0] !== 'www') {
+        // Assuming [slug].yourdomain.com or [slug].localhost
+         potentialSlug = hostnameParts[0];
+      }
+
+
+      if (potentialSlug) {
         setIsClientLoadingBrand(true);
-        getCompanyBySubdomainSlug(slug).then(company => {
+        console.log(`[Login Page] Detected potential slug: ${potentialSlug}, fetching brand...`);
+        getCompanyBySubdomainSlug(potentialSlug).then(company => {
           if (company) {
+            console.log(`[Login Page] Brand found by slug ${potentialSlug}: ${company.name}`);
             setDisplayBrandName(company.name);
             if (company.logoUrl) {
               setDisplayBrandLogoUrl(company.logoUrl);
+            } else {
+              setDisplayBrandLogoUrl("/images/gymramp-logo.png"); // Fallback if no logoUrl
             }
+          } else {
+            console.log(`[Login Page] No brand found for slug ${potentialSlug}, using defaults.`);
+            setDisplayBrandName("Gymramp");
+            setDisplayBrandLogoUrl("/images/gymramp-logo.png");
           }
-        }).catch(err => console.error("Error fetching brand by subdomain:", err))
+        }).catch(err => {
+          console.error("[Login Page] Error fetching brand by subdomain:", err);
+          setDisplayBrandName("Gymramp");
+          setDisplayBrandLogoUrl("/images/gymramp-logo.png");
+        })
         .finally(() => setIsClientLoadingBrand(false));
       } else {
+        // No potential slug, or it's the main domain, use defaults
+        console.log("[Login Page] No specific brand slug detected, using defaults.");
+        setDisplayBrandName(initialBrandName || "Gymramp");
+        setDisplayBrandLogoUrl(initialBrandLogoUrl || "/images/gymramp-logo.png");
         setIsClientLoadingBrand(false);
       }
-    } else {
+    } else if (isMounted) {
+        // If initialBrandName is provided (from server props, though currently null), or not client context
+        setDisplayBrandName(initialBrandName || "Gymramp");
+        setDisplayBrandLogoUrl(initialBrandLogoUrl || "/images/gymramp-logo.png");
         setIsClientLoadingBrand(false);
     }
-  }, [initialBrandName]);
+  }, [initialBrandName, initialBrandLogoUrl, isMounted]);
 
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -76,6 +111,19 @@ function LoginPageContent({ brandName: initialBrandName, brandLogoUrl: initialBr
         }
 
         const userDetails = await getUserByEmail(user.email);
+
+        if (userDetails && userDetails.requiresPasswordChange === true) {
+            toast({
+                title: "Password Change Required",
+                description: "For your security, please update your temporary password.",
+                variant: "default",
+                duration: 7000,
+            });
+            router.push('/account/force-reset-password');
+            setIsLoading(false);
+            return;
+        }
+
         if (userDetails && userDetails.isActive === false) {
             await signOut(auth);
             if (typeof window !== 'undefined') {
@@ -92,7 +140,10 @@ function LoginPageContent({ brandName: initialBrandName, brandLogoUrl: initialBr
             if (companyDetails?.isTrial && companyDetails.trialEndsAt) {
                 const trialEndDate = companyDetails.trialEndsAt instanceof Timestamp
                     ? companyDetails.trialEndsAt.toDate()
-                    : new Date(companyDetails.trialEndsAt);
+                    : companyDetails.trialEndsAt instanceof Date
+                        ? companyDetails.trialEndsAt
+                        : new Date(companyDetails.trialEndsAt || 0);
+
 
                 if (trialEndDate < new Date()) {
                     await signOut(auth);
@@ -112,6 +163,7 @@ function LoginPageContent({ brandName: initialBrandName, brandLogoUrl: initialBr
             }
         }
 
+
         if (typeof window !== 'undefined') {
           localStorage.setItem('isLoggedIn', 'true');
           localStorage.setItem('userEmail', user.email);
@@ -119,18 +171,6 @@ function LoginPageContent({ brandName: initialBrandName, brandLogoUrl: initialBr
 
         let redirectPath = '/';
         if (userDetails) {
-            if (userDetails.requiresPasswordChange === true) {
-                toast({
-                    title: "Password Change Required",
-                    description: "For your security, please update your temporary password.",
-                    variant: "default",
-                    duration: 7000,
-                });
-                router.push('/account/force-reset-password');
-                setIsLoading(false); // Stop loading indicator
-                return; // Important: stop further execution of this function
-            }
-
             switch (userDetails.role) {
                 case 'Super Admin': redirectPath = '/admin/dashboard'; break;
                 case 'Admin':
@@ -167,7 +207,7 @@ function LoginPageContent({ brandName: initialBrandName, brandLogoUrl: initialBr
       }
   };
 
-  if (isClientLoadingBrand && !initialBrandName && typeof window !== 'undefined') {
+  if (isMounted && isClientLoadingBrand) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-theme(spacing.14)*2)] py-12 px-4 sm:px-6 lg:px-8">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -185,13 +225,13 @@ function LoginPageContent({ brandName: initialBrandName, brandLogoUrl: initialBr
             height={45}
             priority
             className="max-h-[45px] object-contain"
-            onError={(e) => { (e.target as HTMLImageElement).src = '/images/newlogo.png'; }}
+            onError={(e) => { (e.target as HTMLImageElement).src = '/images/gymramp-logo.png'; }}
         />
        </div>
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-primary">
-            {displayBrandName === "GYMRAMP" || !displayBrandName ? "Welcome Back!" : `Welcome to ${displayBrandName}!`}
+            {displayBrandName === "Gymramp" || !displayBrandName ? "Welcome Back!" : `Welcome to ${displayBrandName}!`}
           </CardTitle>
           <CardDescription>Log in to access your account.</CardDescription>
         </CardHeader>
@@ -220,7 +260,7 @@ function LoginPageContent({ brandName: initialBrandName, brandLogoUrl: initialBr
 export default function LoginPage() {
   return (
     <Suspense fallback={<div className="flex flex-col items-center justify-center min-h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>}>
-      <LoginPageContent brandName={null} brandLogoUrl={null} />
+      <LoginPageContent initialBrandName={null} initialBrandLogoUrl={null} />
     </Suspense>
   );
 }
