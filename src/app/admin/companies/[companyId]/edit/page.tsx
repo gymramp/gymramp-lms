@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link'; // Added Link import
+import Link from 'next/link';
 import Image from 'next/image';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -15,21 +15,21 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import type { Company, CompanyFormData, User } from '@/types/user';
 import type { Program, Course } from '@/types/course';
 import { getCompanyById, updateCompany } from '@/lib/company-data';
-import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data';
 import { getAllPrograms, getProgramById, getAllCourses } from '@/lib/firestore-data';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Globe, Users, CalendarDays, Settings as SettingsIcon, BookOpen, Layers, PackageCheck, Palette, Briefcase, Package, Save } from 'lucide-react'; // Added Save
+import { ArrowLeft, Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Globe, Users, CalendarDays, Settings as SettingsIcon, BookOpen, Layers, PackageCheck, Palette, Briefcase, Package, Save } from 'lucide-react';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Timestamp } from 'firebase/firestore';
 
 const companyFormSchema = z.object({
   name: z.string().min(2, "Brand name must be at least 2 characters."),
@@ -52,10 +52,7 @@ export default function EditCompanyPage() {
   const { toast } = useToast();
 
   const [company, setCompany] = useState<Company | null>(null);
-  const [assignedProgramsDetails, setAssignedProgramsDetails] = useState<Program[]>([]);
-  const [allLibraryCourses, setAllLibraryCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingProgramData, setIsLoadingProgramData] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -65,6 +62,12 @@ export default function EditCompanyPage() {
   const [isLogoUploading, setIsLogoUploading] = useState(false);
   const [logoUploadProgress, setLogoUploadProgress] = useState(0);
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
+
+  // State for program and course display
+  const [assignedProgramsDetails, setAssignedProgramsDetails] = useState<Program[]>([]);
+  const [allLibraryCourses, setAllLibraryCourses] = useState<Course[]>([]);
+  const [isLoadingProgramData, setIsLoadingProgramData] = useState(true);
+
 
   const form = useForm<CompanyFormValues>({
     resolver: zodResolver(companyFormSchema),
@@ -84,11 +87,13 @@ export default function EditCompanyPage() {
   const isTrialValue = form.watch('isTrial');
   const logoUrlValue = form.watch('logoUrl');
 
-  const fetchCompanyData = useCallback(async (user: User) => {
-    if (!companyId) {
+  const fetchCompanyData = useCallback(async (user: User | null) => {
+    if (!companyId || !user) {
       setIsLoading(false);
+      setIsLoadingProgramData(false);
       return;
     }
+    console.log('[EditBrand] Fetching data for brand ID:', companyId);
     setIsLoading(true);
     setIsLoadingProgramData(true);
     setIsLoadingParentBrand(true);
@@ -137,21 +142,25 @@ export default function EditCompanyPage() {
       }
       setIsLoadingParentBrand(false);
 
+      // Fetch program details
+      console.log('[EditBrand] Fetched companyData.assignedProgramIds:', companyData.assignedProgramIds);
       if (companyData.assignedProgramIds && companyData.assignedProgramIds.length > 0) {
-        const programPromises = companyData.assignedProgramIds.map(id => getProgramById(id));
-        const fetchedPrograms = (await Promise.all(programPromises)).filter(Boolean) as Program[];
+        const [programs, courses] = await Promise.all([
+          Promise.all(companyData.assignedProgramIds.map(id => getProgramById(id))),
+          getAllCourses() // Fetch all courses to map IDs to names
+        ]);
+        const fetchedPrograms = programs.filter(Boolean) as Program[];
+        console.log('[EditBrand] Fetched program details:', fetchedPrograms);
         setAssignedProgramsDetails(fetchedPrograms);
-        if (fetchedPrograms.length > 0) {
-            setAllLibraryCourses(await getAllCourses());
-        } else {
-            setAllLibraryCourses([]);
-        }
+        setAllLibraryCourses(courses);
       } else {
         setAssignedProgramsDetails([]);
         setAllLibraryCourses([]);
+         console.log('[EditBrand] No assigned programs for this brand.');
       }
 
     } catch (error: any) {
+      console.error("[EditBrand] Error fetching data:", error);
       toast({ title: "Error", description: `Failed to load brand data: ${error.message}`, variant: "destructive" });
     } finally {
       setIsLoading(false);
@@ -168,14 +177,15 @@ export default function EditCompanyPage() {
         if (details) {
           fetchCompanyData(details);
         } else {
-          router.push('/');
+          router.push('/'); // Should not happen if firebaseUser is present
         }
       } else {
+        setCurrentUser(null);
         router.push('/');
       }
     });
     return () => unsubscribe();
-  }, [router, toast, fetchCompanyData]);
+  }, [router, toast, fetchCompanyData]); // Removed companyId from here
 
 
   const handleLogoFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -186,7 +196,7 @@ export default function EditCompanyPage() {
     setLogoUploadError(null);
     try {
       const uniqueFileName = `${companyId}-logo-${Date.now()}-${file.name}`;
-      const storagePath = `companies/logos/${uniqueFileName}`; // Using a more direct path for clarity
+      const storagePath = `${STORAGE_PATHS.COMPANY_LOGOS}/${uniqueFileName}`;
       const downloadURL = await uploadImage(file, storagePath, setLogoUploadProgress);
       form.setValue('logoUrl', downloadURL, { shouldValidate: true });
       toast({ title: "Logo Uploaded", description: "Brand logo uploaded successfully." });
@@ -216,28 +226,22 @@ export default function EditCompanyPage() {
         isTrial: data.isTrial,
         trialEndsAt: data.isTrial && data.trialEndsAt ? (data.trialEndsAt instanceof Date ? data.trialEndsAt.toISOString() : data.trialEndsAt) : null,
         canManageCourses: data.canManageCourses,
-        // White-label and program assignment are managed on other pages or through specific actions
+        // assignedProgramIds are managed on a separate page
       };
 
       const updatedCompany = await updateCompany(companyId, metadataToUpdate);
       if (updatedCompany) {
-        setCompany(updatedCompany);
-        form.reset({
-          name: updatedCompany.name || '',
-          subdomainSlug: updatedCompany.subdomainSlug || '',
-          customDomain: updatedCompany.customDomain || '',
-          shortDescription: updatedCompany.shortDescription || '',
-          logoUrl: updatedCompany.logoUrl || '',
-          maxUsers: updatedCompany.maxUsers ?? null,
-          isTrial: updatedCompany.isTrial || false,
-          trialEndsAt: updatedCompany.trialEndsAt ? new Date(updatedCompany.trialEndsAt as string) : null,
-          canManageCourses: updatedCompany.canManageCourses || false,
-        });
+        setCompany(updatedCompany); // Update local state
+        // Re-fetch company data to ensure everything is fresh, especially assignedProgramIds
+        if (currentUser) {
+          await fetchCompanyData(currentUser);
+        }
         toast({ title: "Brand Updated", description: `"${updatedCompany.name}" updated successfully.` });
       } else {
         throw new Error("Failed to update brand details.");
       }
     } catch (error: any) {
+      console.error("[EditBrand] onSubmit error:", error);
       toast({ title: "Error Updating Brand", description: error.message, variant: "destructive" });
     } finally {
       setIsSaving(false);
@@ -250,16 +254,8 @@ export default function EditCompanyPage() {
         <Skeleton className="h-8 w-1/4 mb-6" />
         <Skeleton className="h-10 w-1/2 mb-8" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
-            <Skeleton className="h-96" />
-            <Skeleton className="h-64" />
-            <Skeleton className="h-64" />
-          </div>
-          <div className="lg:col-span-1 space-y-6">
-            <Skeleton className="h-80" />
-            <Skeleton className="h-48" />
-            <Skeleton className="h-48" />
-          </div>
+          <div className="lg:col-span-2 space-y-6"> <Skeleton className="h-96" /> <Skeleton className="h-64" /> <Skeleton className="h-64" /> <Skeleton className="h-64" /> </div>
+          <div className="lg:col-span-1 space-y-6"> <Skeleton className="h-80" /> <Skeleton className="h-48" /> <Skeleton className="h-48" /> </div>
         </div>
       </div>
     );
@@ -282,6 +278,7 @@ export default function EditCompanyPage() {
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
+              {/* Core Brand Information Card */}
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" /> Core Brand Information</CardTitle><CardDescription>Basic identification and descriptive details for the brand.</CardDescription></CardHeader>
                 <CardContent className="space-y-4">
@@ -291,6 +288,8 @@ export default function EditCompanyPage() {
                   <FormField control={form.control} name="shortDescription" render={({ field }) => (<FormItem><FormLabel>Short Description (Optional)</FormLabel><FormControl><Textarea rows={3} placeholder="A brief description (max 150 chars)" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                 </CardContent>
               </Card>
+
+              {/* Brand Logo Card */}
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><ImageIconLucide className="h-5 w-5" /> Brand Logo</CardTitle><CardDescription>Upload or manage the brand's logo.</CardDescription></CardHeader>
                 <CardContent>
@@ -307,28 +306,30 @@ export default function EditCompanyPage() {
                 </CardContent>
               </Card>
 
-              {/* Placeholder for White-Label Settings */}
+              {/* White-Label Settings Placeholder */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings</CardTitle>
-                  <CardDescription>Customize the appearance for this brand.</CardDescription>
+                  <CardDescription>Customize the appearance for this brand. (Placeholder - to be implemented)</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-muted-foreground italic">White-label settings UI will be implemented here.</p>
-                  {/* Example: The actual form fields for colors and enable toggle would go here. */}
                 </CardContent>
               </Card>
-
             </div>
+
             <div className="lg:col-span-1 space-y-6">
+              {/* User & Trial Settings Card */}
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> User &amp; Trial Settings</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
-                  <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem><FormLabel>Max Users</FormLabel><FormControl><Input type="number" min="1" placeholder="Leave blank for unlimited" {...field} value={field.value === null ? '' : String(field.value)} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem><FormLabel>Max Users</FormLabel><FormControl><Input type="number" min="1" placeholder="Leave blank for unlimited" {...field} value={field.value === null || field.value === undefined ? '' : String(field.value)} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
                   {isMounted && currentUser?.role === 'Super Admin' && ( <FormField control={form.control} name="isTrial" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Is Trial Account?</FormLabel></div><FormControl><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></FormControl><FormMessage /></FormItem>)} /> )}
                   {isMounted && currentUser?.role === 'Super Admin' && isTrialValue && ( <FormField control={form.control} name="trialEndsAt" render={({ field }) => ( <FormItem> <FormLabel className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Trial End Date</FormLabel> <FormControl><div><DatePickerWithPresets date={field.value} setDate={(date) => field.onChange(date)} /></div></FormControl> <FormMessage /> </FormItem> )} /> )}
                 </CardContent>
               </Card>
+
+              {/* Course Management Ability Card */}
               {isMounted && currentUser?.role === 'Super Admin' && (
                 <Card>
                   <CardHeader><CardTitle className="flex items-center gap-2"><Package className="h-5 w-5" /> Course Management Ability</CardTitle></CardHeader>
@@ -340,7 +341,7 @@ export default function EditCompanyPage() {
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                           <div className="space-y-0.5">
                             <FormLabel className="text-base">Enable Course Management</FormLabel>
-                            <FormDescription>Allow this brand's Admins/Owners to create and manage their own courses.</FormDescription>
+                            <CardDescription>Allow this brand's Admins/Owners to create and manage their own courses.</CardDescription>
                           </div>
                           <FormControl><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></FormControl>
                           <FormMessage />
@@ -350,10 +351,11 @@ export default function EditCompanyPage() {
                   </CardContent>
                 </Card>
               )}
+
+              {/* Assigned Programs Card */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2"><Layers className="h-5 w-5" /> Assigned Programs</CardTitle>
-                  <CardDescription>Programs this brand has access to. Managed separately.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {isLoadingProgramData ? (
@@ -371,7 +373,7 @@ export default function EditCompanyPage() {
                               <ScrollArea className="h-32 w-full rounded-md border p-2 bg-muted/20">
                                 <ul className="space-y-1">
                                   {program.courseIds.map(courseId => allLibraryCourses.find(c => c.id === courseId)).filter(Boolean).map(course => (
-                                    <li key={course!.id} className="text-xs text-foreground p-1 bg-secondary/50 rounded-sm flex items-center gap-1.5">
+                                    <li key={course!.id} className="text-xs text-foreground p-1 rounded-sm flex items-center gap-1.5">
                                       <BookOpen className="h-3 w-3 flex-shrink-0" /> {course!.title}
                                       <Badge variant="ghost" className="ml-auto text-xs">{course!.level}</Badge>
                                     </li>
@@ -412,3 +414,5 @@ export default function EditCompanyPage() {
     </div>
   );
 }
+
+

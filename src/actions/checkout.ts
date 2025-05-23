@@ -13,7 +13,7 @@ import { Timestamp } from 'firebase/firestore';
 import type { CustomerPurchaseRecordFormData } from '@/types/customer';
 import type { Program } from '@/types/course';
 import { generateRandomPassword } from '@/lib/utils';
-import { sendNewUserWelcomeEmail } from '@/lib/email'; // Import email function
+import { sendNewUserWelcomeEmail } from '@/lib/email';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -67,15 +67,16 @@ export async function processCheckout(data: CheckoutFormData): Promise<
     if (!selectedProgram) {
         throw new Error(`Selected Program (ID: ${data.selectedProgramId}) not found.`);
     }
+    // Courses are derived from the program, no longer directly from form data
     const coursesToAssignToBrand = selectedProgram.courseIds || [];
 
     const newCompanyData = {
         name: data.companyName,
-        assignedCourseIds: coursesToAssignToBrand,
+        // assignedCourseIds: coursesToAssignToBrand, // This will be set by assigning the program
         maxUsers: data.maxUsers ?? null,
         isTrial: false,
         trialEndsAt: null,
-        saleAmount: data.finalTotalAmount ?? 0,
+        saleAmount: data.finalTotalAmount ?? 0, // Based on Program base price
         revenueSharePartners: data.revenueSharePartners || null,
         whiteLabelEnabled: false,
         primaryColor: null,
@@ -92,7 +93,8 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         stripeSubscriptionId: null,
         createdAt: Timestamp.now(),
         parentBrandId: null,
-        createdByUserId: null,
+        createdByUserId: null, // This would be the Super Admin's ID, if tracking
+        assignedProgramIds: [], // Initialize, will be updated
     };
     const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
@@ -100,6 +102,13 @@ export async function processCheckout(data: CheckoutFormData): Promise<
     }
     newCompanyId = newCompany.id;
     console.log(`[Server Action] Brand "${newCompany.name}" (Paid Program) created with ID: ${newCompany.id}`);
+
+    // Assign the selected program to the new company
+    if (newCompanyId && data.selectedProgramId) {
+        await updateCompany(newCompanyId, { assignedProgramIds: [data.selectedProgramId] });
+        console.log(`[Server Action] Program ${data.selectedProgramId} assigned to brand ${newCompanyId}`);
+    }
+
 
     const defaultLocation = await createDefaultLocation(newCompany.id);
     const defaultLocationId = defaultLocation ? [defaultLocation.id] : [];
@@ -166,7 +175,6 @@ export async function processCheckout(data: CheckoutFormData): Promise<
 
         } catch (stripeError: any) {
             console.error("[Server Action] Error creating Stripe Customer/Subscription or updating Brand:", stripeError);
-            // Don't fail the whole checkout if Stripe part fails, just log it.
         }
     }
 
@@ -203,13 +211,11 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         console.log(`[Server Action] Customer purchase record created with ID: ${customerPurchaseRecord.id}`);
     }
 
-    // Send welcome email
     try {
         await sendNewUserWelcomeEmail(newAdminUser.email, newAdminUser.name, tempPassword);
         console.log(`[Server Action] Welcome email sent to ${newAdminUser.email}`);
     } catch (emailError) {
         console.error(`[Server Action] Failed to send welcome email to ${newAdminUser.email}:`, emailError);
-        // Do not fail the entire checkout for email sending failure
     }
 
     await cleanupFirebaseApp(localAuthAppName);
@@ -237,7 +243,6 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
     if (!selectedProgram) {
         throw new Error(`Selected Program (ID: ${data.selectedProgramId}) not found for free trial.`);
     }
-    const coursesToAssignToBrand = selectedProgram.courseIds || [];
 
     const trialDurationDays = data.trialDurationDays || 7;
     const trialEndsDate = new Date();
@@ -246,7 +251,6 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
 
     const newCompanyData = {
         name: data.companyName,
-        assignedCourseIds: coursesToAssignToBrand,
         maxUsers: data.maxUsers ?? null,
         isTrial: true,
         trialEndsAt: trialEndsAtTimestamp,
@@ -268,12 +272,19 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
         createdAt: Timestamp.now(),
         parentBrandId: null,
         createdByUserId: null,
+        assignedProgramIds: [], // Initialize, will be updated
     };
     const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
       throw new Error("Failed to create the trial brand in the database.");
     }
     console.log(`[Server Action] Trial Brand "${newCompany.name}" created with ID: ${newCompany.id}, ends: ${trialEndsDate.toLocaleDateString()}`);
+
+    // Assign the selected program to the new trial company
+    if (newCompany.id && data.selectedProgramId) {
+        await updateCompany(newCompany.id, { assignedProgramIds: [data.selectedProgramId] });
+        console.log(`[Server Action] Program ${data.selectedProgramId} assigned to trial brand ${newCompany.id}`);
+    }
 
     const defaultLocation = await createDefaultLocation(newCompany.id);
     const defaultLocationId = defaultLocation ? [defaultLocation.id] : [];
@@ -284,7 +295,8 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
         const userCredential = await createUserWithEmailAndPassword(localAuthInstance, data.adminEmail, tempPassword);
         authUserUid = userCredential.user.uid;
         console.log(`[Server Action] Trial Admin user created in Firebase Auth with UID: ${authUserUid} for email ${data.adminEmail} using local auth instance`);
-    } catch (authError: any) {
+    } catch (authError: any)
+ {
         console.error("[Server Action] Failed to create trial admin user in Firebase Auth:", authError);
         throw new Error(`AuthCreationError: ${authError.code || 'UnknownCode'} - ${authError.message || 'Failed to create user in authentication service.'}`);
     }
@@ -304,7 +316,6 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
     }
     console.log(`[Server Action] Trial Admin user "${newAdminUser.name}" created in Firestore`);
 
-    // Send welcome email
     try {
         await sendNewUserWelcomeEmail(newAdminUser.email, newAdminUser.name, tempPassword);
         console.log(`[Server Action] Welcome email sent to trial user ${newAdminUser.email}`);
@@ -321,3 +332,4 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
     return { success: false, error: error.message || "An unexpected error occurred during free trial checkout." };
   }
 }
+

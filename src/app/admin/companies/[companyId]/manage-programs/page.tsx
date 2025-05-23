@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, 'useState', useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Company, User } from '@/types/user';
 import type { Program } from '@/types/course';
 import { getCompanyById, updateCompany } from '@/lib/company-data';
-import { getAllPrograms, getProgramById } from '@/lib/firestore-data';
+import { getAllPrograms } from '@/lib/firestore-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
@@ -32,7 +32,7 @@ type ManageProgramsFormValues = z.infer<typeof manageProgramsFormSchema>;
 export default function ManageBrandProgramsPage() {
   const params = useParams();
   const router = useRouter();
-  const brandId = params.companyId as string; // companyId from URL is the brandId
+  const brandId = params.companyId as string;
 
   const [brand, setBrand] = useState<Company | null>(null);
   const [allLibraryPrograms, setAllLibraryPrograms] = useState<Program[]>([]);
@@ -65,7 +65,10 @@ export default function ManageBrandProgramsPage() {
   }, [router, toast]);
 
   const fetchBrandAndPrograms = useCallback(async () => {
-    if (!brandId || !currentUser || currentUser.role !== 'Super Admin') return;
+    if (!brandId || !currentUser || currentUser.role !== 'Super Admin') {
+        setIsLoading(false);
+        return;
+    }
     setIsLoading(true);
     try {
       const [brandData, programsData] = await Promise.all([
@@ -218,4 +221,3 @@ export default function ManageBrandProgramsPage() {
   );
 }
 
-    
