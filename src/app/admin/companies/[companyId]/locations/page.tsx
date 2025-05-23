@@ -45,11 +45,12 @@ import { onAuthStateChanged } from 'firebase/auth';
 export default function AdminCompanyLocationsPage() {
   const params = useParams();
   const router = useRouter();
-  const brandIdFromUrl = params.companyId as string; // Treat companyId from URL as brandId
+  const brandIdFromUrl = params.companyId as string;
 
-  const [currentBrand, setCurrentBrand] = useState<Company | null>(null); // Renamed from company
+  const [currentBrand, setCurrentBrand] = useState<Company | null>(null);
   const [locations, setLocations] = useState<LocationType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isAddEditDialogOpen, setIsAddEditDialogOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState<LocationType | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -60,7 +61,7 @@ export default function AdminCompanyLocationsPage() {
   const authorizeAndFetchData = useCallback(async (user: User | null) => {
     if (!user || !brandIdFromUrl) {
       setIsLoading(false);
-      if (!user) router.push('/'); // Redirect if no user
+      if (!user) router.push('/');
       return;
     }
     
@@ -69,16 +70,14 @@ export default function AdminCompanyLocationsPage() {
       const brandData = await getCompanyById(brandIdFromUrl);
       if (!brandData) {
         toast({ title: "Error", description: "Brand not found.", variant: "destructive" });
-        router.push('/admin/companies'); // Or a more appropriate admin page
+        router.push('/admin/companies');
         return;
       }
 
-      // Authorization check
       let authorized = false;
       if (user.role === 'Super Admin') {
         authorized = true;
       } else if ((user.role === 'Admin' || user.role === 'Owner') && user.companyId) {
-        // User can manage their own brand's locations or locations of a child brand
         if (brandData.id === user.companyId || brandData.parentBrandId === user.companyId) {
           authorized = true;
         }
@@ -103,15 +102,21 @@ export default function AdminCompanyLocationsPage() {
   }, [brandIdFromUrl, toast, router]);
 
   useEffect(() => {
+    setIsAuthLoading(true);
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
         const userDetails = await getUserByEmail(firebaseUser.email);
         setCurrentUser(userDetails);
-        authorizeAndFetchData(userDetails); // Pass userDetails directly
+        if (userDetails) {
+          authorizeAndFetchData(userDetails);
+        } else {
+          router.push('/');
+        }
       } else {
         setCurrentUser(null);
-        router.push('/'); // Redirect to login if not authenticated
+        router.push('/');
       }
+      setIsAuthLoading(false);
     });
     return () => unsubscribe();
   }, [authorizeAndFetchData, router]);
@@ -134,7 +139,8 @@ export default function AdminCompanyLocationsPage() {
 
   const confirmDeleteLocation = async () => {
     if (!locationToDelete) return;
-    setIsLoading(true);
+    // Consider adding a more specific loading state for the delete operation
+    // setIsLoading(true); // This affects the whole page, maybe too broad
     try {
       const success = await deleteLocation(locationToDelete.id);
       if (success) {
@@ -146,7 +152,7 @@ export default function AdminCompanyLocationsPage() {
     } catch (error) {
       toast({ title: 'Error Deleting Location', description: `Could not delete location "${locationToDelete.name}".`, variant: 'destructive' });
     } finally {
-      setIsLoading(false);
+      // setIsLoading(false); // Reset general loading if it was set
       setIsDeleteDialogOpen(false);
       setLocationToDelete(null);
     }
@@ -155,6 +161,7 @@ export default function AdminCompanyLocationsPage() {
   const handleSaveLocation = async (locationData: { name: string }) => {
     if (!brandIdFromUrl || !currentUser) return;
     let savedLocation: LocationType | null = null;
+    // Consider adding a saving state here
     try {
       if (editingLocation) {
         savedLocation = await updateLocation(editingLocation.id, { name: locationData.name });
@@ -175,10 +182,18 @@ export default function AdminCompanyLocationsPage() {
     setEditingLocation(null);
   };
 
-  if (isLoading && !currentBrand) {
-    return ( <div className="container mx-auto py-12"> <Skeleton className="h-8 w-1/4 mb-6" /> <Skeleton className="h-10 w-1/2 mb-8" /> <Card><CardContent><Skeleton className="h-64 w-full" /></CardContent></Card> </div> );
+  if (isAuthLoading || (isLoading && !currentBrand)) {
+    return ( 
+      <div className="container mx-auto py-12"> 
+        <Skeleton className="h-8 w-1/4 mb-6" /> 
+        <Skeleton className="h-10 w-1/2 mb-8" /> 
+        <Card><CardContent><Skeleton className="h-64 w-full" /></CardContent></Card> 
+      </div> 
+    );
   }
-  if (!currentBrand) { return <div className="container mx-auto py-12 text-center">Brand data not available or access denied.</div>; }
+  if (!currentUser || !currentBrand) { 
+    return <div className="container mx-auto py-12 text-center">Brand data not available or access denied.</div>; 
+  }
 
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20">
@@ -208,8 +223,24 @@ export default function AdminCompanyLocationsPage() {
                     <TableCell className="font-medium">{location.name}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild> <Button variant="ghost" className="h-8 w-8 p-0"> <span className="sr-only">Open menu for {location.name}</span> <MoreHorizontal className="h-4 w-4" /> </Button> </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end"> <DropdownMenuLabel>Actions</DropdownMenuLabel> <DropdownMenuItem onClick={() => handleEditLocationClick(location)}> <Edit className="mr-2 h-4 w-4" /> Edit Location </DropdownMenuItem> <DropdownMenuSeparator /> <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => openDeleteConfirmation(location)}> <Trash2 className="mr-2 h-4 w-4" /> Delete Location </DropdownMenuItem> </DropdownMenuContent>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span> {/* Wrapper span for Button children */}
+                              <span className="sr-only">Open menu for {location.name}</span>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => handleEditLocationClick(location)}>
+                            <Edit className="mr-2 h-4 w-4" /> Edit Location
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => openDeleteConfirmation(location)}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete Location
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
