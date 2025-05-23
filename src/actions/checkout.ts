@@ -1,19 +1,19 @@
 
 'use server';
 
-import type { CheckoutFormData, RevenueSharePartner } from '@/types/user';
+import type { CheckoutFormData } from '@/types/user';
 import { addCompany, updateCompany, createDefaultLocation } from '@/lib/company-data';
-import { addUser, getUserByEmail } from '@/lib/user-data'; // Added getUserByEmail here for consistency
+import { addUser } from '@/lib/user-data';
 import { addCustomerPurchaseRecord } from '@/lib/customer-data';
 import { getProgramById, getCourseById } from '@/lib/firestore-data';
 import { stripe } from '@/lib/stripe';
 import { initializeApp, deleteApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, Auth } from 'firebase/auth';
-import { Timestamp, doc, getDoc, deleteDoc } from 'firebase/firestore'; // Added doc, getDoc, deleteDoc
-import { db } from '@/lib/firebase'; // Added db import
+import { Timestamp, doc, getDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import type { CustomerPurchaseRecordFormData } from '@/types/customer';
 import type { Program } from '@/types/course';
-import type { CompanyFormData } from '@/types/user'; // Added CompanyFormData
+import type { CompanyFormData } from '@/types/user';
 import { generateRandomPassword } from '@/lib/utils';
 import { sendNewUserWelcomeEmail } from '@/lib/email';
 
@@ -51,11 +51,13 @@ export async function processCheckout(data: CheckoutFormData): Promise<
   { success: boolean; companyId?: string; adminUserId?: string; customerPurchaseId?: string; tempPassword?: string; error?: undefined }
 | { success: boolean; error: string; tempPassword?: undefined }
 > {
-  console.log("[Server Action] Starting processCheckout (Paid) for brand:", data.companyName);
+  console.log("[processCheckout] Starting for brand:", data.companyName);
+  console.log("[processCheckout] Received data.selectedProgramId:", data.selectedProgramId);
+
   if (data.paymentIntentId) {
-    console.log("[Server Action] Payment Intent ID received:", data.paymentIntentId);
+    console.log("[processCheckout] Payment Intent ID received:", data.paymentIntentId);
   } else {
-    console.warn("[Server Action] No Payment Intent ID received. Assuming pre-verified payment or simulation.");
+    console.warn("[processCheckout] No Payment Intent ID received. Assuming pre-verified payment or simulation.");
   }
 
   const localAuthAppName = `checkoutAuthApp-${Date.now()}`;
@@ -65,15 +67,16 @@ export async function processCheckout(data: CheckoutFormData): Promise<
   const tempPassword = generateRandomPassword();
 
   try {
+    if (!data.selectedProgramId) {
+        throw new Error("Selected Program ID is missing in checkout data.");
+    }
     const selectedProgram: Program | null = await getProgramById(data.selectedProgramId);
     if (!selectedProgram) {
         throw new Error(`Selected Program (ID: ${data.selectedProgramId}) not found.`);
     }
     const coursesToAssignToBrand = selectedProgram.courseIds || [];
 
-    console.log("[Server Action processCheckout] Selected Program ID for assignment:", data.selectedProgramId);
-
-    const newCompanyData: CompanyFormData = { // Ensure this matches CompanyFormData
+    const newCompanyData: CompanyFormData = {
         name: data.companyName,
         maxUsers: data.maxUsers ?? null,
         isTrial: false,
@@ -88,23 +91,23 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         brandForegroundColor: null,
         logoUrl: null,
         shortDescription: null,
-        subdomainSlug: null, // Will be set via edit page if needed
-        customDomain: null, // Will be set via edit page if needed
-        canManageCourses: false, // Default
-        stripeCustomerId: null, // Will be set later
-        stripeSubscriptionId: null, // Will be set later
-        parentBrandId: null, 
+        subdomainSlug: null,
+        customDomain: null,
+        canManageCourses: false,
+        stripeCustomerId: null,
+        stripeSubscriptionId: null,
+        parentBrandId: null,
         createdByUserId: null, // Or the Super Admin's ID if tracking this
-        assignedProgramIds: data.selectedProgramId ? [data.selectedProgramId] : [],
+        assignedProgramIds: data.selectedProgramId ? [data.selectedProgramId] : [], // Directly assign program here
     };
-    console.log("[Server Action processCheckout] newCompanyData to be passed to addCompany:", JSON.stringify(newCompanyData, null, 2));
+    console.log("[processCheckout] newCompanyData to be passed to addCompany (assignedProgramIds included):", JSON.stringify(newCompanyData.assignedProgramIds, null, 2));
 
     const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
       throw new Error("Failed to create the brand in the database.");
     }
     newCompanyId = newCompany.id;
-    console.log(`[Server Action] Brand "${newCompany.name}" (Paid Program) created with ID: ${newCompany.id} and initial programs assigned directly.`);
+    console.log(`[processCheckout] Brand "${newCompany.name}" (Paid Program) created with ID: ${newCompany.id} and initial programs assigned directly.`);
 
     const defaultLocation = await createDefaultLocation(newCompany.id);
     const defaultLocationId = defaultLocation ? [defaultLocation.id] : [];
@@ -114,11 +117,11 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         localAuthInstance = getFirebaseAuthInstance(localAuthAppName);
         const userCredential = await createUserWithEmailAndPassword(localAuthInstance, data.adminEmail, tempPassword);
         authUserUid = userCredential.user.uid;
-        console.log(`[Server Action] Admin user created in Firebase Auth with UID: ${authUserUid} for email ${data.adminEmail} (Paid Program) using local auth instance`);
+        console.log(`[processCheckout] Admin user created in Firebase Auth with UID: ${authUserUid} for email ${data.adminEmail}`);
     } catch (authError: any) {
-        console.error("[Server Action] Failed to create admin user in Firebase Auth (Paid Program):", authError);
+        console.error("[processCheckout] Failed to create admin user in Firebase Auth:", authError);
         if (newCompanyId) {
-            console.warn(`[Server Action] Auth creation failed. Attempting to soft-delete brand ${newCompanyId}`);
+            console.warn(`[processCheckout] Auth creation failed. Attempting to soft-delete brand ${newCompanyId}`);
             await deleteDoc(doc(db, 'companies', newCompanyId));
         }
         throw new Error(`AuthCreationError: ${authError.code || 'UnknownCode'} - ${authError.message || 'Failed to create user in authentication service.'}`);
@@ -134,9 +137,9 @@ export async function processCheckout(data: CheckoutFormData): Promise<
     };
     const newAdminUser = await addUser(newAdminUserData);
     if (!newAdminUser) {
-      console.warn(`[Server Action] Firestore user creation failed for Auth UID ${authUserUid}. Manual Auth user cleanup might be needed.`);
+      console.warn(`[processCheckout] Firestore user creation failed for Auth UID ${authUserUid}. Manual Auth user cleanup might be needed.`);
       if (newCompanyId) {
-            console.warn(`[Server Action] Firestore user creation failed. Attempting to soft-delete brand ${newCompanyId}`);
+            console.warn(`[processCheckout] Firestore user creation failed. Attempting to soft-delete brand ${newCompanyId}`);
             await deleteDoc(doc(db, 'companies', newCompanyId));
       }
       const authUserToDelete = getAuth(getApps().find(app => app.name === localAuthAppName) || undefined)?.currentUser;
@@ -146,43 +149,38 @@ export async function processCheckout(data: CheckoutFormData): Promise<
       throw new Error("Failed to create the admin user account in Firestore (Paid Program).");
     }
     newAdminUserId = newAdminUser.id;
-    console.log(`[Server Action] Admin user "${newAdminUser.name}" (Paid Program) created in Firestore with ID: ${newAdminUser.id}`);
+    console.log(`[processCheckout] Admin user "${newAdminUser.name}" (Paid Program) created in Firestore with ID: ${newAdminUser.id}`);
 
     let stripeCustomerId: string | null = null;
     let stripeSubscriptionId: string | null = null;
 
     if (data.paymentIntentId && data.paymentIntentId !== 'pi_0_free_checkout' && data.finalTotalAmount && data.finalTotalAmount > 0) {
         try {
-            console.log(`[Server Action] Creating Stripe Customer for ${data.adminEmail}, Brand: ${newCompany.name}`);
+            console.log(`[processCheckout] Creating Stripe Customer for ${data.adminEmail}, Brand: ${newCompany.name}`);
             const customer = await stripe.customers.create({
                 email: data.adminEmail,
                 name: newCompany.name,
-                metadata: {
-                    brandId: newCompany.id,
-                    adminUserId: newAdminUser.id,
-                }
+                metadata: { brandId: newCompany.id, adminUserId: newAdminUser.id, }
             });
             stripeCustomerId = customer.id;
-            console.log(`[Server Action] Stripe Customer created with ID: ${stripeCustomerId}`);
+            console.log(`[processCheckout] Stripe Customer created with ID: ${stripeCustomerId}`);
 
             if (selectedProgram.stripeFirstPriceId && stripeCustomerId) {
-                console.log(`[Server Action] Creating Stripe Subscription for Program "${selectedProgram.title}" (Price ID: ${selectedProgram.stripeFirstPriceId}) for Customer ${stripeCustomerId}`);
+                console.log(`[processCheckout] Creating Stripe Subscription for Program "${selectedProgram.title}" (Price ID: ${selectedProgram.stripeFirstPriceId}) for Customer ${stripeCustomerId}`);
                 const subscription = await stripe.subscriptions.create({
                     customer: stripeCustomerId,
                     items: [{ price: selectedProgram.stripeFirstPriceId }],
-                    trial_period_days: 30, 
+                    trial_period_days: 30,
                 });
                 stripeSubscriptionId = subscription.id;
-                console.log(`[Server Action] Stripe Subscription created with ID: ${stripeSubscriptionId}`);
+                console.log(`[processCheckout] Stripe Subscription created with ID: ${stripeSubscriptionId}`);
             } else {
-                console.log(`[Server Action] No Stripe Price ID found for first subscription tier of Program "${selectedProgram.title}", or Stripe Customer not created. Skipping Stripe Subscription creation.`);
+                console.log(`[processCheckout] No Stripe Price ID for first sub tier of Program "${selectedProgram.title}", or Stripe Customer not created. Skipping Stripe Subscription.`);
             }
-            // Update the company with stripe customer and subscription IDs
             await updateCompany(newCompany.id, { stripeCustomerId, stripeSubscriptionId });
-            console.log(`[Server Action] Brand ${newCompany.id} updated with Stripe Customer ID: ${stripeCustomerId} and Subscription ID: ${stripeSubscriptionId}`);
-
+            console.log(`[processCheckout] Brand ${newCompany.id} updated with Stripe Customer ID: ${stripeCustomerId} and Subscription ID: ${stripeSubscriptionId}`);
         } catch (stripeError: any) {
-            console.error("[Server Action] Error creating Stripe Customer/Subscription or updating Brand:", stripeError);
+            console.error("[processCheckout] Error creating Stripe Customer/Subscription or updating Brand:", stripeError);
         }
     }
 
@@ -190,11 +188,8 @@ export async function processCheckout(data: CheckoutFormData): Promise<
     if (coursesToAssignToBrand.length > 0) {
         for (const courseId of coursesToAssignToBrand) {
             const course = await getCourseById(courseId);
-            if (course) {
-                programCourseTitles.push(course.title);
-            } else {
-                programCourseTitles.push(`Unknown Course (ID: ${courseId})`);
-            }
+            if (course) programCourseTitles.push(course.title);
+            else programCourseTitles.push(`Unknown Course (ID: ${courseId})`);
         }
     }
 
@@ -214,35 +209,35 @@ export async function processCheckout(data: CheckoutFormData): Promise<
     };
     const customerPurchaseRecord = await addCustomerPurchaseRecord(customerPurchaseData);
     if (!customerPurchaseRecord) {
-        console.error("[Server Action] CRITICAL: Failed to create customer purchase record after successful brand and user creation. Manual record needed for:", newCompany.id);
+        console.error("[processCheckout] CRITICAL: Failed to create customer purchase record. Manual record needed for:", newCompany.id);
     } else {
-        console.log(`[Server Action] Customer purchase record created with ID: ${customerPurchaseRecord.id}`);
+        console.log(`[processCheckout] Customer purchase record created with ID: ${customerPurchaseRecord.id}`);
     }
 
     try {
         await sendNewUserWelcomeEmail(newAdminUser.email, newAdminUser.name, tempPassword);
-        console.log(`[Server Action] Welcome email sent to ${newAdminUser.email}`);
+        console.log(`[processCheckout] Welcome email sent to ${newAdminUser.email}`);
     } catch (emailError) {
-        console.error(`[Server Action] Failed to send welcome email to ${newAdminUser.email}:`, emailError);
+        console.error(`[processCheckout] Failed to send welcome email to ${newAdminUser.email}:`, emailError);
     }
 
     await cleanupFirebaseApp(localAuthAppName);
     return { success: true, companyId: newCompany.id, adminUserId: newAdminUser.id, customerPurchaseId: customerPurchaseRecord?.id, tempPassword };
 
   } catch (error: any) {
-    console.error("[Server Action] Error during paid checkout processing (Program):", error);
+    console.error("[processCheckout] Error during paid checkout processing (Program):", error);
     await cleanupFirebaseApp(localAuthAppName);
     if (newCompanyId && !error.message?.includes('AuthCreationError') && !error.message?.includes('Firestore user creation failed')) {
         try {
-            console.warn(`[Server Action] Cleaning up brand ${newCompanyId} due to error: ${error.message}`);
+            console.warn(`[processCheckout] Cleaning up brand ${newCompanyId} due to error: ${error.message}`);
             const companyDocRef = doc(db, 'companies', newCompanyId);
             const companyDoc = await getDoc(companyDocRef);
             if (companyDoc.exists()) {
                  await deleteDoc(companyDocRef);
-                 console.log(`[Server Action] Brand ${newCompanyId} deleted on cleanup.`);
+                 console.log(`[processCheckout] Brand ${newCompanyId} deleted on cleanup.`);
             }
         } catch (cleanupError) {
-            console.error(`[Server Action] Error during brand cleanup for ${newCompanyId}:`, cleanupError);
+            console.error(`[processCheckout] Error during brand cleanup for ${newCompanyId}:`, cleanupError);
         }
     }
     return { success: false, error: error.message || "An unexpected error occurred during paid checkout." };
@@ -253,15 +248,18 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
   { success: boolean; companyId?: string; adminUserId?: string; tempPassword?: string; error?: undefined }
 | { success: boolean; error: string; tempPassword?: undefined }
 > {
-  console.log("[Server Action] Starting processFreeTrialCheckout for brand:", data.companyName);
+  console.log("[processFreeTrialCheckout] Starting for brand:", data.companyName);
+  console.log("[processFreeTrialCheckout] Received data.selectedProgramId:", data.selectedProgramId);
 
   const localAuthAppName = `freeTrialAuthApp-${Date.now()}`;
   let localAuthInstance: Auth | undefined;
   const tempPassword = generateRandomPassword();
   let newCompanyId: string | undefined;
 
-
   try {
+    if (!data.selectedProgramId) {
+        throw new Error("Selected Program ID is missing in free trial checkout data.");
+    }
     const selectedProgram: Program | null = await getProgramById(data.selectedProgramId);
     if (!selectedProgram) {
         throw new Error(`Selected Program (ID: ${data.selectedProgramId}) not found for free trial.`);
@@ -272,9 +270,7 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
     trialEndsDate.setDate(trialEndsDate.getDate() + trialDurationDays);
     const trialEndsAtTimestamp = Timestamp.fromDate(trialEndsDate);
 
-    console.log("[Server Action processFreeTrialCheckout] Selected Program ID for assignment:", data.selectedProgramId);
-
-    const newCompanyData: CompanyFormData = { // Ensure this matches CompanyFormData
+    const newCompanyData: CompanyFormData = {
         name: data.companyName,
         maxUsers: data.maxUsers ?? null,
         isTrial: true,
@@ -296,16 +292,16 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
         stripeSubscriptionId: null,
         parentBrandId: null,
         createdByUserId: null,
-        assignedProgramIds: data.selectedProgramId ? [data.selectedProgramId] : [],
+        assignedProgramIds: data.selectedProgramId ? [data.selectedProgramId] : [], // Directly assign program here
     };
-    console.log("[Server Action processFreeTrialCheckout] newCompanyData to be passed to addCompany:", JSON.stringify(newCompanyData, null, 2));
+    console.log("[processFreeTrialCheckout] newCompanyData to be passed to addCompany (assignedProgramIds included):", JSON.stringify(newCompanyData.assignedProgramIds, null, 2));
 
     const newCompany = await addCompany(newCompanyData);
     if (!newCompany) {
       throw new Error("Failed to create the trial brand in the database.");
     }
     newCompanyId = newCompany.id;
-    console.log(`[Server Action] Trial Brand "${newCompany.name}" created with ID: ${newCompany.id}, ends: ${trialEndsDate.toLocaleDateString()} and initial programs assigned directly.`);
+    console.log(`[processFreeTrialCheckout] Trial Brand "${newCompany.name}" created with ID: ${newCompany.id}, ends: ${trialEndsDate.toLocaleDateString()} and initial programs assigned directly.`);
 
     const defaultLocation = await createDefaultLocation(newCompany.id);
     const defaultLocationId = defaultLocation ? [defaultLocation.id] : [];
@@ -315,9 +311,9 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
         localAuthInstance = getFirebaseAuthInstance(localAuthAppName);
         const userCredential = await createUserWithEmailAndPassword(localAuthInstance, data.adminEmail, tempPassword);
         authUserUid = userCredential.user.uid;
-        console.log(`[Server Action] Trial Admin user created in Firebase Auth with UID: ${authUserUid} for email ${data.adminEmail} using local auth instance`);
+        console.log(`[processFreeTrialCheckout] Trial Admin user created in Firebase Auth with UID: ${authUserUid} for email ${data.adminEmail}`);
     } catch (authError: any) {
-        console.error("[Server Action] Failed to create trial admin user in Firebase Auth:", authError);
+        console.error("[processFreeTrialCheckout] Failed to create trial admin user in Firebase Auth:", authError);
         if (newCompanyId) {
             await deleteDoc(doc(db, 'companies', newCompanyId));
         }
@@ -334,7 +330,7 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
     };
     const newAdminUser = await addUser(newAdminUserData);
     if (!newAdminUser) {
-      console.warn(`[Server Action] Firestore user creation failed for trial Auth UID ${authUserUid}. Manual Auth user cleanup might be needed.`);
+      console.warn(`[processFreeTrialCheckout] Firestore user creation failed for trial Auth UID ${authUserUid}. Manual Auth user cleanup might be needed.`);
        if (newCompanyId) {
             await deleteDoc(doc(db, 'companies', newCompanyId));
       }
@@ -344,36 +340,34 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
       }
       throw new Error("Failed to create the trial admin user account in Firestore.");
     }
-    console.log(`[Server Action] Trial Admin user "${newAdminUser.name}" created in Firestore`);
+    console.log(`[processFreeTrialCheckout] Trial Admin user "${newAdminUser.name}" created in Firestore`);
 
     try {
         await sendNewUserWelcomeEmail(newAdminUser.email, newAdminUser.name, tempPassword);
-        console.log(`[Server Action] Welcome email sent to trial user ${newAdminUser.email}`);
+        console.log(`[processFreeTrialCheckout] Welcome email sent to trial user ${newAdminUser.email}`);
     } catch (emailError) {
-        console.error(`[Server Action] Failed to send welcome email to trial user ${newAdminUser.email}:`, emailError);
+        console.error(`[processFreeTrialCheckout] Failed to send welcome email to trial user ${newAdminUser.email}:`, emailError);
     }
 
     await cleanupFirebaseApp(localAuthAppName);
     return { success: true, companyId: newCompany.id, adminUserId: newAdminUser.id, tempPassword };
 
   } catch (error: any) {
-    console.error("[Server Action] Error during free trial checkout processing:", error);
+    console.error("[processFreeTrialCheckout] Error during free trial checkout processing:", error);
     await cleanupFirebaseApp(localAuthAppName);
     if (newCompanyId && !error.message?.includes('AuthCreationError') && !error.message?.includes('Firestore user creation failed')) {
         try {
-            console.warn(`[Server Action] Cleaning up brand ${newCompanyId} due to error: ${error.message}`);
+            console.warn(`[processFreeTrialCheckout] Cleaning up brand ${newCompanyId} due to error: ${error.message}`);
             const companyDocRef = doc(db, 'companies', newCompanyId);
             const companyDoc = await getDoc(companyDocRef);
             if (companyDoc.exists()) {
                  await deleteDoc(companyDocRef);
-                 console.log(`[Server Action] Brand ${newCompanyId} deleted on cleanup.`);
+                 console.log(`[processFreeTrialCheckout] Brand ${newCompanyId} deleted on cleanup.`);
             }
         } catch (cleanupError) {
-            console.error(`[Server Action] Error during brand cleanup for ${newCompanyId}:`, cleanupError);
+            console.error(`[processFreeTrialCheckout] Error during brand cleanup for ${newCompanyId}:`, cleanupError);
         }
     }
     return { success: false, error: error.message || "An unexpected error occurred during free trial checkout." };
   }
 }
-
-    

@@ -20,7 +20,8 @@ import { useToast } from '@/hooks/use-toast';
 import type { Company, CompanyFormData, User } from '@/types/user';
 import type { Program, Course } from '@/types/course';
 import { getCompanyById, updateCompany } from '@/lib/company-data';
-import { getAllPrograms, getProgramById, getAllCourses } from '@/lib/firestore-data';
+import { getAllPrograms, getProgramById, getAllCourses } from '@/lib/firestore-data'; // getProgramById needed for assigned program details
+import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data'; // To get the initial program from sale
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Globe, Users, CalendarDays, Palette, Briefcase, Package, Save, Layers, BookOpen } from 'lucide-react';
 import { getUserByEmail } from '@/lib/user-data';
@@ -41,12 +42,8 @@ const companyFormSchema = z.object({
   isTrial: z.boolean().default(false),
   trialEndsAt: z.date().nullable().optional(),
   canManageCourses: z.boolean().default(false),
-  whiteLabelEnabled: z.boolean().default(false),
-  primaryColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$/, { message: 'Invalid HEX color (e.g., #RRGGBB or #RGB)'}).optional().or(z.literal('')).nullable(),
-  secondaryColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$/, { message: 'Invalid HEX color'}).optional().or(z.literal('')).nullable(),
-  accentColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$/, { message: 'Invalid HEX color'}).optional().or(z.literal('')).nullable(),
-  brandBackgroundColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$/, { message: 'Invalid HEX color'}).optional().or(z.literal('')).nullable(),
-  brandForegroundColor: z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$/, { message: 'Invalid HEX color'}).optional().or(z.literal('')).nullable(),
+  // White-label fields removed for placeholder
+  // assignedProgramIds: z.array(z.string()).optional(), // This will be managed on a separate page
 });
 
 type CompanyFormValues = z.infer<typeof companyFormSchema>;
@@ -64,13 +61,13 @@ export default function EditCompanyPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [parentBrandName, setParentBrandName] = useState<string | null>(null);
   const [isLoadingParentBrand, setIsLoadingParentBrand] = useState(false);
-
   const [isLogoUploading, setIsLogoUploading] = useState(false);
   const [logoUploadProgress, setLogoUploadProgress] = useState(0);
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
 
+  // State for assigned programs display
   const [assignedProgramsDetails, setAssignedProgramsDetails] = useState<Program[]>([]);
-  const [allLibraryCourses, setAllLibraryCourses] = useState<Course[]>([]);
+  const [allLibraryCourses, setAllLibraryCourses] = useState<Course[]>([]); // For showing courses within programs
   const [isLoadingProgramData, setIsLoadingProgramData] = useState(true);
 
   const form = useForm<CompanyFormValues>({
@@ -85,18 +82,11 @@ export default function EditCompanyPage() {
       isTrial: false,
       trialEndsAt: null,
       canManageCourses: false,
-      whiteLabelEnabled: false,
-      primaryColor: '',
-      secondaryColor: '',
-      accentColor: '',
-      brandBackgroundColor: '',
-      brandForegroundColor: '',
     },
   });
 
   const isTrialValue = form.watch('isTrial');
   const logoUrlValue = form.watch('logoUrl');
-  const whiteLabelEnabledValue = form.watch('whiteLabelEnabled');
 
   const fetchCompanyData = useCallback(async (user: User | null) => {
     if (!companyId || !user) {
@@ -143,12 +133,6 @@ export default function EditCompanyPage() {
         isTrial: companyData.isTrial || false,
         trialEndsAt: companyData.trialEndsAt ? new Date(companyData.trialEndsAt as string) : null,
         canManageCourses: companyData.canManageCourses || false,
-        whiteLabelEnabled: companyData.whiteLabelEnabled || false,
-        primaryColor: companyData.primaryColor || '',
-        secondaryColor: companyData.secondaryColor || '',
-        accentColor: companyData.accentColor || '',
-        brandBackgroundColor: companyData.brandBackgroundColor || '',
-        brandForegroundColor: companyData.brandForegroundColor || '',
       });
 
       if (companyData.parentBrandId) {
@@ -159,6 +143,7 @@ export default function EditCompanyPage() {
       }
       setIsLoadingParentBrand(false);
 
+      // Fetch and display assigned programs
       console.log('[EditBrand] companyData.assignedProgramIds:', companyData.assignedProgramIds);
       if (companyData.assignedProgramIds && companyData.assignedProgramIds.length > 0) {
         const [fetchedAllPrograms, fetchedAllCourses] = await Promise.all([
@@ -166,15 +151,15 @@ export default function EditCompanyPage() {
           getAllCourses()
         ]);
         setAllLibraryCourses(fetchedAllCourses);
-        const details = companyData.assignedProgramIds
-            .map(id => fetchedAllPrograms.find(p => p.id === id))
-            .filter(Boolean) as Program[];
+        const details = (await Promise.all(
+          companyData.assignedProgramIds.map(id => getProgramById(id))
+        )).filter(Boolean) as Program[];
         setAssignedProgramsDetails(details);
-        console.log('[EditBrand] Fetched program details:', details);
+        console.log('[EditBrand] Fetched assigned program details:', details);
       } else {
         setAssignedProgramsDetails([]);
-        setAllLibraryCourses([]);
-        console.log('[EditBrand] No assigned programs found or library empty for brand:', companyId);
+        setAllLibraryCourses([]); // Clear if no programs assigned
+        console.log('[EditBrand] No assigned programs found for brand:', companyId);
       }
 
     } catch (error: any) {
@@ -244,36 +229,15 @@ export default function EditCompanyPage() {
         isTrial: data.isTrial,
         trialEndsAt: data.isTrial && data.trialEndsAt ? (data.trialEndsAt instanceof Date ? data.trialEndsAt.toISOString() : data.trialEndsAt) : null,
         canManageCourses: data.canManageCourses,
-        whiteLabelEnabled: data.whiteLabelEnabled,
-        primaryColor: data.primaryColor?.trim() === '' ? null : data.primaryColor,
-        secondaryColor: data.secondaryColor?.trim() === '' ? null : data.secondaryColor,
-        accentColor: data.accentColor?.trim() === '' ? null : data.accentColor,
-        brandBackgroundColor: data.brandBackgroundColor?.trim() === '' ? null : data.brandBackgroundColor,
-        brandForegroundColor: data.brandForegroundColor?.trim() === '' ? null : data.brandForegroundColor,
+        // White-label fields are not part of this form submission in the simplified version
       };
 
       const updatedCompany = await updateCompany(companyId, metadataToUpdate);
       if (updatedCompany) {
-        setCompany(updatedCompany);
-        form.reset({
-            name: updatedCompany.name || '',
-            subdomainSlug: updatedCompany.subdomainSlug || '',
-            customDomain: updatedCompany.customDomain || '',
-            shortDescription: updatedCompany.shortDescription || '',
-            logoUrl: updatedCompany.logoUrl || '',
-            maxUsers: updatedCompany.maxUsers ?? null,
-            isTrial: updatedCompany.isTrial || false,
-            trialEndsAt: updatedCompany.trialEndsAt ? new Date(updatedCompany.trialEndsAt as string) : null,
-            canManageCourses: updatedCompany.canManageCourses || false,
-            whiteLabelEnabled: updatedCompany.whiteLabelEnabled || false,
-            primaryColor: updatedCompany.primaryColor || '',
-            secondaryColor: updatedCompany.secondaryColor || '',
-            accentColor: updatedCompany.accentColor || '',
-            brandBackgroundColor: updatedCompany.brandBackgroundColor || '',
-            brandForegroundColor: updatedCompany.brandForegroundColor || '',
-        });
+        setCompany(updatedCompany); // Update local company state
+        // Re-fetch all data to ensure consistency, especially for assigned programs display
         if (currentUser) {
-          fetchCompanyData(currentUser);
+          await fetchCompanyData(currentUser); // This will also reset the form with fresh data
         }
         toast({ title: "Brand Updated", description: `"${updatedCompany.name}" updated successfully.` });
       } else {
@@ -335,7 +299,8 @@ export default function EditCompanyPage() {
                   <FormItem>
                     <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
                       {logoUrlValue && !isLogoUploading ? ( <div className="relative w-32 h-32 mx-auto mb-2"> <Image src={logoUrlValue} alt="Brand logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" data-ai-hint="company logo" onError={() => { form.setValue('logoUrl', ''); toast({ title: "Image Load Error", variant: "destructive" }); }} /> <Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6 opacity-80 hover:opacity-100 z-10" onClick={() => form.setValue('logoUrl', '')}><Trash2 className="h-4 w-4" /></Button> </div>
-                      ) : isLogoUploading ? ( <div className="flex flex-col items-center justify-center h-full py-8"><Loader2 className="h-8 w-8 animate-spin text-primary mb-2" /><p className="text-sm text-muted-foreground mb-1">Uploading...</p><Progress value={logoUploadProgress} className="w-full max-w-xs h-2" />{logoUploadError && <p className="text-xs text-destructive mt-2">{logoUploadError}</p>}</div>
+                      ) : isLogoUploading ? (
+                        <div className="flex flex-col items-center justify-center h-full py-8"><Loader2 className="h-8 w-8 animate-spin text-primary mb-2" /><p className="text-sm text-muted-foreground mb-1">Uploading...</p><Progress value={logoUploadProgress} className="w-full max-w-xs h-2" />{logoUploadError && <p className="text-xs text-destructive mt-2">{logoUploadError}</p>}</div>
                       ) : (
                         <Label htmlFor="brand-logo-upload" className="cursor-pointer block"><ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Click to upload logo</p><Input id="brand-logo-upload" type="file" accept="image/*" className="hidden" onChange={handleLogoFileChange} disabled={isLogoUploading} /></Label>
                       )}
@@ -344,41 +309,15 @@ export default function EditCompanyPage() {
                   </FormItem>
                 </CardContent>
               </Card>
-              
-              {/* White-Label Settings Card */}
+
+              {/* White-Label Settings Placeholder Card */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings</CardTitle>
                   <CardDescription>Customize the appearance for this brand.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {isMounted && currentUser?.role === 'Super Admin' && (
-                    <FormField
-                      control={form.control}
-                      name="whiteLabelEnabled"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm mb-4">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Enable White-Labeling</FormLabel>
-                            <FormDescription>Allow this brand to use custom colors and branding. Logo is set above.</FormDescription>
-                          </div>
-                          <FormControl>
-                            <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  )}
-                  {isMounted && whiteLabelEnabledValue && currentUser?.role === 'Super Admin' && (
-                    <div className="space-y-4 pl-2">
-                      <FormField control={form.control} name="primaryColor" render={({ field }) => (<FormItem><FormLabel>Primary Color (HEX)</FormLabel><FormControl><Input placeholder="#000000" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="secondaryColor" render={({ field }) => (<FormItem><FormLabel>Secondary Color (HEX)</FormLabel><FormControl><Input placeholder="#F1F5F9" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="accentColor" render={({ field }) => (<FormItem><FormLabel>Accent Color (HEX)</FormLabel><FormControl><Input placeholder="#3B82F6" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="brandBackgroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Background Color (HEX)</FormLabel><FormControl><Input placeholder="#FFFFFF" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="brandForegroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Foreground Color (HEX)</FormLabel><FormControl><Input placeholder="#030712" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                    </div>
-                  )}
-                  {(!isMounted || currentUser?.role !== 'Super Admin') && <p className="text-sm text-muted-foreground italic">White-label settings can only be managed by Super Admins.</p>}
+                  <p className="text-sm text-muted-foreground italic">White-label settings UI will be re-added here soon. Settings are preserved if previously set.</p>
                 </CardContent>
               </Card>
 
@@ -504,5 +443,3 @@ export default function EditCompanyPage() {
     </div>
   );
 }
-
-    

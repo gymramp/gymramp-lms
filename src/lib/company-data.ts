@@ -17,7 +17,7 @@ import {
     getCountFromServer
 } from 'firebase/firestore';
 import type { Company, Location, CompanyFormData, LocationFormData, User } from '@/types/user';
-import { getUsersWithoutCompany, deleteUser as softDeleteUser } from './user-data';
+import { getUsersWithoutCompany, deleteUser as softDeleteUser } from './user-data'; // Assuming this is for soft-deleting users
 
 const COMPANIES_COLLECTION = 'companies';
 const LOCATIONS_COLLECTION = 'locations';
@@ -55,7 +55,7 @@ async function retryOperation<T>(operation: () => Promise<T>, maxRetries = MAX_R
 export async function createDefaultCompany(): Promise<Company | null> {
     return retryOperation(async () => {
         const companiesRef = collection(db, COMPANIES_COLLECTION);
-        const q = query(companiesRef, where("name", "==", DEFAULT_COMPANY_NAME), where("isDeleted", "==", false), where("parentBrandId", "==", null)); 
+        const q = query(companiesRef, where("name", "==", DEFAULT_COMPANY_NAME), where("isDeleted", "==", false), where("parentBrandId", "==", null));
 
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
@@ -137,7 +137,6 @@ export async function getAllCompanies(currentUser?: User | null): Promise<Compan
                 companiesList.push({ id: doc.id, ...serializeCompanyDocumentData(doc.data()) } as Company);
             });
         }
-        // Managers and Staff typically don't fetch lists of all companies in this context
         return companiesList;
     });
 }
@@ -202,10 +201,10 @@ export async function addCompany(
     creatingUserId?: string | null,
     parentBrandIdForChild?: string | null
 ): Promise<Company | null> {
-    console.log("[company-data addCompany] Received companyData.assignedProgramIds:", companyData.assignedProgramIds);
+    console.log("[addCompany] Received companyData:", JSON.stringify(companyData, null, 2));
+    console.log("[addCompany] Received companyData.assignedProgramIds:", JSON.stringify(companyData.assignedProgramIds, null, 2));
     return retryOperation(async () => {
         const companiesRef = collection(db, COMPANIES_COLLECTION);
-        // Ensure all CompanyFormData fields are mapped correctly
         const docData: Omit<Company, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt'> & { isDeleted: boolean; deletedAt: null | Timestamp; createdAt: Timestamp; updatedAt: Timestamp } = {
             name: companyData.name,
             subdomainSlug: companyData.subdomainSlug?.trim().toLowerCase() || null,
@@ -215,7 +214,7 @@ export async function addCompany(
             maxUsers: companyData.maxUsers ?? null,
             assignedProgramIds: companyData.assignedProgramIds || [],
             isTrial: companyData.isTrial || false,
-            trialEndsAt: companyData.trialEndsAt ? Timestamp.fromDate(new Date(companyData.trialEndsAt)) : null,
+            trialEndsAt: companyData.trialEndsAt ? Timestamp.fromDate(new Date(companyData.trialEndsAt as string)) : null, // Cast to string
             saleAmount: companyData.saleAmount ?? null,
             revenueSharePartners: companyData.revenueSharePartners || null,
             whiteLabelEnabled: companyData.whiteLabelEnabled || false,
@@ -234,7 +233,7 @@ export async function addCompany(
             parentBrandId: parentBrandIdForChild || null,
             createdByUserId: creatingUserId || null,
          };
-        console.log("[company-data addCompany] docData.assignedProgramIds being written:", docData.assignedProgramIds);
+        console.log("[addCompany] docData.assignedProgramIds being written to Firestore:", JSON.stringify(docData.assignedProgramIds, null, 2));
         const docRef = await addDoc(companiesRef, docData);
         const newDocSnap = await getDoc(docRef);
          if (newDocSnap.exists()) {
@@ -251,7 +250,7 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
          console.warn("updateCompany called with empty ID.");
          return null;
      }
-     console.log(`[company-data updateCompany] Updating brand ${companyId} with assignedProgramIds:`, companyData.assignedProgramIds);
+     console.log(`[updateCompany] Updating brand ${companyId}. Received companyData.assignedProgramIds:`, JSON.stringify(companyData.assignedProgramIds, null, 2));
     return retryOperation(async () => {
         const companyRef = doc(db, COMPANIES_COLLECTION, companyId);
         const dataToUpdate: Partial<Company> = { updatedAt: serverTimestamp() as Timestamp };
@@ -262,14 +261,12 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
         if (companyData.shortDescription !== undefined) dataToUpdate.shortDescription = companyData.shortDescription?.trim() || null;
         if (companyData.logoUrl !== undefined) dataToUpdate.logoUrl = companyData.logoUrl?.trim() || null;
         if (companyData.maxUsers !== undefined) dataToUpdate.maxUsers = companyData.maxUsers ?? null;
-        
-        if (companyData.assignedProgramIds !== undefined) { // Critical: ensure this is handled
+        if (companyData.assignedProgramIds !== undefined) {
             dataToUpdate.assignedProgramIds = companyData.assignedProgramIds;
         }
-
         if (companyData.isTrial !== undefined) dataToUpdate.isTrial = companyData.isTrial;
         if (companyData.trialEndsAt !== undefined) {
-            dataToUpdate.trialEndsAt = companyData.trialEndsAt ? Timestamp.fromDate(new Date(companyData.trialEndsAt)) : null;
+            dataToUpdate.trialEndsAt = companyData.trialEndsAt ? Timestamp.fromDate(new Date(companyData.trialEndsAt as string)) : null; // Cast
         }
         if (companyData.saleAmount !== undefined) dataToUpdate.saleAmount = companyData.saleAmount ?? null;
         if (companyData.revenueSharePartners !== undefined) dataToUpdate.revenueSharePartners = companyData.revenueSharePartners || null;
@@ -284,8 +281,8 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
         if (companyData.stripeSubscriptionId !== undefined) dataToUpdate.stripeSubscriptionId = companyData.stripeSubscriptionId || null;
         // parentBrandId and createdByUserId are typically not updated after creation via this general update.
 
-        if (Object.keys(dataToUpdate).length > 1) { // Ensure there's more than just updatedAt
-            console.log(`[company-data updateCompany] Data being written for brand ${companyId}:`, dataToUpdate);
+        if (Object.keys(dataToUpdate).length > 1) {
+            console.log(`[updateCompany] Data being written for brand ${companyId} (assignedProgramIds included):`, JSON.stringify(dataToUpdate.assignedProgramIds, null, 2));
             await updateDoc(companyRef, dataToUpdate);
         } else {
             console.warn("updateCompany called with no actual data changes (besides updatedAt) for brand:", companyId);
@@ -331,12 +328,6 @@ export async function deleteCompany(companyId: string): Promise<boolean> {
         return true;
     }, 3);
 }
-
-export const updateCompanyCourseAssignments = async (companyId: string, courseIds: string[]): Promise<boolean> => {
-    console.warn("updateCompanyCourseAssignments is deprecated. Use updateCompany with assignedProgramIds instead.");
-    return false; // Deprecate this function as programs are now the primary way to assign courses to brands.
-};
-
 
 // --- Location Functions ---
 
@@ -542,5 +533,3 @@ function serializeLocationDocumentData(data: any): any {
     if (data.deletedAt instanceof Timestamp) serialized.deletedAt = data.deletedAt.toDate().toISOString();
     return serialized;
 }
-
-    
