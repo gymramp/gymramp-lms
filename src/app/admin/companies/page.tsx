@@ -33,9 +33,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { PlusCircle, MoreHorizontal, Trash2, Edit, Users, MapPin, Loader2, BookOpen, Search, Infinity, Gift, AlertTriangle } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Trash2, Edit, Users, MapPin, Loader2, BookOpen, Search, Infinity, Gift, AlertTriangle, Building } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { Company, User } from '@/types/user';
+import type { Company, User, CompanyFormData } from '@/types/user';
 import { getAllCompanies, deleteCompany, addCompany, getLocationsByCompanyId } from '@/lib/company-data';
 import { getUsersByCompanyId, getUserCountByCompanyId } from '@/lib/user-data';
 import { AddEditCompanyDialog } from '@/components/admin/AddEditCompanyDialog';
@@ -45,8 +45,8 @@ import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Timestamp } from 'firebase/firestore'; // Import Timestamp
-import { Badge } from '@/components/ui/badge'; // Import Badge
+import { Timestamp } from 'firebase/firestore';
+import { Badge } from '@/components/ui/badge';
 
 type CompanyWithCounts = Company & { locationCount: number; userCount: number; assignedCourseCount: number };
 
@@ -63,33 +63,19 @@ export default function AdminCompaniesPage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser && firebaseUser.email) {
-        const userDetails = await getUserByEmail(firebaseUser.email);
-        setCurrentUser(userDetails);
-        if (userDetails?.role !== 'Super Admin') {
-          toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
-          router.push('/');
-        } else {
-          fetchCompanies();
-        }
-      } else {
-        setCurrentUser(null);
-        router.push('/login');
-      }
-    });
-    return () => unsubscribe();
-  }, [router, toast]);
-
-  const fetchCompanies = useCallback(async () => {
+  const fetchCompanies = useCallback(async (user: User | null) => {
+    if (!user) {
+      setIsLoading(false);
+      setIsLoadingCounts(false);
+      return;
+    }
     setIsLoading(true);
     setIsLoadingCounts(true);
     try {
-      const companiesData = await getAllCompanies();
+      const companiesData = await getAllCompanies(user); // Pass current user
       const companiesWithCountsPromises = companiesData.map(async (company) => {
           const locations = await getLocationsByCompanyId(company.id);
-          const userCount = await getUserCountByCompanyId(company.id); 
+          const userCount = await getUserCountByCompanyId(company.id);
           const assignedCourseCount = company.assignedCourseIds?.length || 0;
           return { ...company, locationCount: locations.length, userCount: userCount, assignedCourseCount };
       });
@@ -108,10 +94,24 @@ export default function AdminCompaniesPage() {
   }, [toast]);
 
   useEffect(() => {
-    if (currentUser?.role === 'Super Admin') {
-      fetchCompanies();
-    }
-  }, [currentUser, fetchCompanies]);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser && firebaseUser.email) {
+        const userDetails = await getUserByEmail(firebaseUser.email);
+        setCurrentUser(userDetails);
+        if (userDetails && (userDetails.role === 'Super Admin' || userDetails.role === 'Admin' || userDetails.role === 'Owner')) {
+          fetchCompanies(userDetails);
+        } else {
+          toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
+          router.push(userDetails?.role === 'Staff' ? '/courses/my-courses' : '/');
+        }
+      } else {
+        setCurrentUser(null);
+        router.push('/login');
+      }
+    });
+    return () => unsubscribe();
+  }, [router, toast, fetchCompanies]);
+
 
   useEffect(() => {
     const lowercasedFilter = searchTerm.toLowerCase();
@@ -122,12 +122,21 @@ export default function AdminCompaniesPage() {
   }, [searchTerm, companies]);
 
   const handleAddCompanyClick = () => {
+    if (!currentUser || (currentUser.role !== 'Super Admin' && currentUser.role !== 'Admin' && currentUser.role !== 'Owner')) {
+      toast({ title: "Permission Denied", description: "You do not have permission to add brands.", variant: "destructive" });
+      return;
+    }
     setIsAddDialogOpen(true);
   };
 
   const openDeleteConfirmation = (company: Company) => {
-    setCompanyToDelete(company);
-    setIsDeleteDialogOpen(true);
+     if (!currentUser) return;
+     if (currentUser.role === 'Super Admin' || (currentUser.companyId === company.id || currentUser.companyId === company.parentBrandId)) {
+        setCompanyToDelete(company);
+        setIsDeleteDialogOpen(true);
+     } else {
+        toast({ title: "Permission Denied", description: "You cannot delete this brand.", variant: "destructive" });
+     }
   };
 
   const confirmDeleteCompany = async () => {
@@ -136,10 +145,10 @@ export default function AdminCompaniesPage() {
     try {
       const success = await deleteCompany(companyToDelete.id);
       if (success) {
-        await fetchCompanies();
+        await fetchCompanies(currentUser);
         toast({
           title: 'Brand Deleted',
-          description: `Brand "${companyToDelete.name}" and all associated locations/users have been deleted.`,
+          description: `Brand "${companyToDelete.name}" and its direct associations (users, locations) have been marked as deleted. Child brands are not automatically deleted.`,
         });
       } else {
         throw new Error('Delete operation returned false.');
@@ -155,17 +164,33 @@ export default function AdminCompaniesPage() {
   };
 
    const handleSaveNewCompany = async (companyData: CompanyFormData) => {
-       const added = await addCompany(companyData);
-       if (added) {
-          toast({ title: "Brand Added", description: `"${added.name}" added successfully.` });
-          fetchCompanies();
-       } else {
-           toast({ title: "Error", description: "Failed to add brand.", variant: "destructive" });
-       }
+     if (!currentUser) {
+       toast({ title: "Error", description: "Current user not found.", variant: "destructive" });
+       return;
+     }
+     let added: Company | null = null;
+     if (currentUser.role === 'Super Admin') {
+       // Super Admin creates a Parent Brand
+       added = await addCompany(companyData, currentUser.id, null);
+     } else if ((currentUser.role === 'Admin' || currentUser.role === 'Owner') && currentUser.companyId) {
+       // Brand Admin/Owner creates a Child Brand under their own brand
+       added = await addCompany(companyData, currentUser.id, currentUser.companyId);
+     } else {
+       toast({ title: "Permission Denied", description: "You do not have the necessary permissions or brand association to create a new brand.", variant: "destructive" });
+       setIsAddDialogOpen(false);
+       return;
+     }
+
+     if (added) {
+        toast({ title: "Brand Added", description: `"${added.name}" added successfully.` });
+        fetchCompanies(currentUser);
+     } else {
+         toast({ title: "Error", description: "Failed to add brand.", variant: "destructive" });
+     }
      setIsAddDialogOpen(false);
    };
 
-   if (currentUser === null || currentUser?.role !== 'Super Admin') {
+   if (!currentUser || !(currentUser.role === 'Super Admin' || currentUser.role === 'Admin' || currentUser.role === 'Owner')) {
      return <div className="container mx-auto py-12 text-center">Loading or Access Denied...</div>;
    }
 
@@ -182,7 +207,7 @@ export default function AdminCompaniesPage() {
         <Input type="text" placeholder="Search brands by name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="max-w-sm"/>
       </div>
       <Card>
-        <CardHeader> <CardTitle>Brand List</CardTitle> <CardDescription>Manage brands, locations, courses, and users.</CardDescription> </CardHeader>
+        <CardHeader> <CardTitle>Brand List</CardTitle> <CardDescription>Manage brands, their locations, courses, and users.</CardDescription> </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="space-y-4 py-4"> <Skeleton className="h-12 w-full" /> <Skeleton className="h-10 w-full" /> <Skeleton className="h-10 w-full" /> </div>
@@ -193,11 +218,12 @@ export default function AdminCompaniesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Brand Name</TableHead>
+                  <TableHead className="text-center">Type</TableHead>
                   <TableHead className="text-center">Locations</TableHead>
                   <TableHead className="text-center">Users (Active)</TableHead>
                   <TableHead className="text-center">Max Users</TableHead>
-                  <TableHead className="text-center">Courses Assigned</TableHead>
-                  <TableHead className="text-center">Trial Status</TableHead> {}
+                  <TableHead className="text-center">Courses Assigned (Global)</TableHead>
+                  <TableHead className="text-center">Trial Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -217,55 +243,48 @@ export default function AdminCompaniesPage() {
                         trialStatusDisplay = <span className="text-xs text-muted-foreground">Not a Trial</span>;
                     }
 
+                    const brandType = company.parentBrandId ? "Child Brand" : "Parent Brand";
+
                     return (
                       <TableRow key={company.id}>
                         <TableCell className="font-medium"> <div className="flex items-center gap-3"> <Avatar className="h-8 w-8 border"> <AvatarImage src={company.logoUrl || undefined} alt={`${company.name} logo`} className="object-contain" /> <AvatarFallback className="text-xs"> {company.name.substring(0, 2).toUpperCase()} </AvatarFallback> </Avatar> <span>{company.name}</span> </div> </TableCell>
+                        <TableCell className="text-center"><Badge variant={company.parentBrandId ? "outline" : "default"}>{brandType}</Badge></TableCell>
                         <TableCell className="text-center"> {isLoadingCounts ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : company.locationCount} </TableCell>
                         <TableCell className="text-center"> {isLoadingCounts ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : company.userCount} </TableCell>
                         <TableCell className="text-center"> {isLoadingCounts ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : company.maxUsers === null || company.maxUsers === undefined ? <Infinity className="h-4 w-4 mx-auto text-muted-foreground" title="Unlimited"/> : company.maxUsers} </TableCell>
                         <TableCell className="text-center"> {isLoadingCounts ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : company.assignedCourseCount} </TableCell>
-                        <TableCell className="text-center">{trialStatusDisplay}</TableCell> {}
+                        <TableCell className="text-center">{trialStatusDisplay}</TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                <Button variant="ghost" className="h-8 w-8 p-0">
-                                <>
                                   <span className="sr-only">Open menu for {company.name}</span>
                                   <MoreHorizontal className="h-4 w-4" />
-                                </>
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Manage</DropdownMenuLabel>
+                              <DropdownMenuLabel>Manage {company.name}</DropdownMenuLabel>
                               <DropdownMenuItem asChild>
                                 <Link href={`/admin/companies/${company.id}/edit`}>
-                                  <span className="flex items-center gap-2">
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    <span>Edit Brand &amp; Settings</span>
-                                  </span>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Edit Brand & Settings
                                 </Link>
                               </DropdownMenuItem>
                               <DropdownMenuItem asChild>
                                 <Link href={`/admin/companies/${company.id}/locations`}>
-                                  <span className="flex items-center gap-2">
-                                    <MapPin className="mr-2 h-4 w-4" />
-                                    <span>Manage Locations</span>
-                                  </span>
+                                  <MapPin className="mr-2 h-4 w-4" />
+                                  Manage Locations
                                 </Link>
                               </DropdownMenuItem>
                               <DropdownMenuItem asChild>
                                 <Link href={`/admin/users?companyId=${company.id}`}>
-                                  <span className="flex items-center gap-2">
-                                    <Users className="mr-2 h-4 w-4" />
-                                    <span>Manage Users</span>
-                                  </span>
+                                  <Users className="mr-2 h-4 w-4" />
+                                  Manage Users
                                 </Link>
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => openDeleteConfirmation(company)}>
-                                <>
-                                  <Trash2 className="mr-2 h-4 w-4" /> <span>Delete Brand</span>
-                                </>
+                                  <Trash2 className="mr-2 h-4 w-4" /> Delete Brand
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -281,11 +300,10 @@ export default function AdminCompaniesPage() {
       <AddEditCompanyDialog isOpen={isAddDialogOpen} setIsOpen={setIsAddDialogOpen} initialData={null} onSave={handleSaveNewCompany}/>
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader> <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle> <AlertDialogDescription> This action cannot be undone. This will permanently delete the brand "{companyToDelete?.name}", all its locations, and all associated user accounts. </AlertDialogDescription> </AlertDialogHeader>
+          <AlertDialogHeader> <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle> <AlertDialogDescription> This action cannot be undone. This will permanently mark the brand "{companyToDelete?.name}" as deleted. Associated users and locations will also be marked as deleted. Child brands (if any) will NOT be automatically deleted but will become orphaned. </AlertDialogDescription> </AlertDialogHeader>
           <AlertDialogFooter> <AlertDialogCancel onClick={() => setCompanyToDelete(null)}>Cancel</AlertDialogCancel> <AlertDialogAction onClick={confirmDeleteCompany} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isLoading}> {isLoading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>) : 'Yes, delete brand'} </AlertDialogAction> </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
   );
 }
-

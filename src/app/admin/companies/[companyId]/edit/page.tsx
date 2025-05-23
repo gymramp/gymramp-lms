@@ -10,11 +10,11 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Label } from '@/components/ui/label'; // Make sure Label is imported
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import type { Company, CompanyFormData } from '@/types/user';
 import type { Program, Course } from '@/types/course';
@@ -22,7 +22,7 @@ import { getCompanyById, updateCompany } from '@/lib/company-data';
 import { getProgramById, getAllCourses } from '@/lib/firestore-data';
 import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Globe, Users, CalendarDays, Settings as SettingsIcon, BookOpen, Layers, PackageCheck, Palette } from 'lucide-react';
+import { ArrowLeft, Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Globe, Users, CalendarDays, Settings as SettingsIcon, BookOpen, Layers, PackageCheck, Palette, Package, Briefcase } from 'lucide-react';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -36,8 +36,8 @@ const companyFormSchema = z.object({
   name: z.string().min(2, "Brand name must be at least 2 characters."),
   subdomainSlug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug must be lowercase alphanumeric with hyphens, not at start/end.' }).min(3, "Slug must be at least 3 characters.").max(63, "Slug cannot exceed 63 characters.").optional().or(z.literal('')).nullable(),
   customDomain: z.string().optional().or(z.literal('')).nullable(),
-  shortDescription: z.string().max(150, { message: "Description can't exceed 150 characters." }).optional().or(z.literal('')),
-  logoUrl: z.string().url({ message: "Invalid URL for logo." }).optional().or(z.literal('')),
+  shortDescription: z.string().max(150, { message: "Description can't exceed 150 characters." }).optional().or(z.literal('')).nullable(),
+  logoUrl: z.string().url({ message: "Invalid URL for logo." }).optional().or(z.literal('')).nullable(),
   maxUsers: z.coerce.number({ invalid_type_error: "Must be a number" }).int().positive().min(1, "Min 1 user").optional().nullable(),
   isTrial: z.boolean().default(false),
   trialEndsAt: z.date().nullable().optional(),
@@ -61,7 +61,7 @@ export default function EditCompanyPage() {
   const [company, setCompany] = useState<Company | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isMounted, setIsMounted] = useState(false);
 
   const [isLogoUploading, setIsLogoUploading] = useState(false);
@@ -69,8 +69,11 @@ export default function EditCompanyPage() {
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
 
   const [assignedProgram, setAssignedProgram] = useState<Program | null>(null);
+  const [parentBrandName, setParentBrandName] = useState<string | null>(null);
   const [coursesInProgram, setCoursesInProgram] = useState<Course[]>([]);
   const [isLoadingProgramData, setIsLoadingProgramData] = useState(false);
+  const [isLoadingParentBrand, setIsLoadingParentBrand] = useState(false);
+
 
   const form = useForm<CompanyFormValues>({
     resolver: zodResolver(companyFormSchema),
@@ -97,75 +100,86 @@ export default function EditCompanyPage() {
   const logoUrlValue = form.watch('logoUrl');
   const whiteLabelEnabledValue = form.watch('whiteLabelEnabled');
 
-  useEffect(() => {
-    setIsMounted(true);
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser && firebaseUser.email) {
-        const userDetails = await getUserByEmail(firebaseUser.email);
-        setCurrentUser(userDetails);
-        if (userDetails?.role !== 'Super Admin') {
-          toast({ title: "Access Denied", description: "You don't have permission to edit brands.", variant: "destructive" });
-          router.push('/admin/dashboard');
-        }
-      } else {
-        router.push('/');
-      }
-    });
-    return () => unsubscribe();
-  }, [router, toast]);
-
-  const fetchCompanyAndRelatedData = useCallback(async () => {
-    if (!companyId || !currentUser || currentUser.role !== 'Super Admin') {
+  const fetchCompanyData = useCallback(async (user: User) => {
+    if (!companyId) {
       setIsLoading(false);
-      setIsLoadingProgramData(false);
       return;
     }
     setIsLoading(true);
     setIsLoadingProgramData(true);
+    setIsLoadingParentBrand(true);
+
     try {
       const companyData = await getCompanyById(companyId);
-      if (companyData) {
-        setCompany(companyData);
-        form.reset({
-          name: companyData.name || '',
-          subdomainSlug: companyData.subdomainSlug || '',
-          customDomain: companyData.customDomain || '',
-          shortDescription: companyData.shortDescription || '',
-          logoUrl: companyData.logoUrl || '',
-          maxUsers: companyData.maxUsers ?? null,
-          isTrial: companyData.isTrial || false,
-          trialEndsAt: companyData.trialEndsAt instanceof Timestamp
-            ? companyData.trialEndsAt.toDate()
-            : companyData.trialEndsAt instanceof Date
-            ? companyData.trialEndsAt
-            : null,
-          canManageCourses: companyData.canManageCourses || false,
-          whiteLabelEnabled: companyData.whiteLabelEnabled || false,
-          primaryColor: companyData.primaryColor || '',
-          secondaryColor: companyData.secondaryColor || '',
-          accentColor: companyData.accentColor || '',
-          brandBackgroundColor: companyData.brandBackgroundColor || '',
-          brandForegroundColor: companyData.brandForegroundColor || '',
-        });
+      if (!companyData) {
+        toast({ title: "Error", description: "Brand not found.", variant: "destructive" });
+        router.push('/admin/companies');
+        return;
+      }
 
-        const purchaseRecord = await getCustomerPurchaseRecordByBrandId(companyId);
-        if (purchaseRecord && purchaseRecord.selectedProgramId) {
-          const program = await getProgramById(purchaseRecord.selectedProgramId);
-          setAssignedProgram(program);
-          if (program && program.courseIds && program.courseIds.length > 0) {
-            const allCourses = await getAllCourses();
-            const programCourses = allCourses.filter(course => program.courseIds.includes(course.id));
-            setCoursesInProgram(programCourses);
-          } else {
-            setCoursesInProgram([]);
-          }
+      // Authorization Check
+      let authorized = false;
+      if (user.role === 'Super Admin') {
+        authorized = true;
+      } else if ((user.role === 'Admin' || user.role === 'Owner') && user.companyId) {
+        if (companyData.id === user.companyId || companyData.parentBrandId === user.companyId) {
+          authorized = true;
+        }
+      }
+
+      if (!authorized) {
+        toast({ title: "Access Denied", description: "You do not have permission to edit this brand.", variant: "destructive" });
+        router.push(user.role === 'Super Admin' ? '/admin/companies' : '/dashboard');
+        return;
+      }
+      
+      setCompany(companyData);
+      form.reset({
+        name: companyData.name || '',
+        subdomainSlug: companyData.subdomainSlug || '',
+        customDomain: companyData.customDomain || '',
+        shortDescription: companyData.shortDescription || '',
+        logoUrl: companyData.logoUrl || '',
+        maxUsers: companyData.maxUsers ?? null,
+        isTrial: companyData.isTrial || false,
+        trialEndsAt: companyData.trialEndsAt instanceof Timestamp
+          ? companyData.trialEndsAt.toDate()
+          : companyData.trialEndsAt instanceof Date
+          ? companyData.trialEndsAt
+          : null,
+        canManageCourses: companyData.canManageCourses || false,
+        whiteLabelEnabled: companyData.whiteLabelEnabled || false,
+        primaryColor: companyData.primaryColor || '',
+        secondaryColor: companyData.secondaryColor || '',
+        accentColor: companyData.accentColor || '',
+        brandBackgroundColor: companyData.brandBackgroundColor || '',
+        brandForegroundColor: companyData.brandForegroundColor || '',
+      });
+
+      // Fetch Parent Brand Name if it's a Child Brand
+      if (companyData.parentBrandId) {
+        const parent = await getCompanyById(companyData.parentBrandId);
+        setParentBrandName(parent?.name || 'Unknown Parent');
+      } else {
+        setParentBrandName(null);
+      }
+      setIsLoadingParentBrand(false);
+
+
+      const purchaseRecord = await getCustomerPurchaseRecordByBrandId(companyId);
+      if (purchaseRecord && purchaseRecord.selectedProgramId) {
+        const program = await getProgramById(purchaseRecord.selectedProgramId);
+        setAssignedProgram(program);
+        if (program && program.courseIds && program.courseIds.length > 0) {
+          const allCourses = await getAllCourses();
+          const programCourses = allCourses.filter(course => program.courseIds.includes(course.id));
+          setCoursesInProgram(programCourses);
         } else {
-          setAssignedProgram(null);
           setCoursesInProgram([]);
         }
       } else {
-        toast({ title: "Error", description: "Brand not found.", variant: "destructive" });
-        router.push('/admin/companies');
+        setAssignedProgram(null);
+        setCoursesInProgram([]);
       }
     } catch (error) {
       console.error("Failed to fetch brand data:", error);
@@ -174,13 +188,27 @@ export default function EditCompanyPage() {
       setIsLoading(false);
       setIsLoadingProgramData(false);
     }
-  }, [companyId, currentUser, form, router, toast]);
+  }, [companyId, form, router, toast]);
 
   useEffect(() => {
-    if (currentUser?.role === 'Super Admin' && companyId) {
-      fetchCompanyAndRelatedData();
-    }
-  }, [currentUser, companyId, fetchCompanyAndRelatedData]);
+    setIsMounted(true);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser && firebaseUser.email) {
+        const userDetails = await getUserByEmail(firebaseUser.email);
+        setCurrentUser(userDetails);
+        if (userDetails && (userDetails.role === 'Super Admin' || userDetails.role === 'Admin' || userDetails.role === 'Owner')) {
+          fetchCompanyData(userDetails);
+        } else {
+          toast({ title: "Access Denied", description: "You don't have permission to edit brands.", variant: "destructive" });
+          router.push('/dashboard'); // Or appropriate non-admin page
+        }
+      } else {
+        router.push('/');
+      }
+    });
+    return () => unsubscribe();
+  }, [router, toast, fetchCompanyData]);
+
 
   const handleLogoFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -207,7 +235,7 @@ export default function EditCompanyPage() {
     if (!companyId) return;
     setIsSaving(true);
     try {
-      const currentLogoUrl = form.getValues('logoUrl'); // Get latest logoUrl from form state
+      const currentLogoUrl = form.getValues('logoUrl');
 
       const metadataToUpdate: Partial<CompanyFormData> = {
         name: data.name,
@@ -263,7 +291,7 @@ export default function EditCompanyPage() {
     }
   };
 
-  if (!isMounted || isLoading || !currentUser || currentUser.role !== 'Super Admin') {
+  if (!isMounted || isLoading || !currentUser) {
     return (
       <div className="container mx-auto py-12 md:py-16 lg:py-20">
         <Skeleton className="h-8 w-1/4 mb-6" />
@@ -277,16 +305,26 @@ export default function EditCompanyPage() {
   }
 
   if (!company) {
-    return <div className="container mx-auto py-12 text-center">Brand not found.</div>;
+    return <div className="container mx-auto py-12 text-center">Brand not found or access denied.</div>;
   }
 
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20">
-      <Button variant="outline" onClick={() => router.push('/admin/companies')} className="mb-6">
+       <Button variant="outline" onClick={() => router.push('/admin/companies')} className="mb-6">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Brands
       </Button>
       <h1 className="text-3xl font-bold tracking-tight text-primary mb-2"> Edit Brand: {company.name} </h1>
       <p className="text-muted-foreground mb-8"> Manage settings for this brand. </p>
+      {company.parentBrandId && (
+        <Card className="mb-6 bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700">
+          <CardContent className="p-4">
+            <p className="text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2">
+              <Briefcase className="h-4 w-4" />
+              This is a Child Brand. Parent Brand: {isLoadingParentBrand ? <Loader2 className="h-4 w-4 animate-spin" /> : <strong>{parentBrandName || 'Loading...'}</strong>}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
@@ -320,10 +358,11 @@ export default function EditCompanyPage() {
                 </CardContent>
               </Card>
 
+               {/* White-Label Settings Card - Restored */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings</CardTitle>
-                  <CardDescription>Customize the appearance for this brand if white-labeling is enabled.</CardDescription>
+                  <CardDescription>Customize the appearance for this brand.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {isMounted && (
@@ -334,11 +373,12 @@ export default function EditCompanyPage() {
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                           <div className="space-y-0.5">
                             <FormLabel className="text-base">Enable White-Labeling</FormLabel>
-                            <FormMessage name="whiteLabelEnabled" /> 
+                             <FormDescription>Allow this brand to use custom colors and branding elements.</FormDescription>
                           </div>
                           <FormControl>
-                            <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                            <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
                           </FormControl>
+                          <FormMessage />
                         </FormItem>
                       )}
                     />
@@ -362,7 +402,7 @@ export default function EditCompanyPage() {
                 <CardContent className="space-y-4">
                   <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem><FormLabel>Max Users</FormLabel><FormControl><Input type="number" min="1" placeholder="Leave blank for unlimited" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
                   {isMounted && (
-                    <FormField control={form.control} name="isTrial" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Is Trial Account?</FormLabel></div><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="isTrial" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Is Trial Account?</FormLabel></div><FormControl><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></FormControl><FormMessage /></FormItem>)} />
                   )}
                   {isMounted && isTrialValue && (
                     <FormField control={form.control} name="trialEndsAt" render={({ field }) => (
@@ -378,8 +418,8 @@ export default function EditCompanyPage() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader><CardTitle className="flex items-center gap-2"><PackageCheck className="h-5 w-5" /> Course Management Ability</CardTitle></CardHeader>
+               <Card>
+                <CardHeader><CardTitle className="flex items-center gap-2"><Package className="h-5 w-5" /> Course Management Ability</CardTitle></CardHeader>
                 <CardContent>
                   {isMounted && (
                     <FormField
@@ -389,15 +429,17 @@ export default function EditCompanyPage() {
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                           <div className="space-y-0.5">
                             <FormLabel className="text-base">Enable Course Management</FormLabel>
+                            <FormDescription>Allow this brand's Admins/Owners to create and manage their own courses.</FormDescription>
                           </div>
-                          <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                          <FormMessage name="canManageCourses" /> 
+                          <FormControl><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></FormControl>
+                          <FormMessage />
                         </FormItem>
                       )}
                     />
                   )}
                 </CardContent>
               </Card>
+
 
               <Card>
                 <CardHeader>
@@ -432,4 +474,3 @@ export default function EditCompanyPage() {
   );
 }
 
-    
