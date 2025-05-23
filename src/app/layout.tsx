@@ -9,23 +9,24 @@ import { Toaster } from "@/components/ui/toaster";
 import { cn } from '@/lib/utils';
 import { Navbar } from '@/components/layout/Navbar';
 import { Sidebar } from '@/components/layout/Sidebar';
-import { hexToHslString } from '@/lib/utils'; // Import the new utility
+import { hexToHslString } from '@/lib/utils';
 
 // Default values for HSL theme variables from globals.css
-const DEFAULT_BACKGROUND_HSL = "0 0% 100%";
-const DEFAULT_FOREGROUND_HSL = "0 0% 3.9%";
+// These are used if a brand has white-labeling enabled but is missing a specific color setting.
+const DEFAULT_BACKGROUND_HSL = "0 0% 100%"; // White
+const DEFAULT_FOREGROUND_HSL = "0 0% 3.9%"; // Near Black
 const DEFAULT_CARD_HSL = "0 0% 100%";
 const DEFAULT_CARD_FOREGROUND_HSL = "0 0% 3.9%";
 const DEFAULT_POPOVER_HSL = "0 0% 100%";
 const DEFAULT_POPOVER_FOREGROUND_HSL = "0 0% 3.9%";
 const DEFAULT_PRIMARY_HSL = "0 0% 3.9%";
-const DEFAULT_PRIMARY_FOREGROUND_HSL = "0 0% 98%";
+const DEFAULT_PRIMARY_FOREGROUND_HSL = "0 0% 98%"; // For primary button text
 const DEFAULT_SECONDARY_HSL = "0 0% 96.1%";
-const DEFAULT_SECONDARY_FOREGROUND_HSL = "0 0% 9%";
+const DEFAULT_SECONDARY_FOREGROUND_HSL = "0 0% 9%"; // For secondary button text
 const DEFAULT_MUTED_HSL = "0 0% 96.1%";
 const DEFAULT_MUTED_FOREGROUND_HSL = "0 0% 45.1%";
 const DEFAULT_ACCENT_HSL = "226 71% 56%";
-const DEFAULT_ACCENT_FOREGROUND_HSL = "0 0% 98%";
+const DEFAULT_ACCENT_FOREGROUND_HSL = "0 0% 98%"; // For accent button text
 const DEFAULT_DESTRUCTIVE_HSL = "0 84.2% 60.2%";
 const DEFAULT_DESTRUCTIVE_FOREGROUND_HSL = "0 0% 98%";
 const DEFAULT_BORDER_HSL = "0 0% 89.8%";
@@ -41,8 +42,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: company?.name || 'GYMRAMP',
     description: company?.shortDescription || 'Sales training for gym employees',
-    // Add dynamic favicon logic here if/when implemented
-    // icons: { icon: company?.faviconUrl || '/favicon.ico' }
+    // icons: { icon: company?.faviconUrl || '/favicon.ico' } // Future enhancement
   };
 }
 
@@ -62,67 +62,70 @@ export default async function RootLayout({
   console.log('[RootLayout] Host from headers():', host);
 
   const company = await getUserCompany(host);
-  console.log('[RootLayout] Company fetched:', company ? { name: company.name, whiteLabelEnabled: company.whiteLabelEnabled, colors: { p: company.primaryColor, s: company.secondaryColor, a: company.accentColor, bg: company.brandBackgroundColor, fg: company.brandForegroundColor } } : null);
+  console.log('[RootLayout] Company fetched:', company ? { name: company.name, whiteLabelEnabled: company.whiteLabelEnabled, primaryColor: company.primaryColor, brandBackgroundColor: company.brandBackgroundColor } : null);
 
   let themeStyles: React.CSSProperties = {};
-  let bodyClasses = "flex flex-col h-full font-sans antialiased"; // Ensured h-full here
+  let brandLogoUrl: string | null = null;
+  let brandName: string | null = null;
 
   if (company && company.whiteLabelEnabled) {
-    console.log(`[RootLayout] White-labeling enabled for brand: ${company.name}`);
+    brandLogoUrl = company.logoUrl || null;
+    brandName = company.name || null;
 
-    const primaryHsl = company.primaryColor ? hexToHslString(company.primaryColor) : null;
-    const secondaryHsl = company.secondaryColor ? hexToHslString(company.secondaryColor) : null;
-    const accentHsl = company.accentColor ? hexToHslString(company.accentColor) : null;
-    const brandBgHsl = company.brandBackgroundColor ? hexToHslString(company.brandBackgroundColor) : null;
-    const brandFgHsl = company.brandForegroundColor ? hexToHslString(company.brandForegroundColor) : null;
+    const addStyle = (variableName: string, hexColor: string | null | undefined, defaultHsl?: string) => {
+      if (hexColor) {
+        const hsl = hexToHslString(hexColor);
+        if (hsl) {
+          themeStyles[variableName as any] = hsl;
+        } else if (defaultHsl) {
+          // Use default if brand color is invalid but whitelabeling is on
+          // This case might be rare if HEX validation is good in admin UI
+          themeStyles[variableName as any] = defaultHsl;
+        }
+      } else if (defaultHsl) {
+        // This ensures that if a brand has white-labeling enabled but *doesn't* set a specific color (e.g. brandBackgroundColor),
+        // it will still get a coherent set of defaults rather than a mix.
+        // However, for a pure override system, we might only want to set if brand provides it.
+        // For now, let's ensure all core theme vars are set if whiteLabelEnabled is true.
+         // themeStyles[variableName as any] = defaultHsl; // Re-evaluating this: better to let globals.css handle if not set
+      }
+    };
 
-    // Apply brand colors or fall back to defaults
-    themeStyles['--background'] = brandBgHsl || DEFAULT_BACKGROUND_HSL;
-    themeStyles['--foreground'] = brandFgHsl || DEFAULT_FOREGROUND_HSL;
-    themeStyles['--card'] = brandBgHsl || DEFAULT_CARD_HSL; // Card background often follows main background
-    themeStyles['--card-foreground'] = brandFgHsl || DEFAULT_CARD_FOREGROUND_HSL;
-    themeStyles['--popover'] = brandBgHsl || DEFAULT_POPOVER_HSL; // Popover background often follows main background
-    themeStyles['--popover-foreground'] = brandFgHsl || DEFAULT_POPOVER_FOREGROUND_HSL;
+    // Only set CSS variables if the brand has provided them. Otherwise, globals.css will apply.
+    if (company.brandBackgroundColor) addStyle('--background', company.brandBackgroundColor);
+    if (company.brandForegroundColor) addStyle('--foreground', company.brandForegroundColor);
     
-    themeStyles['--primary'] = primaryHsl || DEFAULT_PRIMARY_HSL;
-    // --primary-foreground will use its default from globals.css for contrast
+    // For components, if a brand sets a background, they might need to consider text contrast.
+    // Card and Popover often follow the main background/foreground.
+    if (company.brandBackgroundColor) addStyle('--card', company.brandBackgroundColor); else addStyle('--card', DEFAULT_CARD_HSL);
+    if (company.brandForegroundColor) addStyle('--card-foreground', company.brandForegroundColor); else addStyle('--card-foreground', DEFAULT_CARD_FOREGROUND_HSL);
+    if (company.brandBackgroundColor) addStyle('--popover', company.brandBackgroundColor); else addStyle('--popover', DEFAULT_POPOVER_HSL);
+    if (company.brandForegroundColor) addStyle('--popover-foreground', company.brandForegroundColor); else addStyle('--popover-foreground', DEFAULT_POPOVER_FOREGROUND_HSL);
 
-    themeStyles['--secondary'] = secondaryHsl || DEFAULT_SECONDARY_HSL;
-    // --secondary-foreground will use its default
+    if (company.primaryColor) addStyle('--primary', company.primaryColor);
+    // We intentionally DO NOT set --primary-foreground from brandForegroundColor,
+    // let globals.css handle contrast based on the new --primary.
     
-    themeStyles['--muted'] = secondaryHsl || DEFAULT_MUTED_HSL; // Muted often follows secondary
-    // --muted-foreground will use its default (or could be tied to brandFgHsl if desired, but defaults provide contrast)
+    if (company.secondaryColor) addStyle('--secondary', company.secondaryColor);
+    // DO NOT set --secondary-foreground from brandForegroundColor.
+    
+    // Muted usually follows secondary or background. If secondary is set, use it, else default.
+    if (company.secondaryColor) addStyle('--muted', company.secondaryColor); 
+    // else if (company.brandBackgroundColor) addStyle('--muted', company.brandBackgroundColor);
+    // DO NOT set --muted-foreground from brandForegroundColor.
 
-    themeStyles['--accent'] = accentHsl || DEFAULT_ACCENT_HSL;
-    // --accent-foreground will use its default
+    if (company.accentColor) addStyle('--accent', company.accentColor);
+    // DO NOT set --accent-foreground from brandForegroundColor.
 
     // Destructive, Border, Input, Ring will use their defaults from globals.css
-    // This ensures they maintain functional contrast unless explicitly themed by brand.
-    console.log('[RootLayout] Applied themeStyles:', themeStyles);
-
+    // unless specific brand fields are added for them.
+    console.log('[RootLayout] Applied themeStyles for Brand:', company.name, themeStyles);
   } else {
-    console.log('[RootLayout] Applying default GYMRAMP theme.');
-    // Apply default GYMRAMP theme if no brand or white-labeling disabled
-    themeStyles['--background'] = DEFAULT_BACKGROUND_HSL;
-    themeStyles['--foreground'] = DEFAULT_FOREGROUND_HSL;
-    themeStyles['--card'] = DEFAULT_CARD_HSL;
-    themeStyles['--card-foreground'] = DEFAULT_CARD_FOREGROUND_HSL;
-    themeStyles['--popover'] = DEFAULT_POPOVER_HSL;
-    themeStyles['--popover-foreground'] = DEFAULT_POPOVER_FOREGROUND_HSL;
-    themeStyles['--primary'] = DEFAULT_PRIMARY_HSL;
-    themeStyles['--primary-foreground'] = DEFAULT_PRIMARY_FOREGROUND_HSL;
-    themeStyles['--secondary'] = DEFAULT_SECONDARY_HSL;
-    themeStyles['--secondary-foreground'] = DEFAULT_SECONDARY_FOREGROUND_HSL;
-    themeStyles['--muted'] = DEFAULT_MUTED_HSL;
-    themeStyles['--muted-foreground'] = DEFAULT_MUTED_FOREGROUND_HSL;
-    themeStyles['--accent'] = DEFAULT_ACCENT_HSL;
-    themeStyles['--accent-foreground'] = DEFAULT_ACCENT_FOREGROUND_HSL;
-    themeStyles['--destructive'] = DEFAULT_DESTRUCTIVE_HSL;
-    themeStyles['--destructive-foreground'] = DEFAULT_DESTRUCTIVE_FOREGROUND_HSL;
-    themeStyles['--border'] = DEFAULT_BORDER_HSL;
-    themeStyles['--input'] = DEFAULT_INPUT_HSL;
-    themeStyles['--ring'] = DEFAULT_RING_HSL;
+    console.log('[RootLayout] No specific brand theme applied. Using default from globals.css.');
+    // No inline styles will be set if no brand or whiteLabeling is disabled; globals.css rules.
   }
+
+  const bodyClasses = "flex flex-col h-full font-sans antialiased";
 
   return (
     <html lang="en" className={cn("h-full", GeistSans.variable)}>
@@ -130,8 +133,8 @@ export default async function RootLayout({
         className={bodyClasses}
         style={Object.keys(themeStyles).length > 0 ? themeStyles : undefined}
       >
-        <Navbar brandLogoUrl={company?.logoUrl} brandName={company?.name} />
-        <div className="flex flex-1 overflow-hidden"> {/* Removed pt-14 here as Navbar is not fixed */}
+        <Navbar brandLogoUrl={brandLogoUrl} brandName={brandName} />
+        <div className="flex flex-1 overflow-hidden">
           <Sidebar />
           <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto bg-secondary/30">
             {children}
