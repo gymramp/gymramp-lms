@@ -69,7 +69,6 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
   const { toast } = useToast();
   const [locationsForSelectedBrand, setLocationsForSelectedBrand] = useState<Location[]>([]);
   const [selectedCompanyDetails, setSelectedCompanyDetails] = useState<Company | null>(null);
-  const [currentUserCountForSelectedBrand, setCurrentUserCountForSelectedBrand] = useState<number>(0); // Not currently used for live count in this dialog
   const [isLoadingBrandData, setIsLoadingBrandData] = useState(false);
 
   const form = useForm<UserFormValues>({
@@ -133,16 +132,6 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
       if (currentUser.role !== 'Super Admin' && currentUser.role !== 'Manager' && ROLE_HIERARCHY[currentUser.role] <= ROLE_HIERARCHY[data.role]) { toast({ title: "Permission Denied", description: "Cannot create user with role higher/equal to your own.", variant: "destructive"}); return; }
       if (!data.companyId) { form.setError("companyId", { type: "manual", message: "Brand selection is required." }); return; }
       
-      if (selectedCompanyDetails?.maxUsers !== null && selectedCompanyDetails?.maxUsers !== undefined) {
-          // For simplicity, this check is based on the state at dialog load. A more robust check might re-fetch count.
-          // const currentCount = await getCompanyById(data.companyId).then(c => c?.maxUsers ? getUserCountByCompanyId(c.id) : Promise.resolve(0));
-          // if (currentCount >= selectedCompanyDetails.maxUsers) {
-          //   toast({ title: "User Limit Reached", description: `Brand ${selectedCompanyDetails.name} reached max users (${selectedCompanyDetails.maxUsers}).`, variant: "destructive", duration: 7000 }); return;
-          // }
-          // Note: Live user count check removed for brevity in this iteration to focus on the primary error.
-          // It can be added back if strict enforcement at the moment of creation is critical.
-      }
-
       const userDataToSend = {
         name: data.name,
         email: data.email,
@@ -167,8 +156,14 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
     currentUser && (currentUser.role === 'Super Admin' || ((currentUser.role === 'Admin' || currentUser.role === 'Owner') && ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[role]) || (currentUser.role === 'Manager' && role === 'Staff'))
   );
   
-  const isUserLimitReached = false; // Placeholder, as live count check was simplified
+  const isUserLimitReached = false; 
 
+  const isBrandSelectDisabled = () => {
+    if (!currentUser) return true;
+    if (currentUser.role === 'Super Admin') return companies.length === 0;
+    // For Admin/Owner, disable if they manage 0 or 1 brand (their own and no children)
+    return companies.length <= 1;
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -191,13 +186,19 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
             <FormField control={form.control} name="companyId" render={({ field }) => (
               <FormItem> <FormLabel>Brand</FormLabel>
                 {currentUser?.role === 'Super Admin' && companies.length === 0 && ( <div className="text-sm text-muted-foreground p-2 border rounded-md flex items-center gap-2 h-10"> <AlertCircle className="h-4 w-4 text-yellow-500" /> No brands. Add one first. </div> )}
-                <Select onValueChange={(value) => field.onChange(value === 'placeholder-company' ? '' : value)} value={field.value || 'placeholder-company'} disabled={(currentUser?.role !== 'Super Admin' && !!currentUser?.companyId) || (currentUser?.role === 'Super Admin' && companies.length === 0) || isLoadingBrandData}>
+                <Select 
+                  onValueChange={(value) => field.onChange(value === 'placeholder-company' ? '' : value)} 
+                  value={field.value || 'placeholder-company'} 
+                  disabled={isBrandSelectDisabled() || isLoadingBrandData}
+                >
                   <FormControl>
-                    <div> {/* Wrapper for SelectTrigger */}
+                    <div> 
                       <SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger>
                     </div>
                   </FormControl>
-                  <SelectContent> <SelectItem value="placeholder-company" disabled>Select a brand...</SelectItem> {companies.map((c) => ( <SelectItem key={c.id} value={c.id}>{c.name} {c.parentBrandId ? "(Child)" : ""}</SelectItem> ))} </SelectContent>
+                  <SelectContent> <SelectItem value="placeholder-company" disabled>Select a brand...</SelectItem> 
+                    {companies.map((c) => ( <SelectItem key={c.id} value={c.id}>{c.name} {c.parentBrandId ? "(Child)" : ""}</SelectItem> ))} 
+                  </SelectContent>
                 </Select>
                 {isLoadingBrandData && <p className="text-xs text-muted-foreground">Loading brand info...</p>}
                 {isUserLimitReached && !isLoadingBrandData && ( <p className="text-xs font-medium text-destructive">User limit reached for this brand.</p> )}
@@ -206,7 +207,7 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
             <FormField control={form.control} name="assignedLocationIds" render={({ field }) => (
               <FormItem> <FormLabel>Assign to Locations</FormLabel>
                 <FormControl> 
-                  <div> {/* Wrapper for ScrollArea */}
+                  <div> 
                     <ScrollArea className="h-40 w-full rounded-md border p-4">
                         {isLoadingBrandData ? ( <div className="flex items-center justify-center h-full"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
                         ) : selectedCompanyIdForm && locationsForSelectedBrand.length > 0 ? ( <div className="space-y-2"> {locationsForSelectedBrand.map((loc) => ( <FormField key={loc.id} control={form.control} name="assignedLocationIds" render={({ field: cbField }) => ( <FormItem className="flex flex-row items-start space-x-3 space-y-0"> <FormControl><Checkbox checked={cbField.value?.includes(loc.id)} onCheckedChange={(checked) => checked ? cbField.onChange([...(cbField.value || []), loc.id]) : cbField.onChange((cbField.value || []).filter(v => v !== loc.id))} id={`loc-${loc.id}`} /></FormControl> <FormLabel htmlFor={`loc-${loc.id}`} className="font-normal">{loc.name}</FormLabel> </FormItem> )}/> ))} </div>
@@ -219,7 +220,7 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
               <FormItem> <FormLabel>User Role</FormLabel>
                 <Select onValueChange={(value) => field.onChange(value === 'placeholder-role' ? '' : value)} value={field.value || 'placeholder-role'} defaultValue={field.value} disabled={currentUser?.role === 'Manager' || assignableRoles.length === 0}>
                   <FormControl>
-                     <div> {/* Wrapper for SelectTrigger */}
+                     <div> 
                         <SelectTrigger><SelectValue placeholder="Select a user role" /></SelectTrigger>
                      </div>
                   </FormControl>
@@ -238,3 +239,5 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
     </Dialog>
   );
 }
+
+    
