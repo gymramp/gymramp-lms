@@ -202,27 +202,24 @@ export default function SuperAdminDashboardPage() {
                 <CardTitle>Quick Actions</CardTitle>
                 <CardDescription>Navigate to key management areas.</CardDescription>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4">
-                <Button variant="outline" onClick={() => router.push('/admin/companies')} className="justify-start text-left">
-                    <Building className="mr-2 h-4 w-4" /> Manage Brands
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Button variant="outline" onClick={() => router.push('/admin/companies')} className="justify-start text-left h-auto whitespace-normal px-3 py-2">
+                    <Building className="mr-2 h-4 w-4 flex-shrink-0" /> Manage Brands
                 </Button>
-                <Button variant="outline" onClick={() => router.push('/admin/users')} className="justify-start text-left">
-                    <Users className="mr-2 h-4 w-4" /> Manage Users
+                <Button variant="outline" onClick={() => router.push('/admin/users')} className="justify-start text-left h-auto whitespace-normal px-3 py-2">
+                    <Users className="mr-2 h-4 w-4 flex-shrink-0" /> Manage Users
                 </Button>
-                <Button variant="outline" onClick={() => router.push('/admin/courses')} className="justify-start text-left">
-                    <BookOpen className="mr-2 h-4 w-4" /> Manage Courses
+                <Button variant="outline" onClick={() => router.push('/admin/courses')} className="justify-start text-left h-auto whitespace-normal px-3 py-2">
+                    <BookOpen className="mr-2 h-4 w-4 flex-shrink-0" /> Manage Courses
                 </Button>
-                <Button variant="outline" onClick={() => router.push('/admin/checkout')} className="justify-start text-left">
-                    <CreditCard className="mr-2 h-4 w-4" /> New Customer Checkout
+                <Button variant="outline" onClick={() => router.push('/admin/checkout')} className="justify-start text-left h-auto whitespace-normal px-3 py-2">
+                    <CreditCard className="mr-2 h-4 w-4 flex-shrink-0" /> New Customer Checkout
                 </Button>
-                <Button variant="outline" onClick={() => router.push('/admin/settings')} className="justify-start text-left">
-                    <Cog className="mr-2 h-4 w-4" /> System Settings
+                <Button variant="outline" onClick={() => router.push('/admin/settings')} className="justify-start text-left h-auto whitespace-normal px-3 py-2">
+                    <Cog className="mr-2 h-4 w-4 flex-shrink-0" /> System Settings
                 </Button>
-                <Button variant="outline" onClick={() => router.push('/admin/revenue-share-report')} className="justify-start text-left">
-                    <Percent className="mr-2 h-4 w-4" /> Revenue Share Report
-                </Button>
-                 <Button variant="outline" onClick={() => router.push('/admin/migrate-data')} className="justify-start text-left">
-                    <DatabaseZap className="mr-2 h-4 w-4" /> Data Migration
+                <Button variant="outline" onClick={() => router.push('/admin/revenue-share-report')} className="justify-start text-left h-auto whitespace-normal px-3 py-2">
+                    <Percent className="mr-2 h-4 w-4 flex-shrink-0" /> Revenue Share Report
                 </Button>
             </CardContent>
         </Card>
