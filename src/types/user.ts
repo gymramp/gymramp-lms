@@ -11,11 +11,12 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
-  companyId: string; // ID of the company the user belongs to
+  companyId: string; // ID of the company/brand the user belongs to
   assignedLocationIds: string[]; // Array of location IDs assigned to the user
   assignedCourseIds?: string[]; // Optional: Array of course IDs assigned directly to this user
   isActive: boolean; // Whether the user account is active or deactivated
   profileImageUrl?: string | null; // Optional URL for profile image
+  requiresPasswordChange?: boolean; // Added for password reset flow
   isDeleted?: boolean; // For soft deletes
   deletedAt?: Timestamp | null; // Timestamp of soft deletion
   createdAt?: Timestamp | Date; // Timestamp of user creation
@@ -33,38 +34,46 @@ export interface UserCourseProgressData {
     status: "Not Started" | "Started" | "In Progress" | "Completed";
     completedItems: string[]; // Array of completed lesson/quiz IDs (prefixed)
     lastUpdated?: Timestamp | Date | null; // Firestore Timestamp of last progress update
+    videoProgress?: Record<string, number>; // Added for video progress tracking
 }
 
 
 // Represents a company (now Brand) in the system
-export interface Company {
+export interface Company { // Conceptually "Brand"
   id: string; // Firestore document ID
   name: string;
-  subdomainSlug?: string | null; // e.g., "brand-a" for brand-a.yourdomain.com
-  customDomain?: string | null; // e.g., learn.theirgym.com
+  subdomainSlug?: string | null;
+  customDomain?: string | null;
   shortDescription?: string | null;
   logoUrl?: string | null;
-  assignedCourseIds?: string[]; // Courses assigned to the company from the library
-  maxUsers?: number | null; // Maximum number of users allowed, null for unlimited
-  isTrial?: boolean; // Indicates if the company is on a trial
-  trialEndsAt?: Timestamp | null; // Timestamp when the trial period ends
-  saleAmount?: number | null; // Amount of the sale if it was a paid checkout (e.g., Program base price)
-  isDeleted?: boolean; // For soft deletes
-  deletedAt?: Timestamp | null; // Timestamp of soft deletion
-  createdAt?: Timestamp | Date; // Timestamp of company creation
-  revenueSharePartners?: RevenueSharePartner[] | null; // Updated to an array
+  assignedCourseIds?: string[];
+  maxUsers?: number | null;
+  isTrial?: boolean;
+  trialEndsAt?: Timestamp | null;
+  saleAmount?: number | null;
+  isDeleted?: boolean;
+  deletedAt?: Timestamp | null;
+  createdAt?: Timestamp | Date;
+  revenueSharePartners?: RevenueSharePartner[] | null;
   // White-labeling fields
   whiteLabelEnabled: boolean;
   primaryColor: string | null;
   secondaryColor: string | null;
   accentColor?: string | null;
+  brandBackgroundColor?: string | null;
+  brandForegroundColor?: string | null;
+  canManageCourses?: boolean;
   stripeCustomerId?: string | null;
-  stripeSubscriptionId?: string | null; // ID of the active Stripe Subscription object
+  stripeSubscriptionId?: string | null;
+  // New fields for Brand Hierarchy
+  parentBrandId?: string | null; // ID of the parent brand, if this is a child brand
+  createdByUserId?: string | null; // ID of the user (likely Admin/Owner of parent) who created this brand
 }
 
 // Type for the form data when adding/editing a company (now Brand)
 export type CompanyFormData = Omit<Company, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt'> & {
-  revenueSharePartners?: RevenueSharePartner[]; // Ensure this is included
+  revenueSharePartners?: RevenueSharePartner[];
+  // parentBrandId and createdByUserId will be handled implicitly or passed directly in addCompany
 };
 
 // Represents a single revenue share partner
@@ -76,29 +85,31 @@ export interface RevenueSharePartner {
 }
 
 
-// Represents a physical location or branch of a company
+// Represents a physical location or branch of a company/brand
 export interface Location {
   id: string; // Firestore document ID
   name: string;
-  companyId: string; // ID of the company this location belongs to
-  createdBy: string | null; // User ID of the Owner who created this location, if applicable
+  companyId: string; // ID of the specific Brand (Parent or Child) this location belongs to
+  createdBy: string | null; // User ID of the Owner/Admin who created this location
   isDeleted?: boolean; // For soft deletes
   deletedAt?: Timestamp | null; // Timestamp of soft deletion
+  createdAt?: Timestamp | Date; // Timestamp of location creation
+  updatedAt?: Timestamp | Date; // Timestamp of last update
 }
 
 // Type for the form data when adding/editing a location
-export type LocationFormData = Omit<Location, 'id' | 'isDeleted' | 'deletedAt'>;
+export type LocationFormData = Omit<Location, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt'>;
 
 
 // Type for the form data when adding/editing a user
 export interface UserFormData {
   name: string;
   email: string;
-  password?: string; // Password is for creation, not typically stored directly in Firestore user doc
+  // password?: string; // Password handled by auto-generation or reset flow
   role: UserRole;
-  companyId: string | null; // Allow null if user is not yet assigned to a company (e.g. Super Admin)
+  companyId: string | null;
   assignedLocationIds: string[];
-  assignedCourseIds?: string[]; // Optional: Array of course IDs
+  assignedCourseIds?: string[];
   isActive?: boolean;
   profileImageUrl?: string | null;
 }
@@ -106,24 +117,20 @@ export interface UserFormData {
 // Type for checkout form data (Admin initiating for a new customer)
 export interface CheckoutFormData extends Omit<UserFormData, 'role' | 'isActive' | 'profileImageUrl' | 'assignedCourseIds' | 'companyId'> {
   companyName: string;
-  // Billing address fields (optional, can be expanded)
   streetAddress?: string;
   city?: string;
   state?: string;
   zipCode?: string;
   country?: string;
-  adminEmail: string; // Email for the new admin user
-  password?: string; // Password for the new admin user
-  selectedProgramId: string; // Program to be purchased
-  maxUsers?: number | null; // Max users for the new company
-  // Payment related fields
-  paymentIntentId?: string | null; // Store Stripe PaymentIntent ID after successful payment
+  adminEmail: string;
+  selectedProgramId: string;
+  maxUsers?: number | null;
+  paymentIntentId?: string | null;
   subtotalAmount?: number;
   appliedDiscountPercent?: number;
   appliedDiscountAmount?: number;
   finalTotalAmount?: number;
-  // Trial related fields
   isTrial?: boolean;
-  trialDurationDays?: number; // Optional: duration in days if it's a trial
-  revenueSharePartners?: RevenueSharePartner[]; // Array of partners
+  trialDurationDays?: number;
+  revenueSharePartners?: RevenueSharePartner[];
 }
