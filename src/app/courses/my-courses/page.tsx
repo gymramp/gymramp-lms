@@ -8,23 +8,25 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BookOpen, PlayCircle, Eye } from 'lucide-react'; // Removed Award as it's not used here
+import { BookOpen, PlayCircle, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Course, BrandCourse } from '@/types/course';
 import type { User, UserCourseProgressData } from '@/types/user';
 import { getUserByEmail, getUserCourseProgress } from '@/lib/user-data';
-import { getCourseById } from '@/lib/firestore-data';
-import { getBrandCourseById } from '@/lib/brand-content-data';
+import { getCourseById, getAllPrograms } from '@/lib/firestore-data'; // Added getAllPrograms
+import { getBrandCourseById, getBrandCoursesByBrandId } from '@/lib/brand-content-data'; // Added getBrandCoursesByBrandId
+import { getCompanyById } from '@/lib/company-data'; // Added getCompanyById
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { cn } from '@/lib/utils';
-import { Timestamp } from 'firebase/firestore';
+import type { Timestamp } from 'firebase/firestore'; // Correct import if Timestamp is used
 
-type CourseWithProgress = Course & {
+// Define CourseWithProgress to accept either Course or BrandCourse structure
+type CourseWithProgress = (Course | BrandCourse) & {
   progress: number;
   status: "Not Started" | "Started" | "In Progress" | "Completed";
   completedItems: string[];
-  lastUpdated?: Timestamp | Date | null;
+  lastUpdated?: string | null; // Changed to string | null to match serialized data
 };
 
 
@@ -32,10 +34,9 @@ export default function MyCoursesPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [assignedCoursesWithProgress, setAssignedCoursesWithProgress] = useState<CourseWithProgress[]>([]);
   const [isLoadingUser, setIsLoadingUser] = useState(true);
-  const [isLoadingCourses, setIsLoadingCourses] = useState(false); // Initially false, true when fetching courses
+  const [isLoadingCourses, setIsLoadingCourses] = useState(false);
   const { toast } = useToast();
 
-  // Effect 1: Handle Auth State Change and Set User
   useEffect(() => {
     setIsLoadingUser(true);
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -53,78 +54,91 @@ export default function MyCoursesPage() {
       }
       setIsLoadingUser(false);
     });
-
     return () => unsubscribe();
   }, [toast]);
 
-  // Effect 2: Fetch Course Data when User ID is available
-  const fetchCourseData = useCallback(async (userId: string) => {
-    if (!currentUser) { // Check if currentUser (from state) is available
-        setAssignedCoursesWithProgress([]);
-        return;
+  const fetchCourseData = useCallback(async () => {
+    if (!currentUser || !currentUser.id) {
+      setAssignedCoursesWithProgress([]);
+      setIsLoadingCourses(false); // Ensure loading is false if no user
+      return;
     }
     setIsLoadingCourses(true);
     try {
-        const assignedCourseIds = currentUser.assignedCourseIds || [];
+      let effectiveAssignedCourseIds = new Set<string>(currentUser.assignedCourseIds || []);
 
-        if (assignedCourseIds.length === 0) {
-            setAssignedCoursesWithProgress([]);
-            return;
+      // If user belongs to a brand, get courses from their brand's assigned programs
+      if (currentUser.companyId) {
+        const brand = await getCompanyById(currentUser.companyId);
+        if (brand && brand.assignedProgramIds && brand.assignedProgramIds.length > 0) {
+          const allPrograms = await getAllPrograms();
+          const brandPrograms = allPrograms.filter(p => brand.assignedProgramIds!.includes(p.id));
+          brandPrograms.forEach(program => {
+            (program.courseIds || []).forEach(courseId => effectiveAssignedCourseIds.add(courseId));
+          });
+        }
+        // Also add courses created by the brand if canManageCourses is enabled
+        if (brand && brand.canManageCourses) {
+            const brandCreatedCourses = await getBrandCoursesByBrandId(brand.id);
+            brandCreatedCourses.forEach(bc => effectiveAssignedCourseIds.add(bc.id));
+        }
+      }
+      
+      const uniqueCourseIds = Array.from(effectiveAssignedCourseIds);
+
+      if (uniqueCourseIds.length === 0) {
+        setAssignedCoursesWithProgress([]);
+        setIsLoadingCourses(false);
+        return;
+      }
+
+      const courseProgressPromises = uniqueCourseIds.map(async (courseId) => {
+        let courseDetails: Course | BrandCourse | null = null;
+        
+        courseDetails = await getCourseById(courseId);
+        if (!courseDetails) {
+          courseDetails = await getBrandCourseById(courseId);
         }
 
-        const courseProgressPromises = assignedCourseIds.map(async (courseId) => {
-            let courseDetails: Course | BrandCourse | null = null;
-            let courseTypeForDisplay: Partial<Course> = {};
+        if (!courseDetails || courseDetails.isDeleted) {
+          console.warn(`Course (global or brand) with ID ${courseId} not found or is deleted.`);
+          return null;
+        }
+        
+        const progressData = await getUserCourseProgress(currentUser.id, courseId);
+        return {
+          ...courseDetails, // Spreading Course or BrandCourse
+          progress: progressData.progress,
+          status: progressData.status,
+          completedItems: progressData.completedItems,
+          lastUpdated: progressData.lastUpdated // This will be string | null
+        } as CourseWithProgress; // Cast to the union type
+      });
 
-            courseDetails = await getCourseById(courseId); // Try global first
-            if (courseDetails) {
-                courseTypeForDisplay = courseDetails;
-            } else {
-                const brandCourseDetails = await getBrandCourseById(courseId); // Try brand-specific if global not found
-                if (brandCourseDetails) {
-                    courseTypeForDisplay = brandCourseDetails;
-                }
-            }
+      const coursesWithProgressData = (await Promise.all(courseProgressPromises))
+        .filter(Boolean) as CourseWithProgress[];
 
-            if (!courseTypeForDisplay.id) { // Check if any course was found
-                console.warn(`Course (global or brand) with ID ${courseId} not found.`);
-                return null;
-            }
-            
-            const progressData = await getUserCourseProgress(userId, courseTypeForDisplay.id);
-            return {
-                ...(courseTypeForDisplay as Course), // Cast to Course for CourseWithProgress type
-                progress: progressData.progress,
-                status: progressData.status,
-                completedItems: progressData.completedItems,
-                lastUpdated: progressData.lastUpdated
-            };
-        });
-
-        const coursesWithProgressData = (await Promise.all(courseProgressPromises))
-                                    .filter(Boolean) as CourseWithProgress[];
-
-        setAssignedCoursesWithProgress(coursesWithProgressData);
+      setAssignedCoursesWithProgress(coursesWithProgressData);
 
     } catch (error) {
-        console.error("Error fetching assigned courses/progress:", error);
-        toast({ title: "Error", description: "Could not load assigned courses or progress.", variant: "destructive" });
-        setAssignedCoursesWithProgress([]);
+      console.error("Error fetching assigned courses/progress:", error);
+      toast({ title: "Error", description: "Could not load assigned courses or progress.", variant: "destructive" });
+      setAssignedCoursesWithProgress([]);
     } finally {
-        setIsLoadingCourses(false);
+      setIsLoadingCourses(false);
     }
-  }, [currentUser, toast]); // Depends on currentUser object for assignedCourseIds
+  }, [currentUser, toast]);
 
-   useEffect(() => {
-        if (!isLoadingUser && currentUser?.id) { // Fetch courses only after user is loaded and has an ID
-            fetchCourseData(currentUser.id);
-        } else if (!isLoadingUser && !currentUser) { // If user loading is done and there's no user
-            setAssignedCoursesWithProgress([]);
-            setIsLoadingCourses(false); // Ensure courses loading is also false
-        }
-    }, [isLoadingUser, currentUser, fetchCourseData]);
+  useEffect(() => {
+    if (!isLoadingUser && currentUser) {
+      fetchCourseData();
+    } else if (!isLoadingUser && !currentUser) {
+      setAssignedCoursesWithProgress([]);
+      setIsLoadingCourses(false);
+    }
+  }, [isLoadingUser, currentUser, fetchCourseData]);
 
-  const isLoading = isLoadingUser || isLoadingCourses; // Combined loading state for UI
+  const isLoading = isLoadingUser || isLoadingCourses;
 
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20">
@@ -142,17 +156,9 @@ export default function MyCoursesPage() {
           {[...Array(3)].map((_, i) => (
             <Card key={i} className="overflow-hidden w-full sm:w-[calc(50%-1.5rem)] lg:w-[calc(33.333%-1.5rem)]">
               <Skeleton className="h-48 w-full" />
-              <CardHeader>
-                <Skeleton className="h-6 w-3/4" />
-                <Skeleton className="h-4 w-full mt-2" />
-                <Skeleton className="h-4 w-1/2 mt-1" />
-              </CardHeader>
-              <CardContent>
-                 <Skeleton className="h-2 w-full" />
-              </CardContent>
-              <CardFooter>
-                <Skeleton className="h-10 w-full" />
-              </CardFooter>
+              <CardHeader> <Skeleton className="h-6 w-3/4" /> <Skeleton className="h-4 w-full mt-2" /> <Skeleton className="h-4 w-1/2 mt-1" /> </CardHeader>
+              <CardContent> <Skeleton className="h-2 w-full" /> </CardContent>
+              <CardFooter> <Skeleton className="h-10 w-full" /> </CardFooter>
             </Card>
           ))}
         </div>
@@ -166,65 +172,54 @@ export default function MyCoursesPage() {
         <div className="flex flex-wrap justify-center gap-6">
           {assignedCoursesWithProgress.map((course) => {
             const isCompleted = course.status === 'Completed';
+            const imageUrl = course.featuredImageUrl || (course as Course).imageUrl || `https://placehold.co/600x350.png?text=${encodeURIComponent(course.title)}`;
             return (
-                <Card key={course.id} className="flex flex-col overflow-hidden shadow-md hover:shadow-lg transition-shadow w-full sm:w-[calc(50%-1.5rem)] lg:w-[calc(33.333%-1.5rem)]">
-                  <CardHeader className="p-0">
-                    <div className="relative aspect-video w-full">
-                      <Image
-                        src={course.featuredImageUrl || course.imageUrl || `https://placehold.co/600x350.png?text=Course+Preview`}
-                        alt={course.title}
-                        fill
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                        style={{ objectFit: 'cover' }}
-                        className="bg-muted"
-                        data-ai-hint="course cover"
-                         onError={(e) => {
-                             const target = e.target as HTMLImageElement;
-                             target.onerror = null; 
-                             if (course.imageUrl && target.src !== course.imageUrl) {
-                                 target.src = course.imageUrl;
-                             } else { 
-                                 target.src = `https://placehold.co/600x350.png?text=${encodeURIComponent(course.title)}`;
-                             }
-                         }}
-                      />
-                    </div>
-                  </CardHeader>
-                  <CardContent className="flex flex-col flex-grow p-4 space-y-3">
-                     <CardTitle className="text-lg font-semibold leading-tight">{course.title}</CardTitle>
-                     <CardDescription className="text-sm text-muted-foreground flex-grow line-clamp-3">{course.description}</CardDescription>
-                    <div className="pt-2 space-y-1">
-                        <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                           <span>Progress</span>
-                           <span>{course.progress}%</span>
-                        </div>
-                         <Progress value={course.progress} aria-label={`${course.title} progress ${course.progress}%`} className="h-2" />
-                         <p className="text-xs text-muted-foreground">Status: {course.status}</p>
-                     </div>
-                  </CardContent>
-                   <CardFooter className="p-4 pt-0">
-                     <Button asChild className={cn("w-full", isCompleted ? "bg-secondary hover:bg-secondary/80 text-secondary-foreground" : "bg-primary hover:bg-primary/90")}>
-                        <Link href={`/learn/${course.id}`}>
-                             {isCompleted ? (
-                                <span className='flex items-center gap-2'>
-                                    <Eye className="h-4 w-4" />
-                                    View Course
-                                </span>
-                             ) : (
-                                <span className='flex items-center gap-2'>
-                                    <PlayCircle className="h-4 w-4" />
-                                    {course.status === 'Not Started' ? 'Start Learning' : 'Continue Learning'}
-                                </span>
-                             )}
-                        </Link>
-                     </Button>
-                  </CardFooter>
-                </Card>
+              <Card key={course.id} className="flex flex-col overflow-hidden shadow-md hover:shadow-lg transition-shadow w-full sm:w-[calc(50%-1.5rem)] lg:w-[calc(33.333%-1.5rem)]">
+                <CardHeader className="p-0">
+                  <div className="relative aspect-video w-full">
+                    <Image
+                      src={imageUrl}
+                      alt={course.title}
+                      fill
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      style={{ objectFit: 'cover' }}
+                      className="bg-muted"
+                      data-ai-hint="course cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.onerror = null;
+                        target.src = `https://placehold.co/600x350.png?text=${encodeURIComponent(course.title)}`;
+                      }}
+                    />
+                  </div>
+                </CardHeader>
+                <CardContent className="flex flex-col flex-grow p-4 space-y-3">
+                   <CardTitle className="text-lg font-semibold leading-tight">{course.title}</CardTitle>
+                   <CardDescription className="text-sm text-muted-foreground flex-grow line-clamp-3">{course.description}</CardDescription>
+                  <div className="pt-2 space-y-1">
+                      <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                         <span>Progress</span>
+                         <span>{course.progress}%</span>
+                      </div>
+                       <Progress value={course.progress} aria-label={`${course.title} progress ${course.progress}%`} className="h-2" />
+                       <p className="text-xs text-muted-foreground">Status: {course.status}</p>
+                   </div>
+                </CardContent>
+                 <CardFooter className="p-4 pt-0">
+                   <Button asChild className={cn("w-full", isCompleted ? "bg-secondary hover:bg-secondary/80 text-secondary-foreground" : "bg-primary hover:bg-primary/90")}>
+                      <Link href={`/learn/${course.id}`}>
+                           {isCompleted ? ( <span className='flex items-center gap-2'> <Eye className="h-4 w-4" /> View Course </span> )
+                                        : ( <span className='flex items-center gap-2'> <PlayCircle className="h-4 w-4" /> {course.status === 'Not Started' ? 'Start Learning' : 'Continue Learning'} </span> )}
+                      </Link>
+                   </Button>
+                </CardFooter>
+              </Card>
             );
-            })}
+          })}
         </div>
       )}
     </div>
   );
 }
 
+    
