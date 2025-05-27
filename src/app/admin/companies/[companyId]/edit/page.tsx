@@ -14,7 +14,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form'; // Added FormDescription
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
+import { Label } from '@/components/ui/label'; // Added Label import
 import { useToast } from '@/hooks/use-toast';
 import type { Company, CompanyFormData, User } from '@/types/user';
 import type { Program, Course } from '@/types/course';
@@ -139,13 +140,12 @@ export default function EditCompanyPage() {
       setCompany(companyData);
       let trialDate: Date | null = null;
       if (companyData.trialEndsAt) {
-          // Ensure trialEndsAt is treated as a string if it's coming from serialized Firestore data
           const trialEndsAtValue = companyData.trialEndsAt;
           if (typeof trialEndsAtValue === 'string') {
               trialDate = new Date(trialEndsAtValue);
-          } else if (trialEndsAtValue instanceof Date) { // Should ideally not happen with proper serialization
+          } else if (trialEndsAtValue instanceof Date) {
               trialDate = trialEndsAtValue;
-          } else if (trialEndsAtValue && typeof (trialEndsAtValue as any).toDate === 'function') { // Firestore Timestamp
+          } else if (trialEndsAtValue && typeof (trialEndsAtValue as any).toDate === 'function') {
               trialDate = (trialEndsAtValue as any).toDate();
           }
       }
@@ -169,17 +169,19 @@ export default function EditCompanyPage() {
       });
 
       if (companyData.parentBrandId) {
+        setIsLoadingParentBrand(true);
         const parent = await getCompanyById(companyData.parentBrandId);
         setParentBrandName(parent?.name || 'Unknown Parent');
+        setIsLoadingParentBrand(false);
       } else {
         setParentBrandName(null);
+        setIsLoadingParentBrand(false);
       }
-      setIsLoadingParentBrand(false);
       
       console.log('[EditBrand] companyData.assignedProgramIds from Firestore:', companyData.assignedProgramIds);
       if (companyData.assignedProgramIds && companyData.assignedProgramIds.length > 0) {
         const [fetchedAllLibCoursesData, programsDetailsPromises] = await Promise.all([
-            getAllCourses(),
+            getAllCourses(), // This fetches all courses, which might be more than needed but simpler for now
             Promise.all(companyData.assignedProgramIds.map(id => getProgramById(id)))
         ]);
         setAllLibraryCourses(fetchedAllLibCoursesData);
@@ -188,7 +190,7 @@ export default function EditCompanyPage() {
         console.log('[EditBrand] Fetched assigned program details:', details);
       } else {
         setAssignedProgramsDetails([]);
-        setAllLibraryCourses([]);
+        setAllLibraryCourses([]); // Ensure this is cleared if no programs
         console.log('[EditBrand] No assigned programs found for brand:', companyId);
       }
 
@@ -233,7 +235,6 @@ export default function EditCompanyPage() {
       
       const downloadURL = await uploadImage(file, storagePath, setLogoUploadProgress); 
       
-
       form.setValue('logoUrl', downloadURL, { shouldValidate: true });
       toast({ title: "Logo Uploaded", description: "Brand logo uploaded successfully." });
     } catch (error: any) {
@@ -254,13 +255,13 @@ export default function EditCompanyPage() {
     try {
       const metadataToUpdate: Partial<CompanyFormData> = {
         name: data.name,
-        subdomainSlug: data.subdomainSlug?.trim() === '' ? null : data.subdomainSlug?.toLowerCase() || null,
-        customDomain: data.customDomain?.trim() === '' ? null : data.customDomain?.toLowerCase() || null,
-        shortDescription: data.shortDescription?.trim() === '' ? null : data.shortDescription || null,
+        subdomainSlug: data.subdomainSlug?.trim() === '' ? null : (data.subdomainSlug?.toLowerCase() || null),
+        customDomain: data.customDomain?.trim() === '' ? null : (data.customDomain?.toLowerCase() || null),
+        shortDescription: data.shortDescription?.trim() === '' ? null : (data.shortDescription || null),
         logoUrl: currentLogoUrl?.trim() === '' ? null : currentLogoUrl,
         maxUsers: data.maxUsers ?? null,
         isTrial: data.isTrial,
-        trialEndsAt: data.isTrial && data.trialEndsAt ? (data.trialEndsAt instanceof Date ? data.trialEndsAt : new Date(data.trialEndsAt as unknown as string)) : null,
+        trialEndsAt: data.isTrial && data.trialEndsAt ? (data.trialEndsAt instanceof Date ? Timestamp.fromDate(data.trialEndsAt) : (typeof data.trialEndsAt === 'string' ? Timestamp.fromDate(new Date(data.trialEndsAt)) : null)) : null,
         canManageCourses: data.canManageCourses,
         whiteLabelEnabled: data.whiteLabelEnabled,
         primaryColor: data.whiteLabelEnabled && data.primaryColor?.trim() !== '' ? data.primaryColor : null,
@@ -268,12 +269,13 @@ export default function EditCompanyPage() {
         accentColor: data.whiteLabelEnabled && data.accentColor?.trim() !== '' ? data.accentColor : null,
         brandBackgroundColor: data.whiteLabelEnabled && data.brandBackgroundColor?.trim() !== '' ? data.brandBackgroundColor : null,
         brandForegroundColor: data.whiteLabelEnabled && data.brandForegroundColor?.trim() !== '' ? data.brandForegroundColor : null,
+        // assignedProgramIds is managed on a separate page, so not updated here
       };
 
       const updatedCompany = await updateCompany(companyId, metadataToUpdate);
       if (updatedCompany) {
         setCompany(updatedCompany); 
-        await fetchCompanyData(currentUser); // Re-fetch all related data
+        fetchCompanyData(currentUser); // Re-fetch all related data
         toast({ title: "Brand Updated", description: `"${updatedCompany.name}" updated successfully.` });
       } else {
         throw new Error("Failed to update brand details.");
@@ -285,8 +287,8 @@ export default function EditCompanyPage() {
       setIsSaving(false);
     }
   };
-
-  if (!isMounted || isLoading || !currentUser) {
+  
+  if (!isMounted || isLoading || !currentUser ) {
     return (
       <div className="container mx-auto py-12">
         <Skeleton className="h-8 w-1/4 mb-6" />
@@ -302,6 +304,12 @@ export default function EditCompanyPage() {
   if (!company) {
     return <div className="container mx-auto py-12 text-center">Brand not found.</div>;
   }
+
+  const userCanEditWL = currentUser?.role === 'Super Admin';
+  const userCanEditTrial = currentUser?.role === 'Super Admin';
+  const userCanEditCourseMgmt = currentUser?.role === 'Super Admin';
+  const userCanEditBasicInfo = currentUser?.role === 'Super Admin' || (currentUser?.companyId === company.id && (currentUser?.role === 'Admin' || currentUser?.role === 'Owner')) || (company.parentBrandId === currentUser?.companyId && (currentUser?.role === 'Admin' || currentUser?.role === 'Owner'));
+
 
   return (
     <div className="container mx-auto py-12 md:py-16 lg:py-20">
@@ -320,10 +328,10 @@ export default function EditCompanyPage() {
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" /> Core Brand Information</CardTitle><CardDescription>Basic identification and descriptive details for the brand.</CardDescription></CardHeader>
                 <CardContent className="space-y-4">
-                  <FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Brand Name</FormLabel><FormControl><Input placeholder="Brand Name" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="subdomainSlug" render={({ field }) => (<FormItem><FormLabel>Subdomain Slug (Optional)</FormLabel><FormControl><Input placeholder="e.g., brand-slug" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="customDomain" render={({ field }) => (<FormItem><FormLabel>Custom Domain (Optional)</FormLabel><FormControl><Input placeholder="e.g., learn.brand.com" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="shortDescription" render={({ field }) => (<FormItem><FormLabel>Short Description (Optional)</FormLabel><FormControl><Textarea rows={3} placeholder="A brief description (max 150 chars)" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Brand Name</FormLabel><FormControl><Input placeholder="Brand Name" {...field} value={field.value ?? ''} disabled={!userCanEditBasicInfo} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="subdomainSlug" render={({ field }) => (<FormItem><FormLabel>Subdomain Slug (Optional)</FormLabel><FormControl><Input placeholder="e.g., brand-slug" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} disabled={!userCanEditBasicInfo} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="customDomain" render={({ field }) => (<FormItem><FormLabel>Custom Domain (Optional)</FormLabel><FormControl><Input placeholder="e.g., learn.brand.com" {...field} value={field.value ?? ''} disabled={!userCanEditBasicInfo} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="shortDescription" render={({ field }) => (<FormItem><FormLabel>Short Description (Optional)</FormLabel><FormControl><Textarea rows={3} placeholder="A brief description (max 150 chars)" {...field} value={field.value ?? ''} disabled={!userCanEditBasicInfo} /></FormControl><FormMessage /></FormItem>)} />
                 </CardContent>
               </Card>
 
@@ -333,11 +341,11 @@ export default function EditCompanyPage() {
                 <CardContent>
                   <FormItem>
                     <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
-                      {logoUrlValue && !isLogoUploading ? ( <div className="relative w-32 h-32 mx-auto mb-2"> <Image src={logoUrlValue} alt="Brand logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" data-ai-hint="company logo" onError={() => { form.setValue('logoUrl', ''); toast({ title: "Image Load Error", description:"Could not load logo preview.", variant: "destructive" }); }} /> <Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6 opacity-80 hover:opacity-100 z-10" onClick={() => form.setValue('logoUrl', '')}><Trash2 className="h-4 w-4" /></Button> </div>
+                      {logoUrlValue && !isLogoUploading ? ( <div className="relative w-32 h-32 mx-auto mb-2"> <Image src={logoUrlValue} alt="Brand logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" data-ai-hint="company logo" onError={() => { form.setValue('logoUrl', ''); toast({ title: "Image Load Error", description:"Could not load logo preview.", variant: "destructive" }); }} /> <Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6 opacity-80 hover:opacity-100 z-10" onClick={() => form.setValue('logoUrl', '')} disabled={!userCanEditBasicInfo || isLogoUploading}><Trash2 className="h-4 w-4" /></Button> </div>
                       ) : isLogoUploading ? (
                         <div className="flex flex-col items-center justify-center h-full py-8"><Loader2 className="h-8 w-8 animate-spin text-primary mb-2" /><p className="text-sm text-muted-foreground mb-1">Uploading...</p><Progress value={logoUploadProgress} className="w-full max-w-xs h-2" />{logoUploadError && <p className="text-xs text-destructive mt-2">{logoUploadError}</p>}</div>
                       ) : (
-                        <Label htmlFor="brand-logo-upload" className="cursor-pointer block"><ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Click to upload logo</p><Input id="brand-logo-upload" type="file" accept="image/*" className="hidden" onChange={handleLogoFileChange} disabled={isLogoUploading} /></Label>
+                        <Label htmlFor="brand-logo-upload" className={cn("cursor-pointer block", !userCanEditBasicInfo && "cursor-not-allowed opacity-50")}><ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Click to upload logo</p><Input id="brand-logo-upload" type="file" accept="image/*" className="hidden" onChange={handleLogoFileChange} disabled={!userCanEditBasicInfo || isLogoUploading} /></Label>
                       )}
                     </div>
                     <FormField control={form.control} name="logoUrl" render={({ field }) => (<FormItem className="hidden"><FormControl><Input type="url" {...field} value={field.value ?? ''} readOnly /></FormControl><FormMessage /></FormItem>)} />
@@ -345,38 +353,40 @@ export default function EditCompanyPage() {
                 </CardContent>
               </Card>
 
-              {/* White-Label Settings Card */}
+              {/* White-Label Settings Card - Placeholder */}
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {isMounted && currentUser?.role === 'Super Admin' && (
-                    <FormField
-                      control={form.control}
-                      name="whiteLabelEnabled"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Enable White-Labeling</FormLabel>
-                            <FormDescription>Allow this brand to use custom colors and logo for a branded experience.</FormDescription>
-                          </div>
-                          <FormControl>
-                            <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></div>
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  )}
-                  {isMounted && whiteLabelEnabledValue && currentUser?.role === 'Super Admin' && (
-                    <div className="space-y-3 pt-3 pl-2 border-l-2 border-primary/20 ml-1">
-                      <FormField control={form.control} name="primaryColor" render={({ field }) => (<FormItem><FormLabel>Primary Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="secondaryColor" render={({ field }) => (<FormItem><FormLabel>Secondary Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="accentColor" render={({ field }) => (<FormItem><FormLabel>Accent Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="brandBackgroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Background Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="brandForegroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Foreground Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                    </div>
-                  )}
+                <CardHeader><CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings</CardTitle></CardHeader>
+                <CardContent>
+                   {userCanEditWL ? (
+                      <>
+                         <FormField
+                           control={form.control}
+                           name="whiteLabelEnabled"
+                           render={({ field }) => (
+                             <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm mb-4">
+                               <div className="space-y-0.5">
+                                 <FormLabel className="text-base">Enable White-Labeling</FormLabel>
+                                 <FormDescription>Allow this brand to use custom colors and logo for a branded experience.</FormDescription>
+                               </div>
+                               <FormControl>
+                                 <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></div>
+                               </FormControl>
+                             </FormItem>
+                           )}
+                         />
+                         {isMounted && whiteLabelEnabledValue && (
+                           <div className="space-y-3 pt-3 pl-2 border-l-2 border-primary/20 ml-1">
+                             <FormField control={form.control} name="primaryColor" render={({ field }) => (<FormItem><FormLabel>Primary Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                             <FormField control={form.control} name="secondaryColor" render={({ field }) => (<FormItem><FormLabel>Secondary Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                             <FormField control={form.control} name="accentColor" render={({ field }) => (<FormItem><FormLabel>Accent Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                             <FormField control={form.control} name="brandBackgroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Background Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                             <FormField control={form.control} name="brandForegroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Foreground Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                           </div>
+                         )}
+                      </>
+                   ) : (
+                     <p className="text-sm text-muted-foreground italic">White-label settings can only be managed by a Super Admin.</p>
+                   )}
                 </CardContent>
               </Card>
 
@@ -387,8 +397,8 @@ export default function EditCompanyPage() {
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> User &amp; Trial Settings</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
-                  <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem><FormLabel>Max Users</FormLabel><FormControl><Input type="number" min="1" placeholder="Leave blank for unlimited" {...field} value={field.value === null || field.value === undefined ? '' : String(field.value)} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
-                  {isMounted && currentUser?.role === 'Super Admin' && (
+                  <FormField control={form.control} name="maxUsers" render={({ field }) => (<FormItem><FormLabel>Max Users</FormLabel><FormControl><Input type="number" min="1" placeholder="Leave blank for unlimited" {...field} value={field.value === null || field.value === undefined ? '' : String(field.value)} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} disabled={!userCanEditBasicInfo} /></FormControl><FormMessage /></FormItem>)} />
+                  {isMounted && (
                     <FormField
                       control={form.control}
                       name="isTrial"
@@ -396,13 +406,13 @@ export default function EditCompanyPage() {
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                           <div className="space-y-0.5"><FormLabel>Is Trial Account?</FormLabel></div>
                           <FormControl>
-                            <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></div>
+                            <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} disabled={!userCanEditTrial} /></div>
                           </FormControl>
                         </FormItem>
                       )}
                     />
                   )}
-                  {isMounted && isTrialValue && currentUser?.role === 'Super Admin' && (
+                  {isMounted && isTrialValue && (
                     <FormField
                       control={form.control}
                       name="trialEndsAt"
@@ -411,7 +421,7 @@ export default function EditCompanyPage() {
                           <FormLabel className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Trial End Date</FormLabel>
                           <FormControl>
                             <div> {/* Added div wrapper */}
-                                <DatePickerWithPresets date={field.value} setDate={field.onChange} />
+                                <DatePickerWithPresets date={field.value} setDate={field.onChange} disabled={!userCanEditTrial} />
                             </div>
                           </FormControl>
                           <FormMessage />
@@ -419,14 +429,15 @@ export default function EditCompanyPage() {
                       )}
                     />
                   )}
+                  {!userCanEditTrial && <p className="text-xs text-muted-foreground italic">Trial settings can only be managed by a Super Admin.</p>}
                 </CardContent>
               </Card>
 
-              {/* Course Management Ability Card */}
-                {isMounted && currentUser?.role === 'Super Admin' && (
-                    <Card>
-                        <CardHeader><CardTitle className="flex items-center gap-2"><Package className="h-5 w-5" /> Course Management Ability</CardTitle></CardHeader>
-                        <CardContent>
+               {/* Course Management Ability Card */}
+                <Card>
+                    <CardHeader><CardTitle className="flex items-center gap-2"><Package className="h-5 w-5" /> Course Management Ability</CardTitle></CardHeader>
+                    <CardContent>
+                    {isMounted && (
                         <FormField
                             control={form.control}
                             name="canManageCourses"
@@ -437,14 +448,15 @@ export default function EditCompanyPage() {
                                 <FormDescription>Allow this brand's Admins/Owners to create and manage their own courses.</FormDescription>
                                 </div>
                                 <FormControl>
-                                <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></div>
+                                  <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} disabled={!userCanEditCourseMgmt} /></div>
                                 </FormControl>
                             </FormItem>
                             )}
                         />
-                        </CardContent>
-                    </Card>
-                )}
+                    )}
+                    {!userCanEditCourseMgmt && <p className="text-xs text-muted-foreground italic mt-2">Course management ability can only be set by a Super Admin.</p>}
+                    </CardContent>
+                </Card>
 
 
               {/* Assigned Programs Card */}
@@ -500,7 +512,7 @@ export default function EditCompanyPage() {
             </div>
           </div>
           <div className="flex justify-end pt-6 border-t">
-            <Button type="submit" size="lg" className="bg-primary hover:bg-primary/90" disabled={isSaving || isLogoUploading}>
+            <Button type="submit" size="lg" className="bg-primary hover:bg-primary/90" disabled={isSaving || isLogoUploading || !userCanEditBasicInfo}>
               {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} Save Changes
             </Button>
           </div>
