@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import type { Company, CompanyFormData, User } from '@/types/user';
 import type { Program, Course } from '@/types/course';
@@ -23,7 +23,7 @@ import { getCompanyById, updateCompany } from '@/lib/company-data';
 import { getAllPrograms, getProgramById, getAllCourses } from '@/lib/firestore-data';
 import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Globe, Users, CalendarDays, Palette, Briefcase, Package, Save, Layers, BookOpen, Info } from 'lucide-react';
+import { ArrowLeft, Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Globe, Users, CalendarDays, Palette, Briefcase, Package, Save, Layers, BookOpen, Info, Settings as SettingsIcon } from 'lucide-react';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -32,6 +32,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Timestamp } from 'firebase/firestore';
+import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 
 const HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}){1,2}$/;
 
@@ -105,6 +106,7 @@ export default function EditCompanyPage() {
     if (!companyId || !user) {
       setIsLoading(false);
       setIsLoadingProgramData(false);
+      setIsLoadingParentBrand(false);
       return;
     }
     console.log('[EditBrand] Fetching data for brand ID:', companyId);
@@ -138,15 +140,13 @@ export default function EditCompanyPage() {
       setCompany(companyData);
       let trialDate: Date | null = null;
       if (companyData.trialEndsAt) {
-        if (companyData.trialEndsAt instanceof Timestamp) {
-          trialDate = companyData.trialEndsAt.toDate();
-        } else if (typeof companyData.trialEndsAt === 'string') {
+        if (typeof companyData.trialEndsAt === 'string') { // Timestamps are serialized to ISO strings
           trialDate = new Date(companyData.trialEndsAt);
-        } else if (companyData.trialEndsAt instanceof Date) {
+        } else if (companyData.trialEndsAt instanceof Date) { // Should not happen if serialized, but good check
           trialDate = companyData.trialEndsAt;
         }
       }
-
+      
       form.reset({
         name: companyData.name || '',
         subdomainSlug: companyData.subdomainSlug || '',
@@ -172,21 +172,19 @@ export default function EditCompanyPage() {
         setParentBrandName(null);
       }
       setIsLoadingParentBrand(false);
-
+      
       console.log('[EditBrand] companyData.assignedProgramIds from Firestore:', companyData.assignedProgramIds);
       if (companyData.assignedProgramIds && companyData.assignedProgramIds.length > 0) {
-        const [fetchedAllProgs, fetchedAllLibCourses] = await Promise.all([
-          getAllPrograms(),
-          getAllCourses()
-        ]);
+        const fetchedAllLibCourses = await getAllCourses();
         setAllLibraryCourses(fetchedAllLibCourses);
+        
         const programDetailsPromises = companyData.assignedProgramIds.map(id => getProgramById(id));
         const details = (await Promise.all(programDetailsPromises)).filter(Boolean) as Program[];
         setAssignedProgramsDetails(details);
         console.log('[EditBrand] Fetched assigned program details:', details);
       } else {
         setAssignedProgramsDetails([]);
-        setAllLibraryCourses([]);
+        setAllLibraryCourses([]); // Ensure this is also reset
         console.log('[EditBrand] No assigned programs found for brand:', companyId);
       }
 
@@ -227,15 +225,9 @@ export default function EditCompanyPage() {
     setLogoUploadError(null);
     try {
       const uniqueFileName = `${companyId}-logo-${Date.now()}-${file.name}`;
-      const storagePath = `companies/logos/${uniqueFileName}`;
-      // Assuming uploadImage is a function that handles upload and returns URL
-      // const downloadURL = await uploadImage(file, storagePath, setLogoUploadProgress);
-      // For now, let's simulate a URL. Replace with actual uploadImage call.
-      const downloadURL = `https://placehold.co/200x100.png?text=${encodeURIComponent(file.name)}`;
-      // Remove the above line and uncomment the actual uploadImage call once `uploadImage` is available and configured.
-      // For example:
-      // const { uploadImage, STORAGE_PATHS } = await import('@/lib/storage');
-      // const downloadURL = await uploadImage(file, `${STORAGE_PATHS.COMPANY_LOGOS}/${uniqueFileName}`, setLogoUploadProgress);
+      const storagePath = `${STORAGE_PATHS.COMPANY_LOGOS}/${uniqueFileName}`;
+      
+      const downloadURL = await uploadImage(file, storagePath, setLogoUploadProgress);
 
       form.setValue('logoUrl', downloadURL, { shouldValidate: true });
       toast({ title: "Logo Uploaded", description: "Brand logo uploaded successfully." });
@@ -252,7 +244,7 @@ export default function EditCompanyPage() {
     if (!companyId || !company) return;
     setIsSaving(true);
 
-    const currentLogoUrl = form.getValues('logoUrl');
+    const currentLogoUrl = form.getValues('logoUrl'); // Get latest value from form state
 
     try {
       const metadataToUpdate: Partial<CompanyFormData> = {
@@ -263,7 +255,7 @@ export default function EditCompanyPage() {
         logoUrl: currentLogoUrl?.trim() === '' ? null : currentLogoUrl,
         maxUsers: data.maxUsers ?? null,
         isTrial: data.isTrial,
-        trialEndsAt: data.isTrial && data.trialEndsAt ? (data.trialEndsAt instanceof Date ? data.trialEndsAt : new Date(data.trialEndsAt)) : null,
+        trialEndsAt: data.isTrial && data.trialEndsAt ? (data.trialEndsAt instanceof Date ? data.trialEndsAt : new Date(data.trialEndsAt as unknown as string)) : null,
         canManageCourses: data.canManageCourses,
         whiteLabelEnabled: data.whiteLabelEnabled,
         primaryColor: data.whiteLabelEnabled && data.primaryColor?.trim() !== '' ? data.primaryColor : null,
@@ -275,9 +267,9 @@ export default function EditCompanyPage() {
 
       const updatedCompany = await updateCompany(companyId, metadataToUpdate);
       if (updatedCompany) {
-        setCompany(updatedCompany);
-        if (currentUser) {
-          await fetchCompanyData(currentUser); // Re-fetch to ensure all state is fresh
+        setCompany(updatedCompany); // Update local company state
+        if (currentUser) { // Re-fetch to ensure form is reset with the absolute latest data
+            await fetchCompanyData(currentUser);
         }
         toast({ title: "Brand Updated", description: `"${updatedCompany.name}" updated successfully.` });
       } else {
@@ -305,7 +297,7 @@ export default function EditCompanyPage() {
   }
 
   if (!company) {
-    return <div className="container mx-auto py-12 text-center">Brand not found.</div>;
+    return <div className="container mx-auto py-12 text-center">Brand not found or access denied.</div>;
   }
 
   return (
@@ -338,7 +330,7 @@ export default function EditCompanyPage() {
                 <CardContent>
                   <FormItem>
                     <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
-                      {logoUrlValue && !isLogoUploading ? ( <div className="relative w-32 h-32 mx-auto mb-2"> <Image src={logoUrlValue} alt="Brand logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" data-ai-hint="company logo" onError={() => { form.setValue('logoUrl', ''); toast({ title: "Image Load Error", variant: "destructive" }); }} /> <Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6 opacity-80 hover:opacity-100 z-10" onClick={() => form.setValue('logoUrl', '')}><Trash2 className="h-4 w-4" /></Button> </div>
+                      {logoUrlValue && !isLogoUploading ? ( <div className="relative w-32 h-32 mx-auto mb-2"> <Image src={logoUrlValue} alt="Brand logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" data-ai-hint="company logo" onError={() => { form.setValue('logoUrl', ''); toast({ title: "Image Load Error", description:"Could not load logo preview.", variant: "destructive" }); }} /> <Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6 opacity-80 hover:opacity-100 z-10" onClick={() => form.setValue('logoUrl', '')}><Trash2 className="h-4 w-4" /></Button> </div>
                       ) : isLogoUploading ? (
                         <div className="flex flex-col items-center justify-center h-full py-8"><Loader2 className="h-8 w-8 animate-spin text-primary mb-2" /><p className="text-sm text-muted-foreground mb-1">Uploading...</p><Progress value={logoUploadProgress} className="w-full max-w-xs h-2" />{logoUploadError && <p className="text-xs text-destructive mt-2">{logoUploadError}</p>}</div>
                       ) : (
@@ -365,12 +357,10 @@ export default function EditCompanyPage() {
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                           <div className="space-y-0.5">
                             <FormLabel className="text-base">Enable White-Labeling</FormLabel>
-                            <FormDescription>Allow this brand to use custom colors and branding.</FormDescription>
+                            <FormDescription>Allow this brand to use custom colors and logo for a branded experience.</FormDescription>
                           </div>
                           <FormControl>
-                            <div>
-                                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                            </div>
+                            <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></div>
                           </FormControl>
                         </FormItem>
                       )}
@@ -387,6 +377,7 @@ export default function EditCompanyPage() {
                   )}
                 </CardContent>
               </Card>
+
             </div>
 
             <div className="lg:col-span-1 space-y-6">
@@ -403,9 +394,7 @@ export default function EditCompanyPage() {
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                           <div className="space-y-0.5"><FormLabel>Is Trial Account?</FormLabel></div>
                           <FormControl>
-                            <div>
-                                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                            </div>
+                            <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></div>
                           </FormControl>
                         </FormItem>
                       )}
@@ -446,9 +435,7 @@ export default function EditCompanyPage() {
                             <FormDescription>Allow this brand's Admins/Owners to create and manage their own courses.</FormDescription>
                           </div>
                           <FormControl>
-                            <div>
-                                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                            </div>
+                            <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></div>
                           </FormControl>
                         </FormItem>
                       )}
@@ -458,7 +445,7 @@ export default function EditCompanyPage() {
               )}
 
               {/* Assigned Programs Card */}
-              <Card>
+               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2"><Layers className="h-5 w-5" /> Assigned Programs</CardTitle>
                 </CardHeader>
@@ -519,4 +506,3 @@ export default function EditCompanyPage() {
     </div>
   );
 }
-
