@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -36,7 +35,6 @@ type EmployeeWithOverallProgress = User & {
 
 const DEFAULT_ROWS_PER_PAGE = 5;
 
-// Define ROLE_HIERARCHY here
 const ROLE_HIERARCHY: Record<UserRole, number> = {
   'Super Admin': 5,
   'Admin': 4,
@@ -60,8 +58,8 @@ export default function DashboardPage() {
   const [availableCoursesForAssignment, setAvailableCoursesForAssignment] = useState<(Course | BrandCourse)[]>([]);
   const [recentActivity, setRecentActivity] = useState<ActivityLog[]>([]);
   
-  const [isLoading, setIsLoading] = useState(true); // Main loading state for the dashboard
-  const [isAuthLoading, setIsAuthLoading] = useState(true); // For initial auth check
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthLoading, setIsAuthLoading] = useState(true); 
 
   const [isAssignCourseDialogOpen, setIsAssignCourseDialogOpen] = useState(false);
   const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false);
@@ -79,10 +77,10 @@ export default function DashboardPage() {
     if (!userEmail) { 
         setIsAuthLoading(false); 
         setIsLoading(false); 
-        router.push('/'); // Should not happen if onAuthStateChanged is working
+        router.push('/');
         return; 
     }
-    setIsLoading(true); // Start main loading
+    setIsLoading(true);
     try {
       const userDetails = await getUserByEmail(userEmail);
       setCurrentUser(userDetails);
@@ -120,7 +118,7 @@ export default function DashboardPage() {
       if (userDetails.role !== 'Super Admin' && userDetails.companyId) {
         setSelectedBrandIdForDashboard(userDetails.companyId);
         setLocationsForLocationFilter(allVisibleLocs.filter(loc => loc.companyId === userDetails.companyId));
-      } else { // Super Admin or user with no companyId (though latter should be rare for dashboard access)
+      } else {
         setSelectedBrandIdForDashboard('all'); 
         setLocationsForLocationFilter(allVisibleLocs);
       }
@@ -128,7 +126,6 @@ export default function DashboardPage() {
       console.error("[DashboardPage] Error fetching initial data:", error);
       toast({ title: "Error Initializing Dashboard", description: (error as Error).message, variant: "destructive" });
     } finally {
-      // setIsLoading(false); // Employee fetching will handle the main loading state
       setIsAuthLoading(false);
     }
   }, [toast, router]);
@@ -140,18 +137,16 @@ export default function DashboardPage() {
             fetchInitialDashboardData(user.email);
         } else {
             setIsAuthLoading(false); 
-            setIsLoading(false); // No user, stop all loading
+            setIsLoading(false); 
             router.push('/'); 
         }
     });
     return () => unsubscribe();
   }, [fetchInitialDashboardData, router]);
 
-
-  // Effect to fetch employees and assignable courses based on filters
   useEffect(() => {
-    if (isAuthLoading || !currentUser) { // Wait for auth check and currentUser
-        if (!isAuthLoading) setIsLoading(false); // If auth done and no user, stop loading
+    if (isAuthLoading || !currentUser) { 
+        if (!isAuthLoading) setIsLoading(false);
         return;
     }
     
@@ -164,21 +159,15 @@ export default function DashboardPage() {
         if (selectedBrandIdForDashboard === 'all') {
           if (currentUser.role === 'Super Admin') {
             usersToProcess = await fetchAllSystemUsers();
-            // For Super Admin + All Brands, course assignment might be complex.
-            // Let's assume they can assign any global course.
             companyForCourseAssignmentContext = null; 
           } else if (currentUser.role === 'Admin' || currentUser.role === 'Owner') {
-            // Fetch users from all viewable brands for Admin/Owner
             if (viewableBrandsForFilter.length > 0) {
                 const usersPromises = viewableBrandsForFilter.map(b => getUsersByCompanyId(b.id));
                 usersToProcess = (await Promise.all(usersPromises)).flat();
             }
-             // Course assignment context for Admin/Owner with "All Brands" could be their primary brand,
-             // or we might disable assignment in this view, or show courses from all their brands.
-             // For now, let's use primary brand for course context.
             companyForCourseAssignmentContext = userPrimaryBrand;
           }
-        } else { // Specific brand selected
+        } else { 
           if (viewableBrandsForFilter.some(b => b.id === selectedBrandIdForDashboard)) {
              usersToProcess = await getUsersByCompanyId(selectedBrandIdForDashboard);
              companyForCourseAssignmentContext = viewableBrandsForFilter.find(b => b.id === selectedBrandIdForDashboard) || null;
@@ -188,15 +177,13 @@ export default function DashboardPage() {
           }
         }
 
-        // Managers: further restrict usersToProcess to their own brand (already handled if selectedBrandIdForDashboard is their companyId)
-        // Also, their viewableBrandsForFilter should only contain their own brand.
         if (currentUser.role === 'Manager' && currentUser.companyId) {
-          if (selectedBrandIdForDashboard !== currentUser.companyId) { // Safety check
-              usersToProcess = []; // Should not happen if filters are set right
+          if (selectedBrandIdForDashboard !== currentUser.companyId) {
+              usersToProcess = [];
           } else {
              usersToProcess = await getUsersByCompanyId(currentUser.companyId);
           }
-          companyForCourseAssignmentContext = userPrimaryBrand; // Manager's primary brand
+          companyForCourseAssignmentContext = userPrimaryBrand;
         }
         
         const employeesWithProgressPromises = usersToProcess.map(async (user) => {
@@ -208,10 +195,9 @@ export default function DashboardPage() {
         });
         setEmployees(await Promise.all(employeesWithProgressPromises));
 
-        // Fetch courses available for assignment
         let assignableCourses: (Course | BrandCourse)[] = [];
-        if (companyForCourseAssignmentContext) { // If a specific brand context is determined
-            const brandContext = companyForCourseAssignmentContext; // Alias for clarity
+        if (companyForCourseAssignmentContext) { 
+            const brandContext = companyForCourseAssignmentContext;
             const globalProgramCourses: Course[] = [];
             if (brandContext.assignedProgramIds && brandContext.assignedProgramIds.length > 0) {
                 const allPrograms = await fetchAllGlobalPrograms();
@@ -229,7 +215,6 @@ export default function DashboardPage() {
                 assignableCourses.push(...brandCourses);
             }
         } else if (currentUser.role === 'Super Admin' && selectedBrandIdForDashboard === 'all') {
-            // Super Admin viewing "All Brands" can assign any global course
             assignableCourses = (await getAllLibraryCourses()).filter(c => !c.isDeleted);
         }
         setAvailableCoursesForAssignment(assignableCourses);
@@ -246,10 +231,8 @@ export default function DashboardPage() {
     fetchEmployeesAndAssignableCourses();
   }, [currentUser, selectedBrandIdForDashboard, viewableBrandsForFilter, userPrimaryBrand, toast, isAuthLoading]);
 
-
-  // Effect to update locationsForLocationFilter when selectedBrandIdForDashboard or allSystemLocations changes
   useEffect(() => {
-    if (isAuthLoading) return; // Don't run if auth is still loading
+    if (isAuthLoading) return; 
     if (selectedBrandIdForDashboard === 'all') {
       setLocationsForLocationFilter(allSystemLocations);
     } else if (selectedBrandIdForDashboard) {
@@ -257,10 +240,9 @@ export default function DashboardPage() {
     } else {
       setLocationsForLocationFilter([]);
     }
-    setSelectedLocationId('all'); // Reset location filter when brand changes
+    setSelectedLocationId('all');
   }, [selectedBrandIdForDashboard, allSystemLocations, isAuthLoading]);
 
-  // Effect to filter employees based on selectedLocationId
   useEffect(() => {
     if (isAuthLoading || isLoading) return; 
 
@@ -272,7 +254,6 @@ export default function DashboardPage() {
     console.log(`[Dashboard Filter] Employees before location filter for ${currentUser?.role}: ${tempUsers.length} users`);
     console.log(`[Dashboard Filter] Manager's assignedLocationIds: ${JSON.stringify(currentUser?.assignedLocationIds)}`);
 
-
     if (selectedLocationId && selectedLocationId !== 'all') {
       tempUsers = tempUsers.filter(emp => (emp.assignedLocationIds || []).includes(selectedLocationId));
     } else if (currentUser?.role === 'Manager' && selectedBrandIdForDashboard === currentUser.companyId && selectedLocationId === 'all') {
@@ -282,8 +263,6 @@ export default function DashboardPage() {
           emp.id === currentUser.id || (emp.assignedLocationIds || []).some(locId => managerLocationIds.includes(locId))
         );
       } else {
-        // If manager has no assigned locations, show only the manager themselves.
-        // This implicitly happens if managerLocationIds is empty, as .some() on empty array for others will be false.
          tempUsers = tempUsers.filter(emp => emp.id === currentUser.id);
          console.log("[Dashboard Filter] Manager has no assigned locations. Showing only manager.");
       }
@@ -305,11 +284,11 @@ export default function DashboardPage() {
       if (currentUser.role === 'Super Admin') canToggle = true;
       else if (currentUser.companyId) {
           const targetUserIsAccessible = viewableBrandsForFilter.some(vb => vb.id === targetUser.companyId);
-          if (targetUserIsAccessible && ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[targetUser.role]) {
-              if (currentUser.role === 'Manager') { // Manager can only toggle Staff or other Managers in their scope
+          if (targetUserIsAccessible) {
+              if (currentUser.role === 'Manager') {
                 canToggle = (targetUser.role === 'Staff' || targetUser.role === 'Manager');
               } else {
-                canToggle = true;
+                canToggle = ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[targetUser.role];
               }
           }
       }
@@ -323,18 +302,26 @@ export default function DashboardPage() {
   const openAssignCourseDialog = (employee: User) => {
      if (!currentUser) return;
      let canAssign = false;
-     if (currentUser.role === 'Super Admin') canAssign = true;
-     else if (currentUser.companyId) { 
+
+     if (currentUser.role === 'Super Admin') {
+         canAssign = true;
+     } else if (currentUser.companyId) {
          const targetUserIsAccessible = viewableBrandsForFilter.some(vb => vb.id === employee.companyId);
-         if (targetUserIsAccessible && ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[employee.role]) {
-             if (currentUser.role === 'Manager') { // Manager can only assign to Staff or other Managers in their scope
-                canAssign = (employee.role === 'Staff' || employee.role === 'Manager');
-             } else {
-                canAssign = true;
+         if (targetUserIsAccessible) {
+             if (currentUser.role === 'Manager') {
+                 // Managers can assign to Staff or other Managers within their accessible brands
+                 canAssign = (employee.role === 'Staff' || employee.role === 'Manager');
+             } else if (currentUser.role === 'Admin' || currentUser.role === 'Owner') {
+                 // Admin/Owner can assign to roles strictly lower than their own
+                 canAssign = ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[employee.role];
              }
          }
      }
-     if (!canAssign) { toast({ title: "Permission Denied", description: "You do not have permission to assign courses to this user.", variant: "destructive" }); return; }
+
+     if (!canAssign) { 
+        toast({ title: "Permission Denied", description: "You do not have permission to assign courses to this user.", variant: "destructive" }); 
+        return; 
+     }
      
      let companyContextForDialog = userPrimaryBrand; 
      if (currentUser.role === 'Super Admin') {
@@ -345,16 +332,15 @@ export default function DashboardPage() {
             else companyContextForDialog = null; 
          }
      } else if (selectedBrandIdForDashboard !== 'all' && selectedBrandIdForDashboard !== currentUser.companyId) {
-        // Admin/Owner viewing a child brand
         companyContextForDialog = viewableBrandsForFilter.find(b => b.id === selectedBrandIdForDashboard) || null;
      }
      
      if (availableCoursesForAssignment.length === 0 && !companyContextForDialog) { 
-         toast({ title: "No Courses Available", description: "No courses are available for assignment in the current brand context (Super Admin, All Brands, no specific employee brand).", variant: "destructive" }); 
+         toast({ title: "No Courses Available", description: "No courses available for assignment (Super Admin, All Brands, no specific employee brand).", variant: "destructive" }); 
          return; 
      }
      if (availableCoursesForAssignment.length === 0 && companyContextForDialog) {
-        toast({ title: "No Courses Available", description: `No courses are available for assignment for the brand: ${companyContextForDialog.name}.`, variant: "destructive" }); 
+        toast({ title: "No Courses Available", description: `No courses available for assignment for brand: ${companyContextForDialog.name}.`, variant: "destructive" }); 
         return;
      }
      setUserToAssignCourse(employee); 
@@ -411,7 +397,6 @@ export default function DashboardPage() {
   if (!currentUser || (!userPrimaryBrand && currentUser.role !== 'Super Admin' && currentUser.role !== 'Admin' && currentUser.role !== 'Owner' )) { 
     return <div className="flex-1 space-y-4 p-8 pt-6 text-center">Could not load dashboard data. User may not be assigned to a primary brand or access is denied.</div>;
   }
-
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6">
@@ -507,7 +492,7 @@ export default function DashboardPage() {
             isOpen={isAssignCourseDialogOpen} 
             setIsOpen={setIsAssignCourseDialogOpen} 
             employee={userToAssignCourse}
-            company={selectedBrandIdForDashboard === 'all' ? (employee.companyId ? viewableBrandsForFilter.find(b => b.id === employee.companyId) : null) : viewableBrandsForFilter.find(b => b.id === selectedBrandIdForDashboard)}
+            company={selectedBrandIdForDashboard === 'all' ? (userToAssignCourse.companyId ? viewableBrandsForFilter.find(b => b.id === userToAssignCourse.companyId) : null) : viewableBrandsForFilter.find(b => b.id === selectedBrandIdForDashboard)}
             onAssignCourse={handleAssignCourse} />
       )}
       {isEditUserDialogOpen && userToEdit && currentUser && ( 
@@ -532,3 +517,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

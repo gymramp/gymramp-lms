@@ -23,9 +23,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import type { User, UserRole, Location, Company } from '@/types/user'; 
-import type { Course } from '@/types/course'; 
+import type { Course, BrandCourse } from '@/types/course'; 
 import { cn } from '@/lib/utils';
-import { getCourseById } from '@/lib/firestore-data'; 
+import { getCourseById as fetchGlobalCourseById } from '@/lib/firestore-data'; 
+import { getBrandCourseById } from '@/lib/brand-content-data';
+
 
 type EmployeeWithOverallProgress = User & {
     overallProgress: number;
@@ -40,7 +42,7 @@ interface EmployeeTableProps {
   onEditUser: (user: User) => void; 
   currentUser: User | null; 
   locations: Location[]; 
-  companyCourses: Course[]; 
+  companyCourses: (Course | BrandCourse)[]; 
 }
 
 const ROLE_HIERARCHY_TABLE: Record<UserRole, number> = { 
@@ -57,7 +59,7 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
     const [isLoadingTitles, setIsLoadingTitles] = useState(false);
 
     useEffect(() => {
-        let isMounted = true; // Flag to prevent state updates if component unmounts
+        let isMounted = true;
         const fetchTitles = async () => {
             if (!isMounted) return;
             setIsLoadingTitles(true);
@@ -67,12 +69,18 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
             for (const courseId of courseIdsToFetch) {
                 if (courseId) { 
                     try {
-                        const course = await getCourseById(courseId);
-                        if (isMounted) { // Check again before setting state
-                            if (course) {
+                        // Attempt to fetch as global course first
+                        let course: Course | BrandCourse | null = await fetchGlobalCourseById(courseId);
+                        if (!course) {
+                            // If not found, attempt to fetch as brand course
+                            course = await getBrandCourseById(courseId);
+                        }
+
+                        if (isMounted) {
+                            if (course && !course.isDeleted) {
                                 titles[courseId] = course.title;
                             } else {
-                                titles[courseId] = "Unknown Course";
+                                titles[courseId] = "Unknown/Deleted Course";
                             }
                         }
                     } catch (error) {
@@ -93,20 +101,57 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
              setAssignedCourseTitles({});
              setIsLoadingTitles(false);
         }
-        return () => { isMounted = false; }; // Cleanup function
+        return () => { isMounted = false; };
     }, [employees]); 
 
 
-     const canManageUser = (targetUser: User): boolean => {
+     const canPerformGeneralAction = (targetUser: User): boolean => {
          if (!currentUser) return false;
-         if (currentUser.id === targetUser.id) return true;
+         if (currentUser.id === targetUser.id) return true; // User can edit self (for profile usually, not deactivate)
          if (currentUser.role === 'Super Admin') return true; 
-         if (!currentUser.companyId || currentUser.companyId !== targetUser.companyId) return false; 
+         if (!currentUser.companyId || !targetUser.companyId || !viewableBrandsForFilter.some(b => b.id === targetUser.companyId)) return false;
+
+         if (currentUser.role === 'Manager') {
+             return (targetUser.role === 'Staff' || targetUser.role === 'Manager');
+         }
          return ROLE_HIERARCHY_TABLE[currentUser.role] > ROLE_HIERARCHY_TABLE[targetUser.role];
      };
+     
+     // Helper to get accessible brands for the current user (passed from parent or fetched if needed)
+     // This is a placeholder, in a real scenario this might be a prop or fetched based on currentUser.
+     const viewableBrandsForFilter: Company[] = []; // This should be populated correctly based on the parent component's logic.
+
+
+    const canAssignCoursesToTarget = (cu: User | null, tu: User): boolean => {
+        if (!cu) return false;
+        if (cu.role === 'Super Admin') return true;
+        if (!cu.companyId) return false; // Non-Super Admins must belong to a company
+
+        // Check if target user's company is within the current user's manageable scope
+        // This logic might need to be more sophisticated if viewableBrandsForFilter isn't directly available
+        // or if it doesn't accurately reflect children brands for Admin/Owner.
+        // For now, we assume a simple check: if non-SA, target must be in one of CU's viewable brands.
+        const isTargetInScope = viewableBrandsForFilter.some(b => b.id === tu.companyId);
+        if (!isTargetInScope && cu.companyId !== tu.companyId) return false;
+
+
+        if (cu.role === 'Manager') {
+            return (tu.role === 'Staff' || tu.role === 'Manager');
+        }
+        if (cu.role === 'Admin' || cu.role === 'Owner') {
+            return ROLE_HIERARCHY_TABLE[cu.role] > ROLE_HIERARCHY_TABLE[tu.role];
+        }
+        return false;
+    };
+
 
     const handleToggleClick = (employee: User) => {
-        if (!canManageUser(employee) || currentUser?.id === employee.id) { 
+        // Allow editing self, but not deactivating self.
+        if (currentUser?.id === employee.id) {
+            toast({ title: "Action Denied", description: "You cannot deactivate your own account.", variant: "destructive" });
+            return;
+        }
+        if (!canPerformGeneralAction(employee)) { 
             toast({ title: "Permission Denied", description: "You cannot modify this user's status.", variant: "destructive" });
             return;
         }
@@ -114,19 +159,20 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
     };
 
     const handleAssignClick = (employee: User) => {
-        if (!canManageUser(employee)) {
+         if (!canAssignCoursesToTarget(currentUser, employee)) {
              toast({ title: "Permission Denied", description: "You cannot assign courses to this user.", variant: "destructive" });
              return;
          }
          if (companyCourses.length === 0) {
-              toast({ title: "No Courses Available", description: "There are no courses assigned to this company to assign to users.", variant: "destructive" });
+              toast({ title: "No Courses Available", description: "There are no courses assignable in the current brand context.", variant: "destructive" });
               return;
          }
          onAssignCourse(employee);
     }
 
     const handleEditClick = (employee: User) => {
-        if (!canManageUser(employee)) { 
+        // Allow users to edit their own details, otherwise check hierarchy.
+        if (currentUser?.id !== employee.id && !canPerformGeneralAction(employee)) { 
              toast({
                 title: "Permission Denied",
                 description: `You do not have permission to edit ${employee.name}.`,
@@ -137,17 +183,16 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
         onEditUser(employee); 
     };
 
-
     if (!currentUser) {
          return <div className="text-center text-muted-foreground py-8">Loading user data...</div>;
      }
 
     const getAccessibleLocationNames = (assignedIds: string[] | undefined): string[] => {
       if (!assignedIds) return [];
-      const accessibleLocationIds = new Set(locations.map(loc => loc.id));
+      // Use the passed 'locations' prop which should already be filtered by accessible locations for the current view
       return assignedIds
-        .filter(id => accessibleLocationIds.has(id)) 
-        .map(id => locations.find(loc => loc.id === id)?.name || ''); 
+        .map(id => locations.find(loc => loc.id === id)?.name)
+        .filter(Boolean) as string[];
     };
 
   return (
@@ -181,7 +226,7 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
           } else if (assignedCount > 0) {
               const courseList = assignedCourseIds
                                     .map(courseId => assignedCourseTitles[courseId] || 'Loading...') 
-                                    .filter(title => title !== 'Unknown Course' && title !== 'Error Loading Title'); 
+                                    .filter(title => title !== 'Unknown/Deleted Course' && title !== 'Error Loading Title'); 
               if (courseList.length <= 2) {
                   courseDisplay = <span className="text-xs text-foreground">{courseList.join(', ')}</span>;
               } else {
@@ -256,21 +301,28 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
                <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="h-8 w-8 p-0">
-                    <>
+                    {/* Content wrapped in a span for Button asChild compatibility */}
+                    <span>
                       <span className="sr-only">Open menu for {employee.name}</span>
                       <MoreHorizontal className="h-4 w-4" />
-                    </>
+                    </span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Actions for {employee.name}</DropdownMenuLabel>
-                   <DropdownMenuItem onClick={() => handleAssignClick(employee)} disabled={!canManageUser(employee) || !employee.isActive || companyCourses.length === 0}>
+                   <DropdownMenuItem 
+                        onClick={() => handleAssignClick(employee)} 
+                        disabled={!canAssignCoursesToTarget(currentUser, employee) || !employee.isActive || companyCourses.length === 0}
+                    >
                      <>
                        <BookCopy className="mr-2 h-4 w-4" />
                        <span>Manage Assigned Courses</span>
                      </>
                   </DropdownMenuItem>
-                   <DropdownMenuItem onClick={() => handleEditClick(employee)} disabled={!canManageUser(employee) || !employee.isActive}>
+                   <DropdownMenuItem 
+                        onClick={() => handleEditClick(employee)} 
+                        disabled={currentUser?.id !== employee.id && !canPerformGeneralAction(employee)}
+                    >
                      <>
                        <Edit className="mr-2 h-4 w-4" />
                        <span>Edit Details</span>
@@ -284,7 +336,7 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
                           ? "text-destructive focus:text-destructive focus:bg-destructive/10"
                           : "text-green-600 focus:text-green-600 focus:bg-green-500/10"
                       )}
-                      disabled={!canManageUser(employee) || currentUser?.id === employee.id}
+                      disabled={currentUser?.id === employee.id || !canPerformGeneralAction(employee)}
                     >
                      {employee.isActive ? (
                         <> <Archive className="mr-2 h-4 w-4" /> <span>Deactivate</span> </>
@@ -302,3 +354,5 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
     </Table>
   );
 }
+
+    
