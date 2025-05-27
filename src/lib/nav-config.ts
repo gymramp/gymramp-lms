@@ -38,7 +38,7 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
     roleSpecificItems.push(
       { href: '/admin/dashboard', label: 'Dashboard', icon: BarChartBig },
       { href: '/admin/companies', label: 'Brands', icon: Building },
-      { href: '/admin/users', label: 'Users', icon: Users }, // Added Users link back
+      { href: '/admin/users', label: 'Users', icon: Users },
       { href: '/admin/programs', label: 'Programs', icon: Layers },
       { href: '/admin/customers', label: 'Customers', icon: CreditCard },
       {
@@ -58,7 +58,7 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
         subItems: [
           { href: '/admin/checkout', label: 'Paid Checkout', icon: ShoppingCart },
           { href: '/admin/free-trial-checkout', label: 'Free Trial', icon: Gift },
-          { href: '/admin/test-checkout', label: 'Test Checkout', icon: TestTube2 },
+          // { href: '/admin/test-checkout', label: 'Test Checkout', icon: TestTube2 }, // Removed Test Checkout
         ],
       },
       { href: '/admin/revenue-share-report', label: 'Rev Share Report', icon: Percent }
@@ -67,7 +67,6 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
     roleSpecificItems.push(
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/admin/companies', label: 'Brands', icon: Building, requiresCompanyId: true },
-      { href: '/admin/users', label: 'Users', icon: Users, requiresCompanyId: true },
       { href: `/admin/companies/${user.companyId}/locations`, label: 'Locations', icon: MapPin, requiresCompanyId: true },
       {
         label: 'Brand Content',
@@ -110,6 +109,7 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
              if (subItem.requiresCanManageCourses && !(userCompanyDetails?.canManageCourses === true)) return false;
              return true;
         });
+        // Hide dropdown if all its sub-items are filtered out due to permissions
         if (item.isDropdown && item.subItems.length === 0 && (item.requiresCanManageCourses || item.requiresCompanyId)) return false;
     }
     return true;
@@ -130,7 +130,6 @@ export function getUserDropdownItems(user: User | null): NavItemType[] {
             { href: '/admin/settings', label: 'Settings', icon: Cog }
         );
     }
-    // No specific items for Admin/Owner/Manager in user dropdown beyond default account/help
     items.push({ href: '/certificates', label: 'My Certificates', icon: Award });
     items.push({ href: '/site-help', label: 'Site Help', icon: HelpCircle });
 
