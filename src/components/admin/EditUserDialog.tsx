@@ -38,7 +38,7 @@ import type { UserRole, User, Company, Location } from '@/types/user';
 import { updateUser as updateFirestoreUser } from '@/lib/user-data';
 import { cn } from '@/lib/utils';
 import { AlertCircle, Loader2, KeyRound } from 'lucide-react';
-import { getCompanyById, getLocationsByCompanyId } from '@/lib/company-data'; // Added getCompanyById
+import { getCompanyById, getLocationsByCompanyId } from '@/lib/company-data';
 
 const ROLE_HIERARCHY: Record<UserRole, number> = {
   'Super Admin': 5, 'Admin': 4, 'Owner': 3, 'Manager': 2, 'Staff': 1,
@@ -70,8 +70,8 @@ interface EditUserDialogProps {
   user: User;
   onUserUpdated: (user: User) => void;
   currentUser: User;
-  companies: Company[]; // All accessible brands for the current admin
-  locations: Location[]; // All system locations (will be filtered)
+  companies: Company[];
+  locations: Location[];
 }
 
 export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, currentUser, companies = [], locations = [] }: EditUserDialogProps) {
@@ -79,7 +79,7 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
   const { toast } = useToast();
   const [locationsForSelectedBrandInDialog, setLocationsForSelectedBrandInDialog] = useState<Location[]>([]);
   const [isLoadingLocationsForDialog, setIsLoadingLocationsForDialog] = useState(false);
-
+  const [initialCompanyIdForUser, setInitialCompanyIdForUser] = useState<string | null>(null);
 
   const form = useForm<EditUserFormValues>({
     resolver: zodResolver(editUserFormSchema),
@@ -91,6 +91,7 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
 
   useEffect(() => {
     if (user && isOpen) {
+      setInitialCompanyIdForUser(user.companyId || null); // Store initial company ID
       form.reset({
         name: user.name || '',
         companyId: user.companyId || null,
@@ -99,7 +100,7 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
         newTemporaryPassword: '',
       });
     }
-  }, [user, form, isOpen]);
+  }, [user, form, isOpen]); // Removed user.assignedLocationIds as user object identity change is sufficient
 
   useEffect(() => {
     const fetchLocationsForBrand = async () => {
@@ -112,33 +113,38 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
            } else {
             setLocationsForSelectedBrandInDialog(brandLocations);
            }
-          // Preserve existing valid selections or clear if brand changed significantly
-          const currentAssigned = form.getValues('assignedLocationIds') || [];
-          const validAssigned = currentAssigned.filter(locId => brandLocations.some(filteredLoc => filteredLoc.id === locId));
-          form.setValue('assignedLocationIds', validAssigned, { shouldValidate: true });
+          // Only reset assignedLocationIds if the company *actually* changed from the user's initial company
+          if (selectedCompanyIdInDialog !== initialCompanyIdForUser) {
+             form.setValue('assignedLocationIds', [], { shouldValidate: true });
+          }
+          // Otherwise, let the values from form.reset (based on user prop) persist for checkboxes.
 
         } catch (error) {
             toast({ title: "Error", description: "Could not load locations for selected brand.", variant: "destructive" });
             setLocationsForSelectedBrandInDialog([]);
+            form.setValue('assignedLocationIds', []); // Clear on error too
         } finally {
             setIsLoadingLocationsForDialog(false);
         }
       } else if (isOpen && !selectedCompanyIdInDialog) {
         setLocationsForSelectedBrandInDialog([]);
-        form.setValue('assignedLocationIds', []);
+        // Only reset if there was an initial company for this user
+        if (initialCompanyIdForUser !== null) {
+           form.setValue('assignedLocationIds', []);
+        }
       }
     };
     fetchLocationsForBrand();
-  }, [selectedCompanyIdInDialog, isOpen, form, currentUser, toast]);
+  }, [selectedCompanyIdInDialog, isOpen, form, currentUser, initialCompanyIdForUser, toast]);
 
 
   const canEditRole = currentUser && user && currentUser.id !== user.id && !isTargetUserSuperAdmin &&
-    (currentUser.role === 'Super Admin' || 
-     (currentUser.companyId && 
-      (user.companyId === currentUser.companyId || companies.find(c => c.id === user.companyId)?.parentBrandId === currentUser.companyId) && // Target user is in scope
+    (currentUser.role === 'Super Admin' ||
+     (currentUser.companyId &&
+      (user.companyId === currentUser.companyId || companies.find(c => c.id === user.companyId)?.parentBrandId === currentUser.companyId) &&
       (
-        (currentUser.role === 'Manager' && (user.role === 'Staff' || user.role === 'Manager')) || // Manager can edit Staff or other Managers
-        (ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[user.role]) // Admin/Owner can edit strictly lower
+        (currentUser.role === 'Manager' && (user.role === 'Staff' || user.role === 'Manager')) ||
+        (ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[user.role])
       )
      )
     );
@@ -151,7 +157,6 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
     startTransition(async () => {
       if (!currentUser || !user) return;
 
-      // Role change permission check
       if (data.role !== user.role) {
         if (isTargetUserSuperAdmin) {
             toast({ title: "Permission Denied", description: "Super Admin role cannot be changed.", variant: "destructive" }); return;
@@ -186,9 +191,6 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
         let passwordMessage = "";
         if (canSetPassword && data.newTemporaryPassword && data.newTemporaryPassword.length >= 6) {
             updateData.requiresPasswordChange = true;
-            // IMPORTANT: Actual password change requires Admin SDK on backend.
-            // This client-side code SIMULATES setting it for the purpose of the flag.
-            // The Super Admin needs to be instructed to communicate this password.
             console.warn(`ADMIN SDK NEEDED: Pretending to update password for ${user.email} to ${data.newTemporaryPassword}`);
             toast({ title: "Password Update (Simulated)", description: `Password for ${user.email} would be set to '${data.newTemporaryPassword}' via Admin SDK. User will be prompted to change it. Communicate this password to the user.`, variant: "default", duration: 15000 });
             passwordMessage = ` New temporary password noted.`;
@@ -246,7 +248,7 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
                   <div>
                     <ScrollArea className="h-40 w-full rounded-md border p-4">
                         {isLoadingLocationsForDialog ? ( <div className="flex items-center justify-center h-full"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-                        ) :selectedCompanyIdInDialog && locationsForSelectedBrandInDialog.length > 0 ? ( <div className="space-y-2"> {locationsForSelectedBrandInDialog.map((loc) => ( <FormItem key={loc.id} className="flex flex-row items-start space-x-3 space-y-0"> <FormControl><Checkbox checked={form.getValues('assignedLocationIds')?.includes(loc.id)} onCheckedChange={c => { const current = form.getValues('assignedLocationIds') || []; const newVals = c ? [...current, loc.id] : current.filter(v => v !== loc.id); form.setValue('assignedLocationIds', newVals, { shouldValidate: true }); }} id={`edit-loc-${loc.id}`} /></FormControl> <FormLabel htmlFor={`edit-loc-${loc.id}`} className="font-normal">{loc.name}</FormLabel> </FormItem> ))} </div>
+                        ) :selectedCompanyIdInDialog && locationsForSelectedBrandInDialog.length > 0 ? ( <div className="space-y-2"> {locationsForSelectedBrandInDialog.map((loc) => ( <FormField key={loc.id} control={form.control} name="assignedLocationIds" render={({ field: cbField }) => ( <FormItem className="flex flex-row items-start space-x-3 space-y-0"> <FormControl><Checkbox checked={cbField.value?.includes(loc.id)} onCheckedChange={c => { const current = cbField.value || []; const newVals = c ? [...current, loc.id] : current.filter(v => v !== loc.id); cbField.onChange(newVals); }} id={`edit-loc-${loc.id}`} /></FormControl> <FormLabel htmlFor={`edit-loc-${loc.id}`} className="font-normal">{loc.name}</FormLabel> </FormItem> )}/> ))} </div>
                         ) : ( <div className="text-sm text-muted-foreground italic flex items-center justify-center h-full"> {selectedCompanyIdInDialog ? 'No locations for this brand or your access.' : (user.role !== 'Super Admin' ? 'Select a brand to assign locations.' : 'Super Admins are not assigned to locations.')} </div> )}
                     </ScrollArea>
                   </div>
@@ -278,3 +280,4 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
   );
 }
     
+      
