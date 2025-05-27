@@ -40,6 +40,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Loader2, Info, ShieldCheck } from 'lucide-react';
 import { createUserAndSendWelcomeEmail } from '@/actions/userManagement';
 
+const ROLE_HIERARCHY: Record<UserRole, number> = {
+  'Super Admin': 5, 'Admin': 4, 'Owner': 3, 'Manager': 2, 'Staff': 1,
+};
+// Roles that non-Super Admins can potentially assign (Super Admin can assign Super Admin too, handled by assignableRoles)
+const ASSIGNABLE_ROLES_BY_ADMINS: UserRole[] = ['Admin', 'Owner', 'Manager', 'Staff'];
+
+
 const userFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email({ message: 'Please enter a valid email address.' }),
@@ -59,10 +66,6 @@ interface AddUserDialogProps {
   currentUser: User | null;
 }
 
-const ROLE_HIERARCHY: Record<UserRole, number> = {
-  'Super Admin': 5, 'Admin': 4, 'Owner': 3, 'Manager': 2, 'Staff': 1,
-};
-const ALL_POSSIBLE_ROLES_TO_ASSIGN: UserRole[] = ['Super Admin', 'Admin', 'Owner', 'Manager', 'Staff'];
 
 export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locations, currentUser }: AddUserDialogProps) {
   const [isPending, startTransition] = useTransition();
@@ -112,7 +115,7 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
   useEffect(() => {
     if (isOpen) {
       const initialCompanyId = currentUser?.role !== 'Super Admin' ? currentUser?.companyId || '' : (companies.length === 1 ? companies[0].id : '');
-      const initialRole = currentUser?.role === 'Manager' ? 'Staff' : 'Staff';
+      const initialRole = currentUser?.role === 'Manager' ? 'Staff' : 'Staff'; // Default to Staff
       form.reset({ name: '', email: '', role: initialRole, companyId: initialCompanyId, assignedLocationIds: [] });
       
       if (initialCompanyId) {
@@ -128,9 +131,32 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
   const onSubmit = async (data: UserFormValues) => {
     startTransition(async () => {
       if (!currentUser) { toast({ title: "Error", description: "Current user not found.", variant: "destructive" }); return; }
-      if (currentUser.role === 'Manager' && data.role !== 'Staff') { toast({ title: "Permission Denied", description: "Managers can only create Staff users.", variant: "destructive"}); return; }
-      if (currentUser.role !== 'Super Admin' && currentUser.role !== 'Manager' && ROLE_HIERARCHY[currentUser.role] <= ROLE_HIERARCHY[data.role]) { toast({ title: "Permission Denied", description: "Cannot create user with role higher/equal to your own.", variant: "destructive"}); return; }
+
+      // Permission checks
+      if (currentUser.role !== 'Super Admin') {
+        if (ROLE_HIERARCHY[currentUser.role] < ROLE_HIERARCHY[data.role]) {
+          toast({ title: "Permission Denied", description: "You cannot create a user with a role higher than your own.", variant: "destructive"});
+          return;
+        }
+        if (currentUser.role === 'Manager') {
+          if (!(data.role === 'Staff' || data.role === 'Manager')) {
+            toast({ title: "Permission Denied", description: "Managers can only create Staff or other Manager users.", variant: "destructive"});
+            return;
+          }
+        } else { // Admin or Owner
+          if (ROLE_HIERARCHY[currentUser.role] === ROLE_HIERARCHY[data.role]) {
+            toast({ title: "Permission Denied", description: "You cannot create a user with a role equal to your own.", variant: "destructive"});
+            return;
+          }
+        }
+      }
+      
       if (!data.companyId) { form.setError("companyId", { type: "manual", message: "Brand selection is required." }); return; }
+      // Location check is not strictly needed if not required by schema, but good for UX
+      // if (!data.assignedLocationIds || data.assignedLocationIds.length === 0) {
+      //   form.setError("assignedLocationIds", { type: "manual", message: "User must be assigned to at least one location." });
+      //   return;
+      // }
       
       const userDataToSend = {
         name: data.name,
@@ -152,16 +178,22 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
     });
   };
 
-  const assignableRoles = ALL_POSSIBLE_ROLES_TO_ASSIGN.filter(role =>
-    currentUser && (currentUser.role === 'Super Admin' || ((currentUser.role === 'Admin' || currentUser.role === 'Owner') && ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[role]) || (currentUser.role === 'Manager' && role === 'Staff'))
-  );
+  const assignableRoles = ASSIGNABLE_ROLES_BY_ADMINS.filter(role => {
+    if (!currentUser) return false;
+    if (currentUser.role === 'Super Admin') return true; // Super Admin can assign any of these roles
+    if (currentUser.role === 'Manager') return role === 'Staff' || role === 'Manager';
+    // For Admin/Owner, they can assign roles strictly lower than their own
+    return ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[role];
+  });
   
-  const isUserLimitReached = false; 
+  const isUserLimitReached = selectedCompanyDetails?.maxUsers !== null && 
+                             selectedCompanyDetails?.maxUsers !== undefined &&
+                             (selectedCompanyDetails.userCount || 0) >= selectedCompanyDetails.maxUsers;
+
 
   const isBrandSelectDisabled = () => {
     if (!currentUser) return true;
     if (currentUser.role === 'Super Admin') return companies.length === 0;
-    // For Admin/Owner, disable if they manage 0 or 1 brand (their own and no children)
     return companies.length <= 1;
   };
 
@@ -205,7 +237,7 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
                 <FormMessage />
               </FormItem> )} />
             <FormField control={form.control} name="assignedLocationIds" render={({ field }) => (
-              <FormItem> <FormLabel>Assign to Locations</FormLabel>
+              <FormItem> <FormLabel>Assign to Locations (Optional)</FormLabel>
                 <FormControl> 
                   <div> 
                     <ScrollArea className="h-40 w-full rounded-md border p-4">
@@ -218,7 +250,7 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
               </FormItem> )} />
             <FormField control={form.control} name="role" render={({ field }) => (
               <FormItem> <FormLabel>User Role</FormLabel>
-                <Select onValueChange={(value) => field.onChange(value === 'placeholder-role' ? '' : value)} value={field.value || 'placeholder-role'} defaultValue={field.value} disabled={currentUser?.role === 'Manager' || assignableRoles.length === 0}>
+                <Select onValueChange={(value) => field.onChange(value === 'placeholder-role' ? '' : value)} value={field.value || 'placeholder-role'} defaultValue={field.value} disabled={assignableRoles.length === 0}>
                   <FormControl>
                      <div> 
                         <SelectTrigger><SelectValue placeholder="Select a user role" /></SelectTrigger>
@@ -226,10 +258,10 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
                   </FormControl>
                   <SelectContent> <SelectItem value="placeholder-role" disabled>Select a role...</SelectItem>
                     {assignableRoles.map((r) => ( <SelectItem key={r} value={r}>{r}</SelectItem> ))}
-                    {ALL_POSSIBLE_ROLES_TO_ASSIGN.filter(r => !assignableRoles.includes(r)).map(r => ( <SelectItem key={r} value={r} disabled>{r} (Permission Denied)</SelectItem> ))}
+                    {ASSIGNABLE_ROLES_BY_ADMINS.filter(r => !assignableRoles.includes(r) && r !== 'Super Admin').map(r => ( <SelectItem key={r} value={r} disabled>{r} (Permission Denied)</SelectItem> ))}
                   </SelectContent>
                 </Select>
-                {currentUser?.role === 'Manager' && <p className="text-xs text-muted-foreground pt-1">Managers can only create Staff users.</p>}
+                {currentUser?.role === 'Manager' && <p className="text-xs text-muted-foreground pt-1">Managers can assign 'Staff' or 'Manager' roles.</p>}
                 <FormMessage />
               </FormItem> )} />
             <DialogFooter> <DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button></DialogClose> <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isPending || (currentUser?.role === 'Super Admin' && companies.length === 0) || isUserLimitReached || isLoadingBrandData}> {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} {isPending ? 'Adding...' : 'Add User'} </Button> </DialogFooter>
@@ -239,5 +271,4 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
     </Dialog>
   );
 }
-
     

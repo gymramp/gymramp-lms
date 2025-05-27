@@ -38,7 +38,7 @@ import type { UserRole, User, Company, Location } from '@/types/user';
 import { updateUser as updateFirestoreUser } from '@/lib/user-data';
 import { cn } from '@/lib/utils';
 import { AlertCircle, Loader2, KeyRound } from 'lucide-react';
-import { getLocationsByCompanyId } from '@/lib/company-data';
+import { getCompanyById, getLocationsByCompanyId } from '@/lib/company-data'; // Added getCompanyById
 
 const ROLE_HIERARCHY: Record<UserRole, number> = {
   'Super Admin': 5, 'Admin': 4, 'Owner': 3, 'Manager': 2, 'Staff': 1,
@@ -70,14 +70,16 @@ interface EditUserDialogProps {
   user: User;
   onUserUpdated: (user: User) => void;
   currentUser: User;
-  companies: Company[];
-  locations: Location[];
+  companies: Company[]; // All accessible brands for the current admin
+  locations: Location[]; // All system locations (will be filtered)
 }
 
 export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, currentUser, companies = [], locations = [] }: EditUserDialogProps) {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
   const [locationsForSelectedBrandInDialog, setLocationsForSelectedBrandInDialog] = useState<Location[]>([]);
+  const [isLoadingLocationsForDialog, setIsLoadingLocationsForDialog] = useState(false);
+
 
   const form = useForm<EditUserFormValues>({
     resolver: zodResolver(editUserFormSchema),
@@ -96,53 +98,81 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
         role: user.role || 'Staff',
         newTemporaryPassword: '',
       });
-
-      const initialCompanyId = user.companyId;
-      if (initialCompanyId) {
-        let filtered: Location[] = [];
-        if (currentUser?.role === 'Super Admin' || ((currentUser?.role === 'Admin' || currentUser?.role === 'Owner') && currentUser.companyId === initialCompanyId)) {
-          filtered = locations.filter(loc => loc.companyId === initialCompanyId);
-        } else if (currentUser?.role === 'Manager' && currentUser.companyId === initialCompanyId) {
-          filtered = locations.filter(loc => loc.companyId === initialCompanyId && (currentUser.assignedLocationIds || []).includes(loc.id));
-        }
-        setLocationsForSelectedBrandInDialog(filtered);
-      } else {
-        setLocationsForSelectedBrandInDialog([]);
-      }
     }
-  }, [user, form, isOpen, locations, currentUser]);
+  }, [user, form, isOpen]);
 
   useEffect(() => {
-    if (isOpen) {
-      if (selectedCompanyIdInDialog) {
-        let filtered: Location[] = [];
-         if (currentUser?.role === 'Super Admin' || ((currentUser?.role === 'Admin' || currentUser?.role === 'Owner') && (currentUser.companyId === selectedCompanyIdInDialog || companies.some(c => c.id === selectedCompanyIdInDialog && c.parentBrandId === currentUser.companyId)))) {
-            filtered = locations.filter(loc => loc.companyId === selectedCompanyIdInDialog);
-        } else if (currentUser?.role === 'Manager' && currentUser.companyId === selectedCompanyIdInDialog) {
-            filtered = locations.filter(loc => loc.companyId === selectedCompanyIdInDialog && (currentUser.assignedLocationIds || []).includes(loc.id));
+    const fetchLocationsForBrand = async () => {
+      if (isOpen && selectedCompanyIdInDialog) {
+        setIsLoadingLocationsForDialog(true);
+        try {
+          const brandLocations = await getLocationsByCompanyId(selectedCompanyIdInDialog);
+           if (currentUser?.role === 'Manager' && currentUser.companyId === selectedCompanyIdInDialog && currentUser.assignedLocationIds) {
+            setLocationsForSelectedBrandInDialog(brandLocations.filter(loc => currentUser.assignedLocationIds!.includes(loc.id)));
+           } else {
+            setLocationsForSelectedBrandInDialog(brandLocations);
+           }
+          // Preserve existing valid selections or clear if brand changed significantly
+          const currentAssigned = form.getValues('assignedLocationIds') || [];
+          const validAssigned = currentAssigned.filter(locId => brandLocations.some(filteredLoc => filteredLoc.id === locId));
+          form.setValue('assignedLocationIds', validAssigned, { shouldValidate: true });
+
+        } catch (error) {
+            toast({ title: "Error", description: "Could not load locations for selected brand.", variant: "destructive" });
+            setLocationsForSelectedBrandInDialog([]);
+        } finally {
+            setIsLoadingLocationsForDialog(false);
         }
-        setLocationsForSelectedBrandInDialog(filtered);
-        const currentAssigned = form.getValues('assignedLocationIds') || [];
-        const validAssigned = currentAssigned.filter(locId => filtered.some(filteredLoc => filteredLoc.id === locId));
-        form.setValue('assignedLocationIds', validAssigned, { shouldValidate: true });
-      } else {
+      } else if (isOpen && !selectedCompanyIdInDialog) {
         setLocationsForSelectedBrandInDialog([]);
         form.setValue('assignedLocationIds', []);
       }
-    }
-  }, [selectedCompanyIdInDialog, isOpen, locations, form, currentUser, companies]);
+    };
+    fetchLocationsForBrand();
+  }, [selectedCompanyIdInDialog, isOpen, form, currentUser, toast]);
+
 
   const canEditRole = currentUser && user && currentUser.id !== user.id && !isTargetUserSuperAdmin &&
-    (currentUser.role === 'Super Admin' || (currentUser.companyId && (user.companyId === currentUser.companyId || companies.find(c => c.id === user.companyId)?.parentBrandId === currentUser.companyId) && ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[user.role] && !(currentUser.role === 'Manager' && user.role !== 'Staff')));
+    (currentUser.role === 'Super Admin' || 
+     (currentUser.companyId && 
+      (user.companyId === currentUser.companyId || companies.find(c => c.id === user.companyId)?.parentBrandId === currentUser.companyId) && // Target user is in scope
+      (
+        (currentUser.role === 'Manager' && (user.role === 'Staff' || user.role === 'Manager')) || // Manager can edit Staff or other Managers
+        (ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[user.role]) // Admin/Owner can edit strictly lower
+      )
+     )
+    );
+
   const isRoleSelectDisabled = !canEditRole;
   const isCompanySelectDisabled = !currentUser || currentUser.role !== 'Super Admin' || user.role === 'Super Admin';
   const canSetPassword = currentUser && currentUser.role === 'Super Admin' && currentUser.id !== user.id && !isTargetUserSuperAdmin;
 
   const onSubmit = async (data: EditUserFormValues) => {
     startTransition(async () => {
-      if (data.role !== user.role && isRoleSelectDisabled) { toast({ title: "Permission Denied", description: "Cannot change this user's role.", variant: "destructive" }); return; }
+      if (!currentUser || !user) return;
+
+      // Role change permission check
+      if (data.role !== user.role) {
+        if (isTargetUserSuperAdmin) {
+            toast({ title: "Permission Denied", description: "Super Admin role cannot be changed.", variant: "destructive" }); return;
+        }
+        if (!canEditRole) {
+            toast({ title: "Permission Denied", description: "You do not have permission to change this user's role to the selected role.", variant: "destructive" }); return;
+        }
+         if (currentUser.role !== 'Super Admin') {
+            if (ROLE_HIERARCHY[currentUser.role] < ROLE_HIERARCHY[data.role]) {
+                 toast({ title: "Permission Denied", description: "Cannot assign a role higher than your own.", variant: "destructive"}); return;
+            }
+            if (currentUser.role === 'Manager' && !(data.role === 'Staff' || data.role === 'Manager')) {
+                toast({ title: "Permission Denied", description: "Managers can only assign 'Staff' or 'Manager' roles.", variant: "destructive"}); return;
+            }
+            if ((currentUser.role === 'Admin' || currentUser.role === 'Owner') && ROLE_HIERARCHY[currentUser.role] <= ROLE_HIERARCHY[data.role]) {
+                toast({ title: "Permission Denied", description: "Cannot assign a role equal to or higher than your own.", variant: "destructive"}); return;
+            }
+        }
+      }
+
       if (data.companyId !== user.companyId && isCompanySelectDisabled) { toast({ title: "Permission Denied", description: "Only Super Admins can change brand for non-Super Admins.", variant: "destructive" }); return; }
-      if (currentUser?.role === 'Manager' && user.role === 'Staff' && data.role !== 'Staff') { toast({ title: "Permission Denied", description: "Managers can only edit Staff users, role cannot be changed.", variant: "destructive" }); return; }
       if (data.role !== 'Super Admin' && !data.companyId) {
           form.setError("companyId", {type: "manual", message: "Non-Super Admin users must be assigned to a brand."}); return;
       }
@@ -156,9 +186,12 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
         let passwordMessage = "";
         if (canSetPassword && data.newTemporaryPassword && data.newTemporaryPassword.length >= 6) {
             updateData.requiresPasswordChange = true;
-            passwordMessage = ` New temporary password set: '${data.newTemporaryPassword}'. Communicate this to the user.`;
-             console.warn(`ADMIN SDK NEEDED: Pretending to update password for ${user.email} to ${data.newTemporaryPassword}`);
-             toast({ title: "Password Update (Simulated)", description: `Password for ${user.email} would be set to '${data.newTemporaryPassword}' via Admin SDK. User will be prompted to change it.`, variant: "default", duration: 10000 });
+            // IMPORTANT: Actual password change requires Admin SDK on backend.
+            // This client-side code SIMULATES setting it for the purpose of the flag.
+            // The Super Admin needs to be instructed to communicate this password.
+            console.warn(`ADMIN SDK NEEDED: Pretending to update password for ${user.email} to ${data.newTemporaryPassword}`);
+            toast({ title: "Password Update (Simulated)", description: `Password for ${user.email} would be set to '${data.newTemporaryPassword}' via Admin SDK. User will be prompted to change it. Communicate this password to the user.`, variant: "default", duration: 15000 });
+            passwordMessage = ` New temporary password noted.`;
         }
         const updatedUser = await updateFirestoreUser(user.id, updateData);
         if (updatedUser) {
@@ -174,12 +207,14 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
   let assignableRolesForDropdown: UserRole[] = [];
   if (canEditRole && currentUser) {
     if (currentUser.role === 'Super Admin' && !isTargetUserSuperAdmin) {
-        assignableRolesForDropdown = ALL_POSSIBLE_ROLES_TO_ASSIGN.filter(r => r !== 'Super Admin' || user.role === 'Super Admin');
-    } else if (currentUser.companyId === user.companyId || companies.find(c => c.id === user.companyId)?.parentBrandId === currentUser.companyId) {
+        assignableRolesForDropdown = ALL_POSSIBLE_ROLES_TO_ASSIGN.filter(r => r !== 'Super Admin');
+    } else if (currentUser.role === 'Manager' && (user.role === 'Staff' || user.role === 'Manager')) {
+        assignableRolesForDropdown = ['Staff', 'Manager'];
+    } else if ((currentUser.role === 'Admin' || currentUser.role === 'Owner')) {
         assignableRolesForDropdown = ALL_POSSIBLE_ROLES_TO_ASSIGN.filter(r => ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[r] && r !== 'Super Admin');
-        if (currentUser.role === 'Manager' && user.role === 'Staff') assignableRolesForDropdown = ['Staff'];
     }
   }
+
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -193,7 +228,7 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
             <FormField control={form.control} name="companyId" render={({ field }) => (
               <FormItem> <FormLabel>Brand</FormLabel>
                 {user.role !== 'Super Admin' && !field.value && currentUser?.role === 'Super Admin' && ( <div className="text-sm text-muted-foreground p-2 border rounded-md flex items-center gap-2 h-10"> <AlertCircle className="h-4 w-4 text-yellow-500" /> Assign a brand. </div> )}
-                <Select onValueChange={(value) => field.onChange(value === 'no-company' || value === 'placeholder-company' ? null : value)} value={field.value || 'placeholder-company'} disabled={isCompanySelectDisabled}>
+                <Select onValueChange={(value) => field.onChange(value === 'no-company' || value === 'placeholder-company' ? null : value)} value={field.value || 'placeholder-company'} disabled={isCompanySelectDisabled || isLoadingLocationsForDialog}>
                   <FormControl><div><SelectTrigger><SelectValue placeholder={user.role === 'Super Admin' ? "No Brand (Super Admin)" : "Select a brand"} /></SelectTrigger></div></FormControl>
                   <SelectContent> <SelectItem value="placeholder-company" disabled>Select a brand...</SelectItem>
                     {currentUser?.role === 'Super Admin' && <SelectItem value="no-company">No Brand Assigned</SelectItem>}
@@ -210,7 +245,8 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
                 <FormControl>
                   <div>
                     <ScrollArea className="h-40 w-full rounded-md border p-4">
-                        {selectedCompanyIdInDialog && locationsForSelectedBrandInDialog.length > 0 ? ( <div className="space-y-2"> {locationsForSelectedBrandInDialog.map((loc) => ( <FormItem key={loc.id} className="flex flex-row items-start space-x-3 space-y-0"> <FormControl><Checkbox checked={form.getValues('assignedLocationIds')?.includes(loc.id)} onCheckedChange={c => { const current = form.getValues('assignedLocationIds') || []; const newVals = c ? [...current, loc.id] : current.filter(v => v !== loc.id); form.setValue('assignedLocationIds', newVals, { shouldValidate: true }); }} id={`edit-loc-${loc.id}`} /></FormControl> <FormLabel htmlFor={`edit-loc-${loc.id}`} className="font-normal">{loc.name}</FormLabel> </FormItem> ))} </div>
+                        {isLoadingLocationsForDialog ? ( <div className="flex items-center justify-center h-full"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                        ) :selectedCompanyIdInDialog && locationsForSelectedBrandInDialog.length > 0 ? ( <div className="space-y-2"> {locationsForSelectedBrandInDialog.map((loc) => ( <FormItem key={loc.id} className="flex flex-row items-start space-x-3 space-y-0"> <FormControl><Checkbox checked={form.getValues('assignedLocationIds')?.includes(loc.id)} onCheckedChange={c => { const current = form.getValues('assignedLocationIds') || []; const newVals = c ? [...current, loc.id] : current.filter(v => v !== loc.id); form.setValue('assignedLocationIds', newVals, { shouldValidate: true }); }} id={`edit-loc-${loc.id}`} /></FormControl> <FormLabel htmlFor={`edit-loc-${loc.id}`} className="font-normal">{loc.name}</FormLabel> </FormItem> ))} </div>
                         ) : ( <div className="text-sm text-muted-foreground italic flex items-center justify-center h-full"> {selectedCompanyIdInDialog ? 'No locations for this brand or your access.' : (user.role !== 'Super Admin' ? 'Select a brand to assign locations.' : 'Super Admins are not assigned to locations.')} </div> )}
                     </ScrollArea>
                   </div>
@@ -221,7 +257,8 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
               <FormItem> <FormLabel>User Role</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value} disabled={isRoleSelectDisabled}>
                   <FormControl><div><SelectTrigger><SelectValue placeholder="Select a user role" /></SelectTrigger></div></FormControl>
-                  <SelectContent> <SelectItem value={user.role} disabled={!assignableRolesForDropdown.includes(user.role) && user.role !== field.value && user.role !== 'Super Admin'}>{user.role} {user.role === 'Super Admin' ? '(Cannot Change)' : ''}</SelectItem>
+                  <SelectContent> 
+                    <SelectItem value={user.role} disabled={!assignableRolesForDropdown.includes(user.role) && user.role !== field.value && user.role !== 'Super Admin'}>{user.role} {user.role === 'Super Admin' ? '(Cannot Change)' : (canEditRole ? '' : '(Permission Denied)')}</SelectItem>
                     {assignableRolesForDropdown.filter(r => r !== user.role).map(r => ( <SelectItem key={r} value={r}>{r}</SelectItem> ))}
                     {ALL_POSSIBLE_ROLES_TO_ASSIGN.filter(r => r !== user.role && !assignableRolesForDropdown.includes(r) && r !== 'Super Admin').map(r => ( <SelectItem key={r} value={r} disabled>{r} (Permission Denied)</SelectItem> ))}
                   </SelectContent>
@@ -233,10 +270,11 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
 
             {canSetPassword && ( <FormField control={form.control} name="newTemporaryPassword" render={({ field }) => ( <FormItem className="pt-2 border-t mt-6"> <FormLabel className="text-base font-semibold flex items-center gap-2"><KeyRound className="h-4 w-4 text-orange-500" />Set New Temporary Password</FormLabel> <FormControl><Input type="text" placeholder="Leave blank to keep current password" {...field} value={field.value ?? ''} /></FormControl> <p className="text-xs text-muted-foreground"> User will be forced to change on next login if set. </p> <FormMessage /> </FormItem> )} /> )}
             
-            <DialogFooter> <DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button></DialogClose> <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isPending}> {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} {isPending ? 'Saving...' : 'Save Changes'} </Button> </DialogFooter>
+            <DialogFooter> <DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button></DialogClose> <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isPending || isLoadingLocationsForDialog}> {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} {isPending ? 'Saving...' : 'Save Changes'} </Button> </DialogFooter>
           </form>
         </Form>
       </DialogContent>
     </Dialog>
   );
 }
+    
