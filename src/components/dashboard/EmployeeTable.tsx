@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -13,7 +12,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Archive, Undo, Edit, BookCopy, MapPin, Loader2 } from "lucide-react";
+import { MoreHorizontal, Archive, Undo, Edit, BookCopy, MapPin, Loader2, ShieldCheck } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,12 +37,11 @@ type EmployeeWithOverallProgress = User & {
 
 interface EmployeeTableProps {
   employees: EmployeeWithOverallProgress[];
-  onToggleEmployeeStatus: (userId: string) => void;
+  onToggleEmployeeStatus: (userId: string, userName: string, currentStatus: boolean) => void;
   onAssignCourse: (user: User) => void;
   onEditUser: (user: User) => void;
   currentUser: User | null;
   locations: Location[];
-  // companyCourses prop is no longer needed here as assignability is checked in dashboard
 }
 
 const ROLE_HIERARCHY_TABLE: Record<UserRole, number> = {
@@ -106,12 +104,14 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
 
     const canPerformGeneralAction = (targetUser: User): boolean => {
         if (!currentUser) return false;
-        if (currentUser.id === targetUser.id) return true; // User can edit their own details
+        if (currentUser.id === targetUser.id && currentUser.role !== 'Super Admin' && currentUser.role !== 'Admin' && currentUser.role !== 'Owner') {
+             return false;
+        }
         if (currentUser.role === 'Super Admin') return true;
         
-        const isTargetInScope = currentUser.companyId === targetUser.companyId || 
-                                targetUser.parentBrandId === currentUser.companyId; // Target is in same primary brand or child
-        if (!isTargetInScope) return false;
+        if (!currentUser.companyId) return false; 
+
+        if (targetUser.companyId !== currentUser.companyId) return false;
 
         if (currentUser.role === 'Manager') {
             return (targetUser.role === 'Staff' || targetUser.role === 'Manager');
@@ -121,19 +121,37 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
      
 
     const canAssignCoursesToTarget = (cu: User | null, tu: User): boolean => {
-        if (!cu) return false;
-        if (cu.role === 'Super Admin') return true;
-        if (!cu.companyId) return false;
+        if (!cu) {
+            console.log(`[EmployeeTable canAssignCoursesToTarget] No current user (cu): false`);
+            return false;
+        }
+        console.log(`[EmployeeTable canAssignCoursesToTarget] CurrentUser: ${cu.role} (Brand: ${cu.companyId}), TargetUser: ${tu.role} (Brand: ${tu.companyId})`);
 
-        const isTargetInScope = cu.companyId === tu.companyId || tu.parentBrandId === cu.companyId;
-        if (!isTargetInScope) return false;
+        if (cu.role === 'Super Admin') {
+            console.log(`[EmployeeTable canAssignCoursesToTarget] Super Admin: true`);
+            return true;
+        }
+        if (!cu.companyId) {
+            console.log(`[EmployeeTable canAssignCoursesToTarget] Current user ${cu.role} has no companyId: false`);
+            return false; 
+        }
+
+        if (tu.companyId !== cu.companyId) {
+            console.log(`[EmployeeTable canAssignCoursesToTarget] Different companyIds (cu: ${cu.companyId}, tu: ${tu.companyId}): false`);
+            return false; 
+        }
 
         if (cu.role === 'Manager') {
-            return (tu.role === 'Staff' || tu.role === 'Manager');
+            const canAssign = (tu.role === 'Staff' || tu.role === 'Manager');
+            console.log(`[EmployeeTable canAssignCoursesToTarget] Manager check: target is Staff/Manager (${tu.role}) AND same company: ${canAssign}`);
+            return canAssign;
         }
         if (cu.role === 'Admin' || cu.role === 'Owner') {
-            return ROLE_HIERARCHY_TABLE[cu.role] > ROLE_HIERARCHY_TABLE[tu.role];
+            const canAssign = ROLE_HIERARCHY_TABLE[cu.role] > ROLE_HIERARCHY_TABLE[tu.role];
+            console.log(`[EmployeeTable canAssignCoursesToTarget] Admin/Owner check: cu.role > tu.role (${ROLE_HIERARCHY_TABLE[cu.role]} > ${ROLE_HIERARCHY_TABLE[tu.role]}): ${canAssign}`);
+            return canAssign;
         }
+        console.log(`[EmployeeTable canAssignCoursesToTarget] Default fallback for role ${cu.role}: false`);
         return false;
     };
 
@@ -147,7 +165,7 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
             toast({ title: "Permission Denied", description: "You cannot modify this user's status.", variant: "destructive" });
             return;
         }
-        onToggleEmployeeStatus(employee.id);
+        onToggleEmployeeStatus(employee.id, employee.name, employee.isActive);
     };
 
     const handleAssignClick = (employee: User) => {
@@ -155,14 +173,11 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
              toast({ title: "Permission Denied", description: "You cannot assign courses to this user.", variant: "destructive" });
              return;
          }
-         // The check for available courses is now handled in the dashboard page before opening the dialog
          onAssignCourse(employee);
     }
 
     const handleEditClick = (employee: User) => {
-        // A user can always edit their own details (covered by canPerformGeneralAction if IDs match)
-        // Otherwise, specific role-based permission is needed.
-        if (currentUser?.id !== employee.id && !canPerformGeneralAction(employee)) {
+        if (!canPerformGeneralAction(employee)) {
              toast({
                 title: "Permission Denied",
                 description: `You do not have permission to edit ${employee.name}.`,
@@ -233,7 +248,10 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
             <TableCell>
               <div className="font-medium">{employee.name}</div>
               <div className="text-xs text-muted-foreground">{employee.email}</div>
-              <div className="text-xs text-muted-foreground">{employee.role}</div>
+              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                <ShieldCheck className="h-3 w-3 opacity-70" />
+                {employee.role}
+              </div>
             </TableCell>
             <TableCell>
                  {courseDisplay}
@@ -290,7 +308,6 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
                <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="h-8 w-8 p-0">
-                    {/* Content wrapped in a span for Button asChild compatibility */}
                     <span>
                       <span className="sr-only">Open menu for {employee.name}</span>
                       <MoreHorizontal className="h-4 w-4" />
@@ -303,19 +320,15 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
                         onClick={() => handleAssignClick(employee)}
                         disabled={!canAssignCoursesToTarget(currentUser, employee) || !employee.isActive}
                     >
-                     <>
                        <BookCopy className="mr-2 h-4 w-4" />
                        <span>Manage Assigned Courses</span>
-                     </>
                   </DropdownMenuItem>
                    <DropdownMenuItem
                         onClick={() => handleEditClick(employee)}
-                        disabled={currentUser?.id !== employee.id && !canPerformGeneralAction(employee)}
+                        disabled={!canPerformGeneralAction(employee)}
                     >
-                     <>
                        <Edit className="mr-2 h-4 w-4" />
                        <span>Edit Details</span>
-                     </>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                    <DropdownMenuItem
