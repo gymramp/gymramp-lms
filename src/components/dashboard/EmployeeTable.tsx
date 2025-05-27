@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react'; 
@@ -69,10 +70,8 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
             for (const courseId of courseIdsToFetch) {
                 if (courseId) { 
                     try {
-                        // Attempt to fetch as global course first
                         let course: Course | BrandCourse | null = await fetchGlobalCourseById(courseId);
                         if (!course) {
-                            // If not found, attempt to fetch as brand course
                             course = await getBrandCourseById(courseId);
                         }
 
@@ -105,40 +104,38 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
     }, [employees]); 
 
 
-     const canPerformGeneralAction = (targetUser: User): boolean => {
-         if (!currentUser) return false;
-         if (currentUser.id === targetUser.id) return true; // User can edit self (for profile usually, not deactivate)
-         if (currentUser.role === 'Super Admin') return true; 
-         if (!currentUser.companyId || !targetUser.companyId || !viewableBrandsForFilter.some(b => b.id === targetUser.companyId)) return false;
+    const canPerformGeneralAction = (targetUser: User): boolean => {
+        if (!currentUser) return false;
+        if (currentUser.id === targetUser.id) return true; 
+        if (currentUser.role === 'Super Admin') return true; 
+        
+        // For non-Super Admins, the target must be within their primary brand or a child of it.
+        // And their role must be higher, or if Manager, target is Staff/Manager.
+        const isTargetInPrimaryOrChildBrand = currentUser.companyId === targetUser.companyId || targetUser.parentBrandId === currentUser.companyId;
+        if (!isTargetInPrimaryOrChildBrand) return false;
 
-         if (currentUser.role === 'Manager') {
-             return (targetUser.role === 'Staff' || targetUser.role === 'Manager');
-         }
-         return ROLE_HIERARCHY_TABLE[currentUser.role] > ROLE_HIERARCHY_TABLE[targetUser.role];
-     };
+        if (currentUser.role === 'Manager') {
+            return (targetUser.role === 'Staff' || targetUser.role === 'Manager');
+        }
+        return ROLE_HIERARCHY_TABLE[currentUser.role] > ROLE_HIERARCHY_TABLE[targetUser.role];
+    };
      
-     // Helper to get accessible brands for the current user (passed from parent or fetched if needed)
-     // This is a placeholder, in a real scenario this might be a prop or fetched based on currentUser.
-     const viewableBrandsForFilter: Company[] = []; // This should be populated correctly based on the parent component's logic.
-
 
     const canAssignCoursesToTarget = (cu: User | null, tu: User): boolean => {
         if (!cu) return false;
         if (cu.role === 'Super Admin') return true;
-        if (!cu.companyId) return false; // Non-Super Admins must belong to a company
+        if (!cu.companyId) return false; 
 
-        // Check if target user's company is within the current user's manageable scope
-        // This logic might need to be more sophisticated if viewableBrandsForFilter isn't directly available
-        // or if it doesn't accurately reflect children brands for Admin/Owner.
-        // For now, we assume a simple check: if non-SA, target must be in one of CU's viewable brands.
-        const isTargetInScope = viewableBrandsForFilter.some(b => b.id === tu.companyId);
-        if (!isTargetInScope && cu.companyId !== tu.companyId) return false;
-
+        // Check if target user is in the same primary brand or a child brand of the current user's primary brand
+        const isTargetInScope = cu.companyId === tu.companyId || tu.parentBrandId === cu.companyId;
+        if (!isTargetInScope) return false;
 
         if (cu.role === 'Manager') {
+            // Managers can assign to Staff or other Managers within their scope
             return (tu.role === 'Staff' || tu.role === 'Manager');
         }
         if (cu.role === 'Admin' || cu.role === 'Owner') {
+            // Admin/Owner can assign to roles strictly lower than their own within their scope
             return ROLE_HIERARCHY_TABLE[cu.role] > ROLE_HIERARCHY_TABLE[tu.role];
         }
         return false;
@@ -146,7 +143,6 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
 
 
     const handleToggleClick = (employee: User) => {
-        // Allow editing self, but not deactivating self.
         if (currentUser?.id === employee.id) {
             toast({ title: "Action Denied", description: "You cannot deactivate your own account.", variant: "destructive" });
             return;
@@ -171,7 +167,6 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
     }
 
     const handleEditClick = (employee: User) => {
-        // Allow users to edit their own details, otherwise check hierarchy.
         if (currentUser?.id !== employee.id && !canPerformGeneralAction(employee)) { 
              toast({
                 title: "Permission Denied",
@@ -189,7 +184,6 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
 
     const getAccessibleLocationNames = (assignedIds: string[] | undefined): string[] => {
       if (!assignedIds) return [];
-      // Use the passed 'locations' prop which should already be filtered by accessible locations for the current view
       return assignedIds
         .map(id => locations.find(loc => loc.id === id)?.name)
         .filter(Boolean) as string[];
@@ -284,7 +278,7 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
                         </Badge>
                         ))
                     ) : (
-                        <span className="text-xs text-muted-foreground italic">None (Accessible)</span>
+                        <span className="text-xs text-muted-foreground italic">None</span>
                     )}
                 </div>
              </TableCell>
@@ -354,5 +348,3 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
     </Table>
   );
 }
-
-    

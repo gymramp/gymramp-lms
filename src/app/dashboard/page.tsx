@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -13,7 +14,7 @@ import type { ActivityLog } from '@/types/activity';
 import { getUserByEmail, toggleUserStatus as toggleUserDataStatus, getAllUsers as fetchAllSystemUsers, toggleUserCourseAssignments, getUserOverallProgress, updateUser, getUsersByCompanyId } from '@/lib/user-data';
 import { getCompanyById, getLocationsByCompanyId, getAllLocations as fetchAllSystemLocations, getAllCompanies as fetchAllAccessibleBrandsForUser } from '@/lib/company-data';
 import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data';
-import { getAllCourses as getAllLibraryCourses, getCourseById as fetchGlobalCourseById, getAllPrograms as fetchAllGlobalPrograms } from '@/lib/firestore-data';
+import { getAllCourses as getAllLibraryCourses, getCourseById as fetchGlobalCourseById, getAllPrograms as fetchAllGlobalPrograms, getProgramById } from '@/lib/firestore-data';
 import { getBrandCoursesByBrandId } from '@/lib/brand-content-data';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,11 +28,9 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Info, ShieldCheck } from 'lucide-react';
 
-type EmployeeWithOverallProgress = User & {
-    overallProgress: number;
-    overallStatus: "Not Started" | "Started" | "In Progress" | "Completed";
-};
 
 const DEFAULT_ROWS_PER_PAGE = 5;
 
@@ -56,16 +55,20 @@ export default function DashboardPage() {
   const [employees, setEmployees] = useState<EmployeeWithOverallProgress[]>([]);
   const [filteredEmployees, setFilteredEmployees] = useState<EmployeeWithOverallProgress[]>([]);
   const [availableCoursesForAssignment, setAvailableCoursesForAssignment] = useState<(Course | BrandCourse)[]>([]);
-  const [recentActivity, setRecentActivity] = useState<ActivityLog[]>([]);
   
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // General loading, can be true if any sub-loading is true
   const [isAuthLoading, setIsAuthLoading] = useState(true); 
+  const [isLoadingBrandDataForFilters, setIsLoadingBrandDataForFilters] = useState(true);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
+  const [isLoadingCoursesForAssignment, setIsLoadingCoursesForAssignment] = useState(false);
 
   const [isAssignCourseDialogOpen, setIsAssignCourseDialogOpen] = useState(false);
   const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false);
   const [isEditUserDialogOpen, setIsEditUserDialogOpen] = useState(false);
   const [userToAssignCourse, setUserToAssignCourse] = useState<User | null>(null);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
+  const [lastGeneratedPassword, setLastGeneratedPassword] = useState<string | null>(null);
+  
   const { toast } = useToast();
   const router = useRouter();
 
@@ -73,117 +76,116 @@ export default function DashboardPage() {
   const [inactiveCurrentPage, setInactiveCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState<number | 'all'>(DEFAULT_ROWS_PER_PAGE);
 
-  const fetchInitialDashboardData = useCallback(async (userEmail: string | null) => {
-    if (!userEmail) { 
-        setIsAuthLoading(false); 
-        setIsLoading(false); 
-        router.push('/');
-        return; 
-    }
-    setIsLoading(true);
+  const fetchInitialDataForFilters = useCallback(async (user: User) => {
+    setIsLoadingBrandDataForFilters(true);
     try {
-      const userDetails = await getUserByEmail(userEmail);
-      setCurrentUser(userDetails);
-      if (!userDetails) { 
-        toast({ title: "Error", description: "Could not load user profile.", variant: "destructive" });
-        setIsLoading(false); 
-        setIsAuthLoading(false);
-        router.push('/');
-        return; 
-      }
-      
-      const fetchedAccessibleBrands = await fetchAllAccessibleBrandsForUser(userDetails);
+      const fetchedAccessibleBrands = await fetchAllAccessibleBrandsForUser(user);
       setViewableBrandsForFilter(fetchedAccessibleBrands);
 
-      let primaryBrandDetails: Company | null = null;
-      if (userDetails.companyId) {
-        primaryBrandDetails = await getCompanyById(userDetails.companyId);
-        setUserPrimaryBrand(primaryBrandDetails);
-      } else {
-        setUserPrimaryBrand(null);
+      let primaryBrand: Company | null = null;
+      if (user.companyId) {
+        primaryBrand = fetchedAccessibleBrands.find(b => b.id === user.companyId) || await getCompanyById(user.companyId);
       }
+      setUserPrimaryBrand(primaryBrand);
       
       let allVisibleLocs: Location[] = [];
-      if (userDetails.role === 'Super Admin') {
+      if (user.role === 'Super Admin') {
         allVisibleLocs = await fetchAllSystemLocations();
-      } else if ((userDetails.role === 'Admin' || userDetails.role === 'Owner') && fetchedAccessibleBrands.length > 0) {
+      } else if ((user.role === 'Admin' || user.role === 'Owner') && fetchedAccessibleBrands.length > 0) {
         const locPromises = fetchedAccessibleBrands.map(b => getLocationsByCompanyId(b.id));
-        allVisibleLocs = (await Promise.all(locPromises)).flat();
-      } else if (userDetails.role === 'Manager' && userDetails.companyId && userDetails.assignedLocationIds && userDetails.assignedLocationIds.length > 0) {
-         const brandLocs = await getLocationsByCompanyId(userDetails.companyId);
-         allVisibleLocs = brandLocs.filter(loc => userDetails.assignedLocationIds!.includes(loc.id));
+        allVisibleLocs = (await Promise.all(locPromises)).flat().filter((loc, index, self) => index === self.findIndex(l => l.id === loc.id)); // Deduplicate locations
+      } else if (user.role === 'Manager' && user.companyId && user.assignedLocationIds && user.assignedLocationIds.length > 0) {
+         const brandLocs = await getLocationsByCompanyId(user.companyId);
+         allVisibleLocs = brandLocs.filter(loc => user.assignedLocationIds!.includes(loc.id));
       }
       setAllSystemLocations(allVisibleLocs);
       
-      if (userDetails.role !== 'Super Admin' && userDetails.companyId) {
-        setSelectedBrandIdForDashboard(userDetails.companyId);
-        setLocationsForLocationFilter(allVisibleLocs.filter(loc => loc.companyId === userDetails.companyId));
-      } else {
+      if (user.role !== 'Super Admin' && user.companyId) {
+        setSelectedBrandIdForDashboard(user.companyId);
+        setLocationsForLocationFilter(allVisibleLocs.filter(loc => loc.companyId === user.companyId));
+      } else if (user.role === 'Super Admin') {
         setSelectedBrandIdForDashboard('all'); 
         setLocationsForLocationFilter(allVisibleLocs);
+      } else {
+        setSelectedBrandIdForDashboard(''); // Should not happen if user has role
+        setLocationsForLocationFilter([]);
       }
     } catch (error) {
-      console.error("[DashboardPage] Error fetching initial data:", error);
-      toast({ title: "Error Initializing Dashboard", description: (error as Error).message, variant: "destructive" });
+      console.error("[DashboardPage] Error fetching initial filter data:", error);
+      toast({ title: "Error Initializing Dashboard Filters", description: (error as Error).message, variant: "destructive" });
     } finally {
-      setIsAuthLoading(false);
+      setIsLoadingBrandDataForFilters(false);
     }
-  }, [toast, router]);
+  }, [toast]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         setIsAuthLoading(true);
-        if (user && user.email) {
-            fetchInitialDashboardData(user.email);
+        if (firebaseUser && firebaseUser.email) {
+            try {
+                const userDetails = await getUserByEmail(firebaseUser.email);
+                setCurrentUser(userDetails);
+                if (!userDetails) {
+                    toast({ title: "Error", description: "Could not load user profile.", variant: "destructive" });
+                    router.push('/');
+                } else if (!['Super Admin', 'Admin', 'Owner', 'Manager'].includes(userDetails.role)) {
+                    toast({ title: "Access Denied", description: "Your role does not have dashboard access.", variant: "destructive" });
+                    router.push('/courses/my-courses'); // Or appropriate non-admin page
+                }
+                 else {
+                    await fetchInitialDataForFilters(userDetails);
+                }
+            } catch (error) {
+                toast({ title: "Authentication Error", description: "Failed to verify user.", variant: "destructive" });
+                router.push('/');
+            }
         } else {
-            setIsAuthLoading(false); 
-            setIsLoading(false); 
+            setCurrentUser(null);
             router.push('/'); 
         }
+        setIsAuthLoading(false);
     });
     return () => unsubscribe();
-  }, [fetchInitialDashboardData, router]);
+  }, [fetchInitialDataForFilters, router, toast]);
 
-  useEffect(() => {
-    if (isAuthLoading || !currentUser) { 
-        if (!isAuthLoading) setIsLoading(false);
+
+  const fetchEmployeesAndAssignableCourses = useCallback(async () => {
+    if (!currentUser || isAuthLoading || isLoadingBrandDataForFilters) {
+        setIsLoadingEmployees(false);
+        setIsLoadingCoursesForAssignment(false);
         return;
     }
     
-    const fetchEmployeesAndAssignableCourses = async () => {
-      setIsLoading(true);
-      try {
+    setIsLoadingEmployees(true);
+    setIsLoadingCoursesForAssignment(true);
+    setLastGeneratedPassword(null);
+
+    try {
         let usersToProcess: User[] = [];
-        let companyForCourseAssignmentContext: Company | null = null;
+        let companyContextForCourseAssignment: Company | null = null;
 
         if (selectedBrandIdForDashboard === 'all') {
-          if (currentUser.role === 'Super Admin') {
-            usersToProcess = await fetchAllSystemUsers();
-            companyForCourseAssignmentContext = null; 
-          } else if (currentUser.role === 'Admin' || currentUser.role === 'Owner') {
-            if (viewableBrandsForFilter.length > 0) {
-                const usersPromises = viewableBrandsForFilter.map(b => getUsersByCompanyId(b.id));
-                usersToProcess = (await Promise.all(usersPromises)).flat();
+            if (currentUser.role === 'Super Admin') {
+                usersToProcess = await fetchAllSystemUsers(); // All users in the system
+                companyContextForCourseAssignment = null; 
+            } else if (currentUser.role === 'Admin' || currentUser.role === 'Owner') {
+                if (viewableBrandsForFilter.length > 0) {
+                    const usersPromises = viewableBrandsForFilter.map(b => getUsersByCompanyId(b.id));
+                    usersToProcess = (await Promise.all(usersPromises)).flat().filter((user, index, self) => index === self.findIndex((u) => u.id === user.id));
+                }
+                companyContextForCourseAssignment = userPrimaryBrand; // Primary brand context for course assignment
+            } else if (currentUser.role === 'Manager' && currentUser.companyId) {
+                usersToProcess = await getUsersByCompanyId(currentUser.companyId);
+                companyContextForCourseAssignment = userPrimaryBrand;
             }
-            companyForCourseAssignmentContext = userPrimaryBrand;
-          }
-        } else { 
-          if (viewableBrandsForFilter.some(b => b.id === selectedBrandIdForDashboard)) {
-             usersToProcess = await getUsersByCompanyId(selectedBrandIdForDashboard);
-             companyForCourseAssignmentContext = viewableBrandsForFilter.find(b => b.id === selectedBrandIdForDashboard) || null;
-          } else {
-             usersToProcess = []; 
-             companyForCourseAssignmentContext = null;
-          }
-        }
-
-        if (currentUser.role === 'Manager' && currentUser.companyId) {
-          if (selectedBrandIdForDashboard !== currentUser.companyId) {
-              usersToProcess = [];
-          } else {
-             usersToProcess = await getUsersByCompanyId(currentUser.companyId);
-          }
-          companyForCourseAssignmentContext = userPrimaryBrand;
+        } else { // A specific brand is selected
+            if (viewableBrandsForFilter.some(b => b.id === selectedBrandIdForDashboard)) {
+                usersToProcess = await getUsersByCompanyId(selectedBrandIdForDashboard);
+                companyContextForCourseAssignment = viewableBrandsForFilter.find(b => b.id === selectedBrandIdForDashboard) || null;
+            } else {
+                usersToProcess = []; 
+                companyContextForCourseAssignment = null;
+            }
         }
         
         const employeesWithProgressPromises = usersToProcess.map(async (user) => {
@@ -194,10 +196,11 @@ export default function DashboardPage() {
           return { ...user, overallProgress, overallStatus };
         });
         setEmployees(await Promise.all(employeesWithProgressPromises));
+        setIsLoadingEmployees(false);
 
         let assignableCourses: (Course | BrandCourse)[] = [];
-        if (companyForCourseAssignmentContext) { 
-            const brandContext = companyForCourseAssignmentContext;
+        if (companyContextForCourseAssignment) { 
+            const brandContext = companyContextForCourseAssignment;
             const globalProgramCourses: Course[] = [];
             if (brandContext.assignedProgramIds && brandContext.assignedProgramIds.length > 0) {
                 const allPrograms = await fetchAllGlobalPrograms();
@@ -221,18 +224,25 @@ export default function DashboardPage() {
 
       } catch (error) {
         console.error("[DashboardPage] Error fetching employees/courses:", error);
-        toast({ title: "Error Fetching Data", description: "Could not load employees or courses.", variant: "destructive" });
+        toast({ title: "Error Fetching Data", description: "Could not load employees or assignable courses.", variant: "destructive" });
         setEmployees([]);
         setAvailableCoursesForAssignment([]);
       } finally {
-        setIsLoading(false);
+        setIsLoadingEmployees(false);
+        setIsLoadingCoursesForAssignment(false);
       }
-    };
-    fetchEmployeesAndAssignableCourses();
-  }, [currentUser, selectedBrandIdForDashboard, viewableBrandsForFilter, userPrimaryBrand, toast, isAuthLoading]);
+  }, [currentUser, selectedBrandIdForDashboard, viewableBrandsForFilter, userPrimaryBrand, toast, isAuthLoading, isLoadingBrandDataForFilters]);
 
   useEffect(() => {
-    if (isAuthLoading) return; 
+    if (!isAuthLoading && currentUser && !isLoadingBrandDataForFilters) {
+        fetchEmployeesAndAssignableCourses();
+    }
+  }, [fetchEmployeesAndAssignableCourses, isAuthLoading, currentUser, isLoadingBrandDataForFilters, selectedBrandIdForDashboard]); // Added selectedBrandIdForDashboard
+
+
+  useEffect(() => {
+    if (isAuthLoading || isLoadingBrandDataForFilters) return; 
+    
     if (selectedBrandIdForDashboard === 'all') {
       setLocationsForLocationFilter(allSystemLocations);
     } else if (selectedBrandIdForDashboard) {
@@ -240,39 +250,66 @@ export default function DashboardPage() {
     } else {
       setLocationsForLocationFilter([]);
     }
-    setSelectedLocationId('all');
-  }, [selectedBrandIdForDashboard, allSystemLocations, isAuthLoading]);
+    setSelectedLocationId('all'); 
+  }, [selectedBrandIdForDashboard, allSystemLocations, isAuthLoading, isLoadingBrandDataForFilters]);
 
   useEffect(() => {
-    if (isAuthLoading || isLoading) return; 
+    if (isAuthLoading || isLoadingBrandDataForFilters || isLoadingEmployees) return; 
 
-    setActiveCurrentPage(1); setInactiveCurrentPage(1); 
-    let tempUsers = employees;
+    setActiveCurrentPage(1); 
+    setInactiveCurrentPage(1); 
     
-    console.log(`[Dashboard Filter] CurrentUser: ${currentUser?.name} (${currentUser?.role})`);
-    console.log(`[Dashboard Filter] Selected Brand ID: ${selectedBrandIdForDashboard}, Selected Location ID: ${selectedLocationId}`);
-    console.log(`[Dashboard Filter] Employees before location filter for ${currentUser?.role}: ${tempUsers.length} users`);
-    console.log(`[Dashboard Filter] Manager's assignedLocationIds: ${JSON.stringify(currentUser?.assignedLocationIds)}`);
+    let tempUsers = [...employees]; // Work with a copy
+    
+    console.log(`[Dashboard Filter] User: ${currentUser?.name} (${currentUser?.role})`);
+    console.log(`[Dashboard Filter] Brand Filter: ${selectedBrandIdForDashboard}, Location Filter: ${selectedLocationId}`);
+    console.log(`[Dashboard Filter] Initial employees for brand scope: ${tempUsers.length}`);
+    console.log(`[Dashboard Filter] Manager's assigned locations: ${JSON.stringify(currentUser?.assignedLocationIds)}`);
+
 
     if (selectedLocationId && selectedLocationId !== 'all') {
       tempUsers = tempUsers.filter(emp => (emp.assignedLocationIds || []).includes(selectedLocationId));
+      console.log(`[Dashboard Filter] After specific location filter ('${selectedLocationId}'): ${tempUsers.length} users`);
     } else if (currentUser?.role === 'Manager' && selectedBrandIdForDashboard === currentUser.companyId && selectedLocationId === 'all') {
       const managerLocationIds = currentUser.assignedLocationIds || [];
       if (managerLocationIds.length > 0) {
         tempUsers = tempUsers.filter(emp => 
-          emp.id === currentUser.id || (emp.assignedLocationIds || []).some(locId => managerLocationIds.includes(locId))
+          emp.id === currentUser.id || // Manager always sees themself
+          (emp.assignedLocationIds || []).some(locId => managerLocationIds.includes(locId))
         );
+        console.log(`[Dashboard Filter] Manager, 'All Locations' (theirs), employees in their locs: ${tempUsers.length}`);
       } else {
+         // If manager has no assigned locations, they should only see themselves in their brand.
          tempUsers = tempUsers.filter(emp => emp.id === currentUser.id);
          console.log("[Dashboard Filter] Manager has no assigned locations. Showing only manager.");
       }
     }
-    console.log(`[Dashboard Filter] Employees AFTER location filter for ${currentUser?.role}: ${tempUsers.length} users`);
     setFilteredEmployees(tempUsers);
-  }, [employees, selectedLocationId, currentUser, selectedBrandIdForDashboard, isAuthLoading, isLoading]);
+  }, [employees, selectedLocationId, currentUser, selectedBrandIdForDashboard, isAuthLoading, isLoadingBrandDataForFilters, isLoadingEmployees]);
 
-  const refreshDashboardData = () => { if (currentUser?.email) fetchInitialDashboardData(currentUser.email); };
-  const handleAddEmployeeClick = () => setIsAddUserDialogOpen(true);
+  const refreshDashboardData = (newUser?: User, tempPassword?: string) => { 
+    if (tempPassword) {
+      setLastGeneratedPassword(tempPassword);
+    } else {
+      setLastGeneratedPassword(null);
+    }
+    if (currentUser) fetchEmployeesAndAssignableCourses(); 
+  };
+
+  const handleAddEmployeeClick = () => {
+    if (!currentUser) return;
+    if ((currentUser.role === 'Super Admin' && viewableBrandsForFilter.length === 0 && selectedBrandIdForDashboard === 'all')) {
+        toast({ title: "Cannot Add User", description: "Please create a brand first or select a specific brand.", variant: "destructive" });
+        return;
+    }
+    if (currentUser.role !== 'Super Admin' && !currentUser.companyId) {
+        toast({ title: "Cannot Add User", description: "You must be associated with a brand to add users.", variant: "destructive" });
+        return;
+    }
+    setLastGeneratedPassword(null);
+    setIsAddUserDialogOpen(true);
+  };
+
   const handleEditUserClick = (user: User) => { setUserToEdit(user); setIsEditUserDialogOpen(true); };
   const handleUserUpdated = () => { refreshDashboardData(); setIsEditUserDialogOpen(false); setUserToEdit(null); };
 
@@ -280,23 +317,23 @@ export default function DashboardPage() {
       const targetUser = employees.find(emp => emp.id === userId);
       if (!currentUser || !targetUser) return;
       if (currentUser.id === targetUser.id) { toast({ title: "Action Denied", description: "Cannot change own status.", variant: "destructive" }); return; }
+      
       let canToggle = false;
-      if (currentUser.role === 'Super Admin') canToggle = true;
-      else if (currentUser.companyId) {
-          const targetUserIsAccessible = viewableBrandsForFilter.some(vb => vb.id === targetUser.companyId);
-          if (targetUserIsAccessible) {
-              if (currentUser.role === 'Manager') {
-                canToggle = (targetUser.role === 'Staff' || targetUser.role === 'Manager');
-              } else {
-                canToggle = ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[targetUser.role];
-              }
+      if (currentUser.role === 'Super Admin') {
+          canToggle = true;
+      } else if (currentUser.companyId && (targetUser.companyId === currentUser.companyId || targetUser.parentBrandId === currentUser.companyId)) {
+          if (currentUser.role === 'Manager') {
+            canToggle = (targetUser.role === 'Staff' || targetUser.role === 'Manager');
+          } else if (currentUser.role === 'Admin' || currentUser.role === 'Owner') {
+            canToggle = ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[targetUser.role];
           }
       }
-      if (!canToggle) { toast({ title: "Permission Denied", variant: "destructive" }); return; }
+      
+      if (!canToggle) { toast({ title: "Permission Denied", description: "You cannot modify this user's status.", variant: "destructive" }); return; }
 
       const updatedUser = await toggleUserDataStatus(userId);
       if (updatedUser) { refreshDashboardData(); toast({ title: updatedUser.isActive ? "User Reactivated" : "User Deactivated" }); }
-      else { toast({ title: "Error", variant: "destructive" }); }
+      else { toast({ title: "Error Updating Status", variant: "destructive" }); }
   };
 
   const openAssignCourseDialog = (employee: User) => {
@@ -305,19 +342,18 @@ export default function DashboardPage() {
 
      if (currentUser.role === 'Super Admin') {
          canAssign = true;
-     } else if (currentUser.companyId) {
-         const targetUserIsAccessible = viewableBrandsForFilter.some(vb => vb.id === employee.companyId);
-         if (targetUserIsAccessible) {
-             if (currentUser.role === 'Manager') {
-                 // Managers can assign to Staff or other Managers within their accessible brands
-                 canAssign = (employee.role === 'Staff' || employee.role === 'Manager');
-             } else if (currentUser.role === 'Admin' || currentUser.role === 'Owner') {
-                 // Admin/Owner can assign to roles strictly lower than their own
-                 canAssign = ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[employee.role];
+     } 
+     // For Admin, Owner, Manager: employee must be in the same primary brand or a child brand of the current user's primary brand
+     else if (currentUser.companyId && (employee.companyId === currentUser.companyId || employee.parentBrandId === currentUser.companyId)) {
+         if (currentUser.role === 'Manager') {
+             canAssign = (employee.role === 'Staff' || employee.role === 'Manager');
+         } else if (currentUser.role === 'Admin' || currentUser.role === 'Owner') {
+             if (ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[employee.role]) {
+                canAssign = true;
              }
          }
      }
-
+     
      if (!canAssign) { 
         toast({ title: "Permission Denied", description: "You do not have permission to assign courses to this user.", variant: "destructive" }); 
         return; 
@@ -327,22 +363,21 @@ export default function DashboardPage() {
      if (currentUser.role === 'Super Admin') {
          if (selectedBrandIdForDashboard !== 'all') {
              companyContextForDialog = viewableBrandsForFilter.find(b => b.id === selectedBrandIdForDashboard) || null;
-         } else {
+         } else { // Super Admin, "All Brands" selected
+            // Use the employee's own brand for context if they have one
             if(employee.companyId) companyContextForDialog = viewableBrandsForFilter.find(b => b.id === employee.companyId) || null;
-            else companyContextForDialog = null; 
+            else companyContextForDialog = null; // Truly global user, can assign global courses
          }
-     } else if (selectedBrandIdForDashboard !== 'all' && selectedBrandIdForDashboard !== currentUser.companyId) {
-        companyContextForDialog = viewableBrandsForFilter.find(b => b.id === selectedBrandIdForDashboard) || null;
+     } else if (employee.companyId) { // For Admin, Owner, Manager, use the employee's actual brand for context
+        companyContextForDialog = viewableBrandsForFilter.find(b => b.id === employee.companyId) || null;
      }
      
-     if (availableCoursesForAssignment.length === 0 && !companyContextForDialog) { 
-         toast({ title: "No Courses Available", description: "No courses available for assignment (Super Admin, All Brands, no specific employee brand).", variant: "destructive" }); 
-         return; 
+     if (availableCoursesForAssignment.length === 0) {
+        const brandNameToLog = companyContextForDialog?.name || (selectedBrandIdForDashboard === 'all' && currentUser.role === 'Super Admin' ? 'any brand (Super Admin global view)' : 'the current brand context');
+        toast({ title: "No Courses Available", description: `No courses available for assignment for ${brandNameToLog}. Ensure programs are assigned to brands and/or brand-specific courses are created.`, variant: "destructive", duration: 7000 }); 
+        return; 
      }
-     if (availableCoursesForAssignment.length === 0 && companyContextForDialog) {
-        toast({ title: "No Courses Available", description: `No courses available for assignment for brand: ${companyContextForDialog.name}.`, variant: "destructive" }); 
-        return;
-     }
+
      setUserToAssignCourse(employee); 
      setIsAssignCourseDialogOpen(true);
   };
@@ -354,7 +389,7 @@ export default function DashboardPage() {
         refreshDashboardData();
         const courseDetails = availableCoursesForAssignment.find(c => c.id === courseId);
         toast({ title: action === 'assign' ? "Course Assigned" : "Course Unassigned", description: `${action === 'assign' ? `"${courseDetails?.title || 'Course'}" assigned to` : `Course removed from`} ${userToAssignCourse.name}.` });
-    } else { toast({ title: "Error", variant: "destructive" }); }
+    } else { toast({ title: "Error Assigning Course", variant: "destructive" }); }
     setIsAssignCourseDialogOpen(false); setUserToAssignCourse(null);
   };
 
@@ -377,7 +412,10 @@ export default function DashboardPage() {
     return count + Object.values(userProgressMap).filter(p => p?.status === 'Completed').length;
   }, 0), [activeEmployees]);
   
-  const totalActiveFilteredCourses = useMemo(() => new Set(activeEmployees.flatMap(emp => emp.assignedCourseIds || []).filter(Boolean)).size, [activeEmployees]);
+  const totalActiveFilteredCourses = useMemo(() => {
+      if (isLoadingCoursesForAssignment) return 0; // Don't count if still loading
+      return new Set(activeEmployees.flatMap(emp => emp.assignedCourseIds || []).filter(Boolean)).size;
+  }, [activeEmployees, isLoadingCoursesForAssignment]);
   
   const handleRowsPerPageChange = (value: string) => { 
     if (value === 'all') setRowsPerPage('all'); 
@@ -389,13 +427,18 @@ export default function DashboardPage() {
   const displayBrandName = selectedBrandIdForDashboard === 'all' 
     ? (currentUser?.role === 'Super Admin' ? 'All System Brands' : 'All Accessible Brands') 
     : (viewableBrandsForFilter.find(b => b.id === selectedBrandIdForDashboard)?.name || userPrimaryBrand?.name || 'Dashboard');
-  const displayLocationName = selectedLocationId === 'all' ? 'All Locations' : locationsForLocationFilter.find(l => l.id === selectedLocationId)?.name || '';
+  const displayLocationName = selectedLocationId === 'all' ? 'All Locations' : allSystemLocations.find(l => l.id === selectedLocationId)?.name || '';
 
-  if (isAuthLoading || (!currentUser && !isLoading) ) { 
+  // Combined loading state for main content
+  const pageIsLoading = isAuthLoading || isLoadingBrandDataForFilters;
+
+
+  if (pageIsLoading || !currentUser) { 
     return ( <div className="flex-1 space-y-4 p-8 pt-6"> <Skeleton className="h-8 w-1/3 mb-4" /> <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"> {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)} </div> <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7"> <Skeleton className="col-span-4 h-64" /> <Skeleton className="col-span-4 lg:col-span-3 h-64" /> </div> </div> );
   }
-  if (!currentUser || (!userPrimaryBrand && currentUser.role !== 'Super Admin' && currentUser.role !== 'Admin' && currentUser.role !== 'Owner' )) { 
-    return <div className="flex-1 space-y-4 p-8 pt-6 text-center">Could not load dashboard data. User may not be assigned to a primary brand or access is denied.</div>;
+  if (!userPrimaryBrand && currentUser.role !== 'Super Admin' ) { 
+    // This case handles Admin/Owner/Manager who might not have a companyId, which is an invalid state for them.
+    return <div className="flex-1 space-y-4 p-8 pt-6 text-center">Error: User not associated with a primary brand. Please contact support.</div>;
   }
 
   return (
@@ -404,7 +447,7 @@ export default function DashboardPage() {
          <div> 
             <h1 className="text-3xl font-bold tracking-tight text-primary">{displayBrandName} Dashboard</h1> 
             <p className="text-muted-foreground flex items-center gap-2"> 
-                <Building className="h-4 w-4" /> 
+                <MapPin className="h-4 w-4" /> 
                 {displayLocationName ? `Viewing: ${displayLocationName}` : (selectedBrandIdForDashboard === 'all' && currentUser?.role !== 'Super Admin' ? 'Overview of Your Brands' : 'Overview')} 
             </p> 
          </div>
@@ -413,7 +456,7 @@ export default function DashboardPage() {
               <Button 
                 onClick={handleAddEmployeeClick}
                 className="bg-accent text-accent-foreground hover:bg-accent/90" 
-                disabled={isLoading || (currentUser.role === 'Super Admin' && viewableBrandsForFilter.length === 0 && selectedBrandIdForDashboard === 'all')}
+                disabled={isLoadingEmployees || (currentUser.role === 'Super Admin' && viewableBrandsForFilter.length === 0 && selectedBrandIdForDashboard === 'all')}
                 title={(currentUser.role === 'Super Admin' && viewableBrandsForFilter.length === 0 && selectedBrandIdForDashboard === 'all') ? "Add a brand first" : ""} 
               >
                   <PlusCircle className="mr-2 h-4 w-4" /> Add New Employee
@@ -422,11 +465,14 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {lastGeneratedPassword && ( <Alert variant="success" className="mb-6 border-green-300 bg-green-50 dark:bg-green-900/30"> <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400" /> <AlertTitle className="text-green-800 dark:text-green-300">New User Added!</AlertTitle> <AlertDescription className="text-green-700 dark:text-green-400"> The temporary password for the new user is: <strong className="font-bold">{lastGeneratedPassword}</strong><br/> They will be required to change this on their first login. A welcome email has also been sent. <Button variant="ghost" size="sm" onClick={() => setLastGeneratedPassword(null)} className="ml-4 text-green-700 hover:text-green-800">Dismiss</Button> </AlertDescription> </Alert> )}
+
+
        <div className="flex flex-wrap items-end gap-4 mb-6 p-4 bg-secondary rounded-lg shadow-sm">
            <div className="flex items-center gap-2">
              <Label htmlFor="brand-filter-dashboard">Brand:</Label>
              <Select value={selectedBrandIdForDashboard} onValueChange={setSelectedBrandIdForDashboard}
-               disabled={isLoading || (viewableBrandsForFilter.length === 0 && currentUser?.role !== 'Super Admin') || (viewableBrandsForFilter.length <=1 && currentUser?.role === 'Manager') }>
+               disabled={isLoadingEmployees || (viewableBrandsForFilter.length === 0 && currentUser?.role !== 'Super Admin') || (viewableBrandsForFilter.length <=1 && currentUser?.role === 'Manager') }>
                <SelectTrigger id="brand-filter-dashboard" className="w-[220px] bg-background">
                  <SelectValue placeholder="Select Brand" />
                </SelectTrigger>
@@ -443,7 +489,7 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2">
                 <Label htmlFor="location-filter-dashboard">Location:</Label>
                  <Select value={selectedLocationId} onValueChange={setSelectedLocationId}
-                    disabled={isLoading || locationsForLocationFilter.length === 0} >
+                    disabled={isLoadingEmployees || locationsForLocationFilter.length === 0} >
                     <SelectTrigger id="location-filter-dashboard" className="w-[220px] bg-background">
                         <SelectValue placeholder="All Locations" />
                     </SelectTrigger>
@@ -457,10 +503,10 @@ export default function DashboardPage() {
         </div>
 
        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card> <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"> <CardTitle className="text-sm font-medium">Active Employees</CardTitle> <UserCheck className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">{totalActiveFiltered}</div> <p className="text-xs text-muted-foreground">{inactiveEmployees.length} inactive in view</p> </CardContent> </Card>
-        <Card> <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"> <CardTitle className="text-sm font-medium">Assigned Courses (Unique)</CardTitle> <BookOpen className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">{totalActiveFilteredCourses}</div> <p className="text-xs text-muted-foreground">in view for active users</p> </CardContent> </Card>
-        <Card> <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"> <CardTitle className="text-sm font-medium">Avg. Completion (Overall)</CardTitle> <TrendingUp className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">{avgCompletion}%</div> <p className="text-xs text-muted-foreground">Across active users in view</p> </CardContent> </Card>
-        <Card> <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"> <CardTitle className="text-sm font-medium">Certificates Issued (Overall)</CardTitle> <Award className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">+{certificatesIssued}</div> <p className="text-xs text-muted-foreground">By active users in view</p> </CardContent> </Card>
+        <Card> <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"> <CardTitle className="text-sm font-medium">Active Employees</CardTitle> <UserCheck className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">{isLoadingEmployees ? <Loader2 className="h-6 w-6 animate-spin"/> : totalActiveFiltered}</div> <p className="text-xs text-muted-foreground">{isLoadingEmployees ? '...' : `${inactiveEmployees.length} inactive in view`}</p> </CardContent> </Card>
+        <Card> <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"> <CardTitle className="text-sm font-medium">Assigned Courses (Unique)</CardTitle> <BookOpen className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">{isLoadingCoursesForAssignment ? <Loader2 className="h-6 w-6 animate-spin"/> : totalActiveFilteredCourses}</div> <p className="text-xs text-muted-foreground">in view for active users</p> </CardContent> </Card>
+        <Card> <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"> <CardTitle className="text-sm font-medium">Avg. Completion (Overall)</CardTitle> <TrendingUp className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">{isLoadingEmployees ? <Loader2 className="h-6 w-6 animate-spin"/> : `${avgCompletion}%`}</div> <p className="text-xs text-muted-foreground">Across active users in view</p> </CardContent> </Card>
+        <Card> <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"> <CardTitle className="text-sm font-medium">Certificates Issued (Overall)</CardTitle> <Award className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">{isLoadingEmployees ? <Loader2 className="h-6 w-6 animate-spin"/> : `+${certificatesIssued}`}</div> <p className="text-xs text-muted-foreground">By active users in view</p> </CardContent> </Card>
       </div>
 
       <div className="flex flex-col space-y-4 pt-6">
@@ -470,16 +516,16 @@ export default function DashboardPage() {
                  <Tabs defaultValue="active" className="w-full">
                     <TabsList className="grid w-full grid-cols-2 mb-4"> <TabsTrigger value="active">Active ({activeEmployees.length})</TabsTrigger> <TabsTrigger value="inactive">Inactive ({inactiveEmployees.length})</TabsTrigger> </TabsList>
                      <TabsContent value="active"> <CardDescription className="mb-4">Track your active team's overall course completion status.</CardDescription>
-                        {isLoading ? <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></div> :
+                        {isLoadingEmployees ? <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></div> :
                          <EmployeeTable employees={paginatedActiveEmployees} onToggleEmployeeStatus={handleToggleEmployeeStatus} onAssignCourse={openAssignCourseDialog} onEditUser={handleEditUserClick} currentUser={currentUser} locations={allSystemLocations} companyCourses={availableCoursesForAssignment} />
                         }
-                        <div className="flex items-center justify-end space-x-2 py-4"> <div className="flex-1 text-sm text-muted-foreground"> Page {activeCurrentPage} of {totalActivePages} ({activeEmployees.length} total active) </div> <Button variant="outline" size="sm" onClick={() => setActiveCurrentPage(p => Math.max(p - 1, 1))} disabled={activeCurrentPage === 1 || isLoading}> <ChevronLeft className="h-4 w-4" /> Prev </Button> <Button variant="outline" size="sm" onClick={() => setActiveCurrentPage(p => Math.min(p + 1, totalActivePages))} disabled={activeCurrentPage === totalActivePages || isLoading}> Next <ChevronRight className="h-4 w-4" /> </Button> </div>
+                        <div className="flex items-center justify-end space-x-2 py-4"> <div className="flex-1 text-sm text-muted-foreground"> Page {activeCurrentPage} of {totalActivePages} ({activeEmployees.length} total active) </div> <Button variant="outline" size="sm" onClick={() => setActiveCurrentPage(p => Math.max(p - 1, 1))} disabled={activeCurrentPage === 1 || isLoadingEmployees}> <ChevronLeft className="h-4 w-4" /> Prev </Button> <Button variant="outline" size="sm" onClick={() => setActiveCurrentPage(p => Math.min(p + 1, totalActivePages))} disabled={activeCurrentPage === totalActivePages || isLoadingEmployees}> Next <ChevronRight className="h-4 w-4" /> </Button> </div>
                      </TabsContent>
                      <TabsContent value="inactive"> <CardDescription className="mb-4">View deactivated employees. They can be reactivated.</CardDescription>
-                        {isLoading ? <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></div> :
+                        {isLoadingEmployees ? <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></div> :
                          <EmployeeTable employees={paginatedInactiveEmployees} onToggleEmployeeStatus={handleToggleEmployeeStatus} onAssignCourse={openAssignCourseDialog} onEditUser={handleEditUserClick} currentUser={currentUser} locations={allSystemLocations} companyCourses={availableCoursesForAssignment} />
                         }
-                        <div className="flex items-center justify-end space-x-2 py-4"> <div className="flex-1 text-sm text-muted-foreground"> Page {inactiveCurrentPage} of {totalInactivePages} ({inactiveEmployees.length} total inactive) </div> <Button variant="outline" size="sm" onClick={() => setInactiveCurrentPage(p => Math.max(p - 1, 1))} disabled={inactiveCurrentPage === 1 || isLoading}> <ChevronLeft className="h-4 w-4" /> Prev </Button> <Button variant="outline" size="sm" onClick={() => setInactiveCurrentPage(p => Math.min(p + 1, totalInactivePages))} disabled={inactiveCurrentPage === totalInactivePages || isLoading}> Next <ChevronRight className="h-4 w-4" /> </Button> </div>
+                        <div className="flex items-center justify-end space-x-2 py-4"> <div className="flex-1 text-sm text-muted-foreground"> Page {inactiveCurrentPage} of {totalInactivePages} ({inactiveEmployees.length} total inactive) </div> <Button variant="outline" size="sm" onClick={() => setInactiveCurrentPage(p => Math.max(p - 1, 1))} disabled={inactiveCurrentPage === 1 || isLoadingEmployees}> <ChevronLeft className="h-4 w-4" /> Prev </Button> <Button variant="outline" size="sm" onClick={() => setInactiveCurrentPage(p => Math.min(p + 1, totalInactivePages))} disabled={inactiveCurrentPage === totalInactivePages || isLoadingEmployees}> Next <ChevronRight className="h-4 w-4" /> </Button> </div>
                      </TabsContent>
                  </Tabs>
                  <div className="flex items-center justify-end space-x-2 pt-4 border-t mt-4"> <Label htmlFor="rows-per-page">Rows:</Label> <Select value={rowsPerPage === 'all' ? 'all' : String(rowsPerPage)} onValueChange={handleRowsPerPageChange}> <SelectTrigger id="rows-per-page" className="w-[80px]"> <SelectValue /> </SelectTrigger> <SelectContent> <SelectItem value="5">5</SelectItem> <SelectItem value="10">10</SelectItem> <SelectItem value="15">15</SelectItem> <SelectItem value="all">All</SelectItem> </SelectContent> </Select> </div>
@@ -492,7 +538,10 @@ export default function DashboardPage() {
             isOpen={isAssignCourseDialogOpen} 
             setIsOpen={setIsAssignCourseDialogOpen} 
             employee={userToAssignCourse}
-            company={selectedBrandIdForDashboard === 'all' ? (userToAssignCourse.companyId ? viewableBrandsForFilter.find(b => b.id === userToAssignCourse.companyId) : null) : viewableBrandsForFilter.find(b => b.id === selectedBrandIdForDashboard)}
+            company={selectedBrandIdForDashboard === 'all' 
+                        ? (userToAssignCourse.companyId ? viewableBrandsForFilter.find(b => b.id === userToAssignCourse.companyId) : null) 
+                        : viewableBrandsForFilter.find(b => b.id === selectedBrandIdForDashboard)}
+            courses={availableCoursesForAssignment}
             onAssignCourse={handleAssignCourse} />
       )}
       {isEditUserDialogOpen && userToEdit && currentUser && ( 
@@ -507,7 +556,7 @@ export default function DashboardPage() {
         /> 
       )}
         <AddUserDialog 
-            onUserAdded={(user, pwd) => refreshDashboardData()} 
+            onUserAdded={refreshDashboardData}
             isOpen={isAddUserDialogOpen} 
             setIsOpen={setIsAddUserDialogOpen} 
             companies={viewableBrandsForFilter} 
@@ -517,5 +566,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
