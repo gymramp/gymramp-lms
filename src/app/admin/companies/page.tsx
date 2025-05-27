@@ -33,11 +33,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { PlusCircle, MoreHorizontal, Trash2, Edit, Users, MapPin, Loader2, BookOpen, Search, Infinity, Gift, AlertTriangle, Building } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Trash2, Edit, Users, MapPin, Loader2, Building, Search, Infinity, Gift, AlertTriangle, Layers } from 'lucide-react'; // Added Layers
 import { useToast } from '@/hooks/use-toast';
 import type { Company, User, CompanyFormData } from '@/types/user';
+import type { Program } from '@/types/course'; // Import Program type
 import { getAllCompanies, deleteCompany, addCompany, getLocationsByCompanyId } from '@/lib/company-data';
-import { getUsersByCompanyId, getUserCountByCompanyId } from '@/lib/user-data';
+import { getAllPrograms } from '@/lib/firestore-data'; // Import getAllPrograms
+import { getUserCountByCompanyId } from '@/lib/user-data';
 import { AddEditCompanyDialog } from '@/components/admin/AddEditCompanyDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getUserByEmail } from '@/lib/user-data';
@@ -54,7 +56,7 @@ export default function AdminCompaniesPage() {
   const [companies, setCompanies] = useState<CompanyWithCounts[]>([]);
   const [filteredCompanies, setFilteredCompanies] = useState<CompanyWithCounts[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingCounts, setIsLoadingCounts] = useState(true);
+  const [isLoadingCounts, setIsLoadingCounts] = useState(true); // Retain for user/location counts if fetched separately initially
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
@@ -70,21 +72,43 @@ export default function AdminCompaniesPage() {
       return;
     }
     setIsLoading(true);
-    setIsLoadingCounts(true);
+    setIsLoadingCounts(true); // This can be used for the initial loading of all data
     try {
-      const companiesData = await getAllCompanies(user); // Pass current user
+      const [companiesData, allProgramsData] = await Promise.all([
+        getAllCompanies(user), // Pass current user
+        getAllPrograms() // Fetch all programs to calculate course counts
+      ]);
+
+      const programsMap = new Map(allProgramsData.map(p => [p.id, p]));
+
       const companiesWithCountsPromises = companiesData.map(async (company) => {
-          const locations = await getLocationsByCompanyId(company.id);
-          const userCount = await getUserCountByCompanyId(company.id);
-          const assignedCourseCount = company.assignedCourseIds?.length || 0;
-          return { ...company, locationCount: locations.length, userCount: userCount, assignedCourseCount };
+        const locations = await getLocationsByCompanyId(company.id);
+        const userCount = await getUserCountByCompanyId(company.id);
+        
+        let globalCourseIds = new Set<string>();
+        if (company.assignedProgramIds && company.assignedProgramIds.length > 0) {
+          company.assignedProgramIds.forEach(programId => {
+            const program = programsMap.get(programId);
+            if (program && program.courseIds) {
+              program.courseIds.forEach(courseId => globalCourseIds.add(courseId));
+            }
+          });
+        }
+        const assignedCourseCount = globalCourseIds.size;
+
+        return { 
+          ...company, 
+          locationCount: locations.length, 
+          userCount: userCount, 
+          assignedCourseCount: assignedCourseCount 
+        };
       });
       const companiesWithCounts = await Promise.all(companiesWithCountsPromises);
       setCompanies(companiesWithCounts);
       setFilteredCompanies(companiesWithCounts);
     } catch (error) {
-      console.error("Failed to fetch brands:", error);
-      toast({ title: "Error", description: "Could not load brands.", variant: "destructive" });
+      console.error("Failed to fetch brands or programs:", error);
+      toast({ title: "Error", description: "Could not load brands or program data.", variant: "destructive" });
       setCompanies([]);
       setFilteredCompanies([]);
     } finally {
@@ -131,7 +155,17 @@ export default function AdminCompaniesPage() {
 
   const openDeleteConfirmation = (company: Company) => {
      if (!currentUser) return;
-     if (currentUser.role === 'Super Admin' || (currentUser.companyId === company.id || currentUser.companyId === company.parentBrandId)) {
+     // Allow Super Admin OR (Admin/Owner if it's their own company or their child company)
+     let canDelete = false;
+     if (currentUser.role === 'Super Admin') {
+         canDelete = true;
+     } else if ((currentUser.role === 'Admin' || currentUser.role === 'Owner') && currentUser.companyId) {
+         if (company.id === currentUser.companyId || company.parentBrandId === currentUser.companyId) {
+             canDelete = true;
+         }
+     }
+
+     if (canDelete) {
         setCompanyToDelete(company);
         setIsDeleteDialogOpen(true);
      } else {
@@ -145,7 +179,7 @@ export default function AdminCompaniesPage() {
     try {
       const success = await deleteCompany(companyToDelete.id);
       if (success) {
-        await fetchCompanies(currentUser);
+        await fetchCompanies(currentUser); // Refetch to update the list
         toast({
           title: 'Brand Deleted',
           description: `Brand "${companyToDelete.name}" and its direct associations (users, locations) have been marked as deleted. Child brands are not automatically deleted.`,
@@ -183,7 +217,7 @@ export default function AdminCompaniesPage() {
 
      if (added) {
         toast({ title: "Brand Added", description: `"${added.name}" added successfully.` });
-        fetchCompanies(currentUser);
+        fetchCompanies(currentUser); // Refetch companies after adding
      } else {
          toast({ title: "Error", description: "Failed to add brand.", variant: "destructive" });
      }
@@ -230,15 +264,15 @@ export default function AdminCompaniesPage() {
               <TableBody>
                 {filteredCompanies.map((company) => {
                     let trialStatusDisplay;
-                    if (company.isTrial) {
-                        const endsAt = company.trialEndsAt instanceof Timestamp ? company.trialEndsAt.toDate() : null;
-                        if (endsAt && endsAt < new Date()) {
+                    if (company.isTrial && company.trialEndsAt) {
+                        const endsAt = new Date(company.trialEndsAt); // Assuming trialEndsAt is ISO string
+                        if (endsAt < new Date()) {
                             trialStatusDisplay = <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3" />Ended: {endsAt.toLocaleDateString()}</Badge>;
-                        } else if (endsAt) {
-                            trialStatusDisplay = <Badge variant="default" className="bg-green-100 text-green-700 flex items-center gap-1"><Gift className="h-3 w-3" />Active: Ends {endsAt.toLocaleDateString()}</Badge>;
                         } else {
-                             trialStatusDisplay = <Badge variant="secondary">Trial (No End Date)</Badge>;
+                            trialStatusDisplay = <Badge variant="default" className="bg-green-100 text-green-700 flex items-center gap-1"><Gift className="h-3 w-3" />Active: Ends {endsAt.toLocaleDateString()}</Badge>;
                         }
+                    } else if (company.isTrial) {
+                         trialStatusDisplay = <Badge variant="secondary">Trial (No End Date)</Badge>;
                     } else {
                         trialStatusDisplay = <span className="text-xs text-muted-foreground">Not a Trial</span>;
                     }
@@ -252,7 +286,13 @@ export default function AdminCompaniesPage() {
                         <TableCell className="text-center"> {isLoadingCounts ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : company.locationCount} </TableCell>
                         <TableCell className="text-center"> {isLoadingCounts ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : company.userCount} </TableCell>
                         <TableCell className="text-center"> {isLoadingCounts ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : company.maxUsers === null || company.maxUsers === undefined ? <Infinity className="h-4 w-4 mx-auto text-muted-foreground" title="Unlimited"/> : company.maxUsers} </TableCell>
-                        <TableCell className="text-center"> {isLoadingCounts ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : company.assignedCourseCount} </TableCell>
+                        <TableCell className="text-center">
+                            {isLoadingCounts ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 
+                             <Badge variant="outline" className="flex items-center gap-1 w-fit mx-auto">
+                                 <Layers className="h-3 w-3" /> {company.assignedCourseCount}
+                             </Badge>
+                            }
+                        </TableCell>
                         <TableCell className="text-center">{trialStatusDisplay}</TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>
@@ -307,3 +347,5 @@ export default function AdminCompaniesPage() {
     </div>
   );
 }
+
+    
