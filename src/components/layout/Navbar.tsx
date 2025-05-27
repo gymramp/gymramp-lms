@@ -18,25 +18,66 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-    Menu, LogOut, User as UserIcon, LayoutDashboard, Settings, Users, BookOpen, FileText,
-    ListChecks, Building, ShoppingCart, Award, MapPin, BarChartBig, Gift,
-    TestTube2, UserPlus, Percent, HelpCircle, Layers, CreditCard, Cog, Package
-} from 'lucide-react'; // Added Cog, Package
+    Menu, LogOut, User as UserIcon, Settings, Cog, Package, HelpCircle, Award
+} from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { getUserByEmail } from '@/lib/user-data';
-import type { User } from '@/types/user';
+import { getCompanyById } from '@/lib/company-data'; // For fetching brand details
+import type { User, Company } from '@/types/user';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { getNavigationStructure, getUserDropdownItems, NavItemType } from '@/lib/nav-config';
 import { Skeleton } from '../ui/skeleton';
+import { hexToHslString } from '@/lib/utils'; // Import hexToHslString
 
-interface NavbarProps {
-  brandLogoUrl?: string | null;
-  brandName?: string | null;
-}
+// Default theme HSL values (from globals.css - ensure these match your defaults)
+const DEFAULT_THEME_VALUES: Record<string, string> = {
+  '--background': "0 0% 100%",
+  '--foreground': "0 0% 3.9%",
+  '--card': "0 0% 100%",
+  '--card-foreground': "0 0% 3.9%",
+  '--popover': "0 0% 100%",
+  '--popover-foreground': "0 0% 3.9%",
+  '--primary': "0 0% 3.9%",
+  '--primary-foreground': "0 0% 98%",
+  '--secondary': "0 0% 96.1%",
+  '--secondary-foreground': "0 0% 9%",
+  '--muted': "0 0% 96.1%",
+  '--muted-foreground': "0 0% 45.1%",
+  '--accent': "226 71% 56%",
+  '--accent-foreground': "0 0% 98%",
+  '--destructive': "0 84.2% 60.2%",
+  '--destructive-foreground': "0 0% 98%",
+  '--border': "0 0% 89.8%",
+  '--input': "0 0% 89.8%",
+  '--ring': "0 0% 3.9%",
+};
 
-export function Navbar({ brandLogoUrl, brandName }: NavbarProps) {
+const DARK_DEFAULT_THEME_VALUES: Record<string, string> = {
+  '--background': "0 0% 3.9%",
+  '--foreground': "0 0% 98%",
+  '--card': "0 0% 3.9%",
+  '--card-foreground': "0 0% 98%",
+  '--popover': "0 0% 3.9%",
+  '--popover-foreground': "0 0% 98%",
+  '--primary': "0 0% 98%",
+  '--primary-foreground': "0 0% 3.9%",
+  '--secondary': "0 0% 14.9%",
+  '--secondary-foreground': "0 0% 98%",
+  '--muted': "0 0% 14.9%",
+  '--muted-foreground': "0 0% 63.9%",
+  '--accent': "226 71% 65%",
+  '--accent-foreground': "0 0% 98%",
+  '--destructive': "0 62.8% 30.6%",
+  '--destructive-foreground': "0 0% 98%",
+  '--border': "0 0% 14.9%",
+  '--input': "0 0% 14.9%",
+  '--ring': "0 0% 98%",
+};
+
+
+export function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
@@ -47,39 +88,111 @@ export function Navbar({ brandLogoUrl, brandName }: NavbarProps) {
   const [userMenuItems, setUserMenuItems] = useState<NavItemType[]>([]);
   const [isLoadingNav, setIsLoadingNav] = useState(true);
 
+  const [currentBrandLogoUrl, setCurrentBrandLogoUrl] = useState<string | null>("/images/newlogo.png");
+  const [currentBrandName, setCurrentBrandName] = useState<string | null>("Gymramp");
+
   const isLoggedIn = !!currentUser;
+
+  const applyTheme = (brand: Company | null) => {
+    const root = document.documentElement;
+    const isDarkMode = root.classList.contains('dark');
+    const defaults = isDarkMode ? DARK_DEFAULT_THEME_VALUES : DEFAULT_THEME_VALUES;
+
+    const themeColorsToApply: Record<string, string | null | undefined> = {
+      '--primary': brand?.primaryColor,
+      '--secondary': brand?.secondaryColor,
+      '--accent': brand?.accentColor,
+      '--background': brand?.brandBackgroundColor,
+      '--foreground': brand?.brandForegroundColor,
+      // Card and Popover will use background/foreground logic
+      '--card': brand?.brandBackgroundColor,
+      '--card-foreground': brand?.brandForegroundColor,
+      '--popover': brand?.brandBackgroundColor,
+      '--popover-foreground': brand?.brandForegroundColor,
+      // Muted often follows secondary or background
+      '--muted': brand?.secondaryColor || brand?.brandBackgroundColor,
+    };
+
+    if (brand && brand.whiteLabelEnabled) {
+      console.log('[Navbar] Applying theme for brand:', brand.name, brand.primaryColor);
+      setCurrentBrandLogoUrl(brand.logoUrl || "/images/newlogo.png");
+      setCurrentBrandName(brand.name || "Gymramp");
+
+      Object.entries(themeColorsToApply).forEach(([cssVar, hexColor]) => {
+        if (hexColor) {
+          const hslColor = hexToHslString(hexColor);
+          if (hslColor) {
+            root.style.setProperty(cssVar, hslColor);
+            console.log(`[Navbar] Set ${cssVar} to ${hslColor} (from ${hexColor})`);
+          } else {
+            // If conversion fails or color not provided for this var, revert to default
+            if (defaults[cssVar]) {
+              root.style.setProperty(cssVar, defaults[cssVar]);
+            } else {
+              root.style.removeProperty(cssVar);
+            }
+          }
+        } else {
+          // If brand doesn't have this specific color defined, revert to default
+           if (defaults[cssVar]) {
+              root.style.setProperty(cssVar, defaults[cssVar]);
+            } else {
+              root.style.removeProperty(cssVar);
+            }
+        }
+      });
+      // Explicitly ensure component foregrounds use their standard contrasts, not brandForegroundColor
+      if(defaults['--primary-foreground']) root.style.setProperty('--primary-foreground', defaults['--primary-foreground']);
+      if(defaults['--secondary-foreground']) root.style.setProperty('--secondary-foreground', defaults['--secondary-foreground']);
+      if(defaults['--accent-foreground']) root.style.setProperty('--accent-foreground', defaults['--accent-foreground']);
+
+    } else {
+      console.log('[Navbar] Reverting to default theme.');
+      setCurrentBrandLogoUrl("/images/newlogo.png");
+      setCurrentBrandName("Gymramp");
+      Object.keys(themeColorsToApply).forEach(cssVar => {
+         if (defaults[cssVar]) {
+            root.style.setProperty(cssVar, defaults[cssVar]);
+          } else {
+            root.style.removeProperty(cssVar);
+          }
+      });
+       // Ensure all other defaults are also set
+      Object.entries(defaults).forEach(([cssVar, hslValue]) => {
+        root.style.setProperty(cssVar, hslValue);
+      });
+    }
+  };
+
 
   const fetchNavAndUserData = useCallback(async (firebaseUser: import('firebase/auth').User | null) => {
     setIsLoadingNav(true);
-    console.log('[Navbar] Fetching nav and user data. Firebase user:', firebaseUser?.email);
     if (firebaseUser && firebaseUser.email) {
       try {
         const userDetails = await getUserByEmail(firebaseUser.email);
         setCurrentUser(userDetails);
-        console.log('[Navbar] User details fetched:', userDetails ? {name: userDetails.name, role: userDetails.role} : null);
         if (userDetails) {
           const mainNav = await getNavigationStructure(userDetails);
           const userNav = await getUserDropdownItems(userDetails);
           setNavItems(mainNav);
           setUserMenuItems(userNav);
-           console.log('[Navbar] Main nav items set:', mainNav.length, 'User menu items set:', userNav.length);
+          if (userDetails.companyId) {
+            const brandDetails = await getCompanyById(userDetails.companyId);
+            applyTheme(brandDetails);
+          } else {
+            applyTheme(null); // No company, apply default theme
+          }
         } else {
-          setNavItems([]);
-          setUserMenuItems([]);
-          console.log('[Navbar] No user details found, nav items cleared.');
+          setNavItems([]); setUserMenuItems([]); applyTheme(null);
         }
       } catch (error) {
-        console.error("[Navbar] Error fetching user data for Navbar:", error);
-        setCurrentUser(null);
-        setNavItems([]);
-        setUserMenuItems([]);
+        console.error("[Navbar] Error fetching user/brand data:", error);
+        setCurrentUser(null); setNavItems([]); setUserMenuItems([]); applyTheme(null);
       }
     } else {
       setCurrentUser(null);
-      const publicNav = await getNavigationStructure(null); 
-      setNavItems(publicNav);
-      setUserMenuItems([]); 
-      console.log('[Navbar] No Firebase user, public nav items set:', publicNav.length);
+      const publicNav = await getNavigationStructure(null);
+      setNavItems(publicNav); setUserMenuItems([]); applyTheme(null);
     }
     setIsLoadingNav(false);
   }, []);
@@ -92,6 +205,23 @@ export function Navbar({ brandLogoUrl, brandName }: NavbarProps) {
     return () => unsubscribe();
   }, [fetchNavAndUserData]);
 
+  // Re-apply theme if system dark mode changes
+  useEffect(() => {
+    if (!isMounted || !currentUser?.companyId) return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = async () => {
+      if (currentUser && currentUser.companyId) {
+        const brandDetails = await getCompanyById(currentUser.companyId);
+        applyTheme(brandDetails);
+      } else {
+        applyTheme(null);
+      }
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [isMounted, currentUser, applyTheme]);
+
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -99,8 +229,9 @@ export function Navbar({ brandLogoUrl, brandName }: NavbarProps) {
           localStorage.removeItem('isLoggedIn');
           localStorage.removeItem('userEmail');
       }
+      applyTheme(null); // Revert to default theme on logout
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
-      router.push('/'); 
+      router.push('/');
     } catch (error) {
       console.error("Logout failed:", error);
       toast({ title: "Logout Failed", description: "Could not log you out.", variant: "destructive" });
@@ -135,11 +266,8 @@ export function Navbar({ brandLogoUrl, brandName }: NavbarProps) {
       </Button>
     );
   };
-  
-  const displayLogoUrl = brandLogoUrl || "/images/newlogo.png";
-  const displayLogoAlt = brandName ? `${brandName} Logo` : "GYMRAMP Logo";
-  console.log('[Navbar] Rendering Navbar. BrandLogoUrl prop:', brandLogoUrl, 'Displaying logo:', displayLogoUrl);
 
+  const displayLogoAlt = currentBrandName ? `${currentBrandName} Logo` : "Gymramp Logo";
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -190,7 +318,7 @@ export function Navbar({ brandLogoUrl, brandName }: NavbarProps) {
                             {userMenuItems.map((item) => (
                                 <Link
                                     key={item.label}
-                                    href={item.href || '#'} // Ensure href has a fallback
+                                    href={item.href || '#'}
                                     onClick={() => setIsMobileMenuOpen(false)}
                                     className="flex items-center gap-3 px-3 py-2 text-base text-foreground/80 hover:text-foreground hover:bg-muted rounded-md w-full"
                                 >
@@ -215,12 +343,12 @@ export function Navbar({ brandLogoUrl, brandName }: NavbarProps) {
            )}
             <Link href={isLoggedIn && currentUser ? (currentUser.role === 'Staff' ? "/courses/my-courses" : (currentUser.role === 'Super Admin' ? "/admin/dashboard" : "/dashboard")) : "/"} className="flex items-center">
                 <Image
-                    src={displayLogoUrl}
+                    src={currentBrandLogoUrl || "/images/newlogo.png"}
                     alt={displayLogoAlt}
                     width={150}
                     height={45}
                     priority
-                    className="max-h-[30px] object-contain" 
+                    className="max-h-[30px] object-contain"
                     onError={(e) => { (e.target as HTMLImageElement).src = '/images/newlogo.png'; }}
                 />
             </Link>
@@ -235,7 +363,7 @@ export function Navbar({ brandLogoUrl, brandName }: NavbarProps) {
                 {isLoadingNav ? (
                      <>
                          <Skeleton className="h-8 w-8 rounded-full" />
-                         <Skeleton className="h-8 w-24 rounded-md" />
+                         {/* <Skeleton className="h-8 w-24 rounded-md" /> User name removed from here */}
                      </>
                  ) : isMounted && isLoggedIn && currentUser && userMenuItems.length > 0 ? (
                     <DropdownMenu>
@@ -284,7 +412,7 @@ export function Navbar({ brandLogoUrl, brandName }: NavbarProps) {
                           <Link href="/contact">Schedule A Call</Link>
                         </Button>
                      </>
-                 ) : null 
+                 ) : null
                 }
             </div>
         </div>
