@@ -11,11 +11,10 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form'; // Added FormDescription
 import { useToast } from '@/hooks/use-toast';
 import type { Company, CompanyFormData, User } from '@/types/user';
 import type { Program, Course } from '@/types/course';
@@ -140,11 +139,15 @@ export default function EditCompanyPage() {
       setCompany(companyData);
       let trialDate: Date | null = null;
       if (companyData.trialEndsAt) {
-        if (typeof companyData.trialEndsAt === 'string') { // Timestamps are serialized to ISO strings
-          trialDate = new Date(companyData.trialEndsAt);
-        } else if (companyData.trialEndsAt instanceof Date) { // Should not happen if serialized, but good check
-          trialDate = companyData.trialEndsAt;
-        }
+          // Ensure trialEndsAt is treated as a string if it's coming from serialized Firestore data
+          const trialEndsAtValue = companyData.trialEndsAt;
+          if (typeof trialEndsAtValue === 'string') {
+              trialDate = new Date(trialEndsAtValue);
+          } else if (trialEndsAtValue instanceof Date) { // Should ideally not happen with proper serialization
+              trialDate = trialEndsAtValue;
+          } else if (trialEndsAtValue && typeof (trialEndsAtValue as any).toDate === 'function') { // Firestore Timestamp
+              trialDate = (trialEndsAtValue as any).toDate();
+          }
       }
       
       form.reset({
@@ -175,16 +178,17 @@ export default function EditCompanyPage() {
       
       console.log('[EditBrand] companyData.assignedProgramIds from Firestore:', companyData.assignedProgramIds);
       if (companyData.assignedProgramIds && companyData.assignedProgramIds.length > 0) {
-        const fetchedAllLibCourses = await getAllCourses();
-        setAllLibraryCourses(fetchedAllLibCourses);
-        
-        const programDetailsPromises = companyData.assignedProgramIds.map(id => getProgramById(id));
-        const details = (await Promise.all(programDetailsPromises)).filter(Boolean) as Program[];
+        const [fetchedAllLibCoursesData, programsDetailsPromises] = await Promise.all([
+            getAllCourses(),
+            Promise.all(companyData.assignedProgramIds.map(id => getProgramById(id)))
+        ]);
+        setAllLibraryCourses(fetchedAllLibCoursesData);
+        const details = programsDetailsPromises.filter(Boolean) as Program[];
         setAssignedProgramsDetails(details);
         console.log('[EditBrand] Fetched assigned program details:', details);
       } else {
         setAssignedProgramsDetails([]);
-        setAllLibraryCourses([]); // Ensure this is also reset
+        setAllLibraryCourses([]);
         console.log('[EditBrand] No assigned programs found for brand:', companyId);
       }
 
@@ -227,7 +231,8 @@ export default function EditCompanyPage() {
       const uniqueFileName = `${companyId}-logo-${Date.now()}-${file.name}`;
       const storagePath = `${STORAGE_PATHS.COMPANY_LOGOS}/${uniqueFileName}`;
       
-      const downloadURL = await uploadImage(file, storagePath, setLogoUploadProgress);
+      const downloadURL = await uploadImage(file, storagePath, setLogoUploadProgress); 
+      
 
       form.setValue('logoUrl', downloadURL, { shouldValidate: true });
       toast({ title: "Logo Uploaded", description: "Brand logo uploaded successfully." });
@@ -241,10 +246,10 @@ export default function EditCompanyPage() {
 
 
   const onSubmit = async (data: CompanyFormValues) => {
-    if (!companyId || !company) return;
+    if (!companyId || !company || !currentUser) return;
     setIsSaving(true);
 
-    const currentLogoUrl = form.getValues('logoUrl'); // Get latest value from form state
+    const currentLogoUrl = form.getValues('logoUrl');
 
     try {
       const metadataToUpdate: Partial<CompanyFormData> = {
@@ -267,10 +272,8 @@ export default function EditCompanyPage() {
 
       const updatedCompany = await updateCompany(companyId, metadataToUpdate);
       if (updatedCompany) {
-        setCompany(updatedCompany); // Update local company state
-        if (currentUser) { // Re-fetch to ensure form is reset with the absolute latest data
-            await fetchCompanyData(currentUser);
-        }
+        setCompany(updatedCompany); 
+        await fetchCompanyData(currentUser); // Re-fetch all related data
         toast({ title: "Brand Updated", description: `"${updatedCompany.name}" updated successfully.` });
       } else {
         throw new Error("Failed to update brand details.");
@@ -297,7 +300,7 @@ export default function EditCompanyPage() {
   }
 
   if (!company) {
-    return <div className="container mx-auto py-12 text-center">Brand not found or access denied.</div>;
+    return <div className="container mx-auto py-12 text-center">Brand not found.</div>;
   }
 
   return (
@@ -346,7 +349,6 @@ export default function EditCompanyPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings</CardTitle>
-                  <CardDescription>Customize the appearance for this brand. Requires "Enable White-Labeling" to be checked.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {isMounted && currentUser?.role === 'Super Admin' && (
@@ -368,11 +370,11 @@ export default function EditCompanyPage() {
                   )}
                   {isMounted && whiteLabelEnabledValue && currentUser?.role === 'Super Admin' && (
                     <div className="space-y-3 pt-3 pl-2 border-l-2 border-primary/20 ml-1">
-                      <FormField control={form.control} name="primaryColor" render={({ field }) => (<FormItem><FormLabel>Primary Color (HEX)</FormLabel><FormControl><div><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></div></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="secondaryColor" render={({ field }) => (<FormItem><FormLabel>Secondary Color (HEX)</FormLabel><FormControl><div><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></div></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="accentColor" render={({ field }) => (<FormItem><FormLabel>Accent Color (HEX)</FormLabel><FormControl><div><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></div></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="brandBackgroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Background Color (HEX)</FormLabel><FormControl><div><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></div></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="brandForegroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Foreground Color (HEX)</FormLabel><FormControl><div><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></div></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="primaryColor" render={({ field }) => (<FormItem><FormLabel>Primary Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="secondaryColor" render={({ field }) => (<FormItem><FormLabel>Secondary Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="accentColor" render={({ field }) => (<FormItem><FormLabel>Accent Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="brandBackgroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Background Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="brandForegroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Foreground Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                     </div>
                   )}
                 </CardContent>
@@ -421,28 +423,29 @@ export default function EditCompanyPage() {
               </Card>
 
               {/* Course Management Ability Card */}
-              {isMounted && currentUser?.role === 'Super Admin' && (
-                <Card>
-                  <CardHeader><CardTitle className="flex items-center gap-2"><Package className="h-5 w-5" /> Course Management Ability</CardTitle></CardHeader>
-                  <CardContent>
-                    <FormField
-                      control={form.control}
-                      name="canManageCourses"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Enable Course Management</FormLabel>
-                            <FormDescription>Allow this brand's Admins/Owners to create and manage their own courses.</FormDescription>
-                          </div>
-                          <FormControl>
-                            <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></div>
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  </CardContent>
-                </Card>
-              )}
+                {isMounted && currentUser?.role === 'Super Admin' && (
+                    <Card>
+                        <CardHeader><CardTitle className="flex items-center gap-2"><Package className="h-5 w-5" /> Course Management Ability</CardTitle></CardHeader>
+                        <CardContent>
+                        <FormField
+                            control={form.control}
+                            name="canManageCourses"
+                            render={({ field }) => (
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                                <div className="space-y-0.5">
+                                <FormLabel className="text-base">Enable Course Management</FormLabel>
+                                <FormDescription>Allow this brand's Admins/Owners to create and manage their own courses.</FormDescription>
+                                </div>
+                                <FormControl>
+                                <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></div>
+                                </FormControl>
+                            </FormItem>
+                            )}
+                        />
+                        </CardContent>
+                    </Card>
+                )}
+
 
               {/* Assigned Programs Card */}
                <Card>
