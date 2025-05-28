@@ -10,8 +10,9 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose, DialogPortal } from "@/components/ui/dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+// Textarea is no longer directly used for main content
 import { Progress } from "@/components/ui/progress";
+import { Textarea } from '@/components/ui/textarea'; // Still needed for exerciseFilesInfo
 import {
   Form,
   FormControl,
@@ -24,8 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 import { createBrandLesson, updateBrandLesson } from '@/lib/brand-content-data';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import type { BrandLesson, BrandLessonFormData } from '@/types/course';
-import { Upload, PlaySquare, FileUp, Image as ImageIconLucide, Trash2, Loader2, Video } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Upload, PlaySquare, FileUp, Image as ImageIconLucide, Trash2, Bold, Italic, Underline, List, ListOrdered, Quote, Link as LinkEditorIcon, Code, Loader2, Video } from 'lucide-react';
 import RichTextEditor from '@/components/ui/RichTextEditor'; // Import the RichTextEditor
 
 const brandLessonFormSchema = z.object({
@@ -44,7 +44,7 @@ type BrandLessonFormValues = z.infer<typeof brandLessonFormSchema>;
 interface AddEditBrandLessonDialogProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
-  brandId: string; 
+  brandId: string;
   initialData: BrandLesson | null;
   onLessonSaved: (lesson: BrandLesson) => void;
 }
@@ -70,7 +70,7 @@ export function AddEditBrandLessonDialog({
     resolver: zodResolver(brandLessonFormSchema),
     defaultValues: {
       title: '',
-      content: '', // Will be HTML from RichTextEditor
+      content: '',
       featuredImageUrl: '',
       videoUrl: '',
       playbackHours: 0,
@@ -167,7 +167,7 @@ export function AddEditBrandLessonDialog({
       const lessonPayload: BrandLessonFormData = {
         brandId: brandId,
         title: data.title,
-        content: data.content, // HTML from RichTextEditor
+        content: data.content,
         featuredImageUrl: data.featuredImageUrl?.trim() === '' ? null : data.featuredImageUrl,
         videoUrl: data.videoUrl?.trim() === '' ? null : data.videoUrl,
         exerciseFilesInfo: data.exerciseFilesInfo?.trim() === '' ? null : data.exerciseFilesInfo,
@@ -241,7 +241,7 @@ export function AddEditBrandLessonDialog({
                       <FormLabel className="text-base font-semibold">Featured Image</FormLabel>
                       <FormControl>
                         <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
-                          {field.value && !isImageUploading ? ( <div className="relative aspect-video bg-muted rounded-md"><Image src={field.value} alt="Preview" fill style={{ objectFit: 'contain' }} className="rounded-md" onError={() => field.onChange('')} /><Button type="button" variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => field.onChange('')}><Trash2 className="h-4 w-4" /></Button></div> )
+                          {field.value && !isImageUploading ? ( <div className="relative aspect-video bg-muted rounded-md"><Image src={field.value ?? ''} alt="Preview" fill style={{ objectFit: 'contain' }} className="rounded-md" onError={() => field.onChange('')} /><Button type="button" variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => field.onChange('')}><Trash2 className="h-4 w-4" /></Button></div> )
                           : isImageUploading ? ( <div className="py-8"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" /><Progress value={imageUploadProgress} className="w-full h-2" />{imageUploadError && <p className="text-xs text-destructive mt-2">{imageUploadError}</p>}</div> )
                           : ( <Label htmlFor="brand-lesson-image-upload" className="cursor-pointer block"><ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Upload image</p><Input id="brand-lesson-image-upload" type="file" accept="image/*" className="hidden" onChange={handleImageFileChange} disabled={isImageUploading} /></Label> )}
                         </div>

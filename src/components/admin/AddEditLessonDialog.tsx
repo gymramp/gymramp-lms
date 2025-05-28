@@ -11,18 +11,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+// Textarea is no longer directly used for main content
 import { Switch } from '@/components/ui/switch';
-import { Alert, AlertDescription } from "@/components/ui/alert"; 
-import { Progress } from "@/components/ui/progress"; 
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"; 
-import { ScrollArea } from '../ui/scroll-area'; 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
+import { Textarea } from '@/components/ui/textarea'; // Still needed for exerciseFilesInfo
+
 import {
   Form,
   FormControl,
@@ -33,18 +27,17 @@ import {
 } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { createLesson, updateLesson } from '@/lib/firestore-data';
-import { uploadImage, STORAGE_PATHS } from '@/lib/storage'; 
+import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import type { Lesson, LessonFormData } from '@/types/course';
-import { Upload, Link as LinkIcon, PlaySquare, Info, FileUp, Image as ImageIconLucide, Trash2, Bold, Italic, Underline, List, ListOrdered, Quote, Link as LinkEditorIcon, Code, Loader2, Video } from 'lucide-react'; 
-import { cn } from '@/lib/utils'; 
+import { Upload, Link as LinkIcon, PlaySquare, Info, FileUp, Image as ImageIconLucide, Trash2, Bold, Italic, Underline, List, ListOrdered, Quote, Link as LinkEditorIcon, Code, Loader2, Video } from 'lucide-react';
 import RichTextEditor from '@/components/ui/RichTextEditor'; // Import the RichTextEditor
 
 const lessonFormSchema = z.object({
   title: z.string().min(3, { message: 'Lesson title must be at least 3 characters.' }),
   content: z.string().min(10, { message: 'Lesson content must be at least 10 characters.' }),
-  featuredImageUrl: z.string().optional().or(z.literal('')), 
-  videoUrl: z.string().url({ message: 'Invalid video URL format.' }).optional().or(z.literal('')), 
-  playbackHours: z.coerce.number().min(0).optional(), 
+  featuredImageUrl: z.string().optional().or(z.literal('')),
+  videoUrl: z.string().url({ message: 'Invalid video URL format.' }).optional().or(z.literal('')),
+  playbackHours: z.coerce.number().min(0).optional(),
   playbackMinutes: z.coerce.number().min(0).max(59).optional(),
   playbackSeconds: z.coerce.number().min(0).max(59).optional(),
   exerciseFilesInfo: z.string().optional().or(z.literal('')),
@@ -69,21 +62,21 @@ export function AddEditLessonDialog({
 }: AddEditLessonDialogProps) {
   const isEditing = !!initialData;
   const { toast } = useToast();
-  const [isSaving, setIsSaving] = useState(false); 
+  const [isSaving, setIsSaving] = useState(false);
   const [isVideoUploading, setIsVideoUploading] = useState(false);
   const [videoUploadProgress, setVideoUploadProgress] = useState(0);
   const [videoUploadError, setVideoUploadError] = useState<string | null>(null);
-   const [isImageUploading, setIsImageUploading] = useState(false);
-   const [imageUploadProgress, setImageUploadProgress] = useState(0);
-   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+  const [isImageUploading, setIsImageUploading] = useState(false);
+  const [imageUploadProgress, setImageUploadProgress] = useState(0);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
 
 
   const form = useForm<LessonFormValues>({
     resolver: zodResolver(lessonFormSchema),
     defaultValues: {
       title: '',
-      content: '', // Will be HTML from RichTextEditor
-      featuredImageUrl: '', 
+      content: '',
+      featuredImageUrl: '',
       videoUrl: '',
       playbackHours: 0,
       playbackMinutes: 0,
@@ -93,11 +86,11 @@ export function AddEditLessonDialog({
     },
   });
 
-  const selectedImageUrl = form.watch('featuredImageUrl'); 
-  const videoUrlValue = form.watch('videoUrl'); 
+  const selectedImageUrl = form.watch('featuredImageUrl');
+  const videoUrlValue = form.watch('videoUrl');
 
   useEffect(() => {
-    if (isOpen) { // Only reset when dialog becomes visible or initialData changes while open
+    if (isOpen) { 
         if (initialData) {
            let hours = 0, minutes = 0, seconds = 0;
            if (initialData.playbackTime) {
@@ -112,7 +105,7 @@ export function AddEditLessonDialog({
           form.reset({
             title: initialData.title || '',
             content: initialData.content || '',
-            featuredImageUrl: initialData.featuredImageUrl || '', 
+            featuredImageUrl: initialData.featuredImageUrl || '',
             videoUrl: initialData.videoUrl || '',
             playbackHours: hours,
             playbackMinutes: minutes,
@@ -124,7 +117,7 @@ export function AddEditLessonDialog({
           form.reset({
             title: '',
             content: '',
-            featuredImageUrl: '', 
+            featuredImageUrl: '',
             videoUrl: '',
             playbackHours: 0,
             playbackMinutes: 0,
@@ -133,13 +126,13 @@ export function AddEditLessonDialog({
             isPreviewAvailable: false,
           });
         }
-        setIsVideoUploading(false); 
+        setIsVideoUploading(false);
         setVideoUploadProgress(0);
         setVideoUploadError(null);
-        setIsImageUploading(false); 
+        setIsImageUploading(false);
         setImageUploadProgress(0);
         setImageUploadError(null);
-        setIsSaving(false); // Reset saving state
+        setIsSaving(false);
     }
   }, [initialData, form, isOpen]);
 
@@ -148,17 +141,17 @@ export function AddEditLessonDialog({
         const file = event.target.files?.[0];
         if (!file) return;
 
-        setIsVideoUploading(true); 
+        setIsVideoUploading(true);
         setVideoUploadProgress(0);
         setVideoUploadError(null);
 
         try {
             const uniqueFileName = isEditing && initialData?.id
-                ? `${initialData.id}-video-${file.name}` 
+                ? `${initialData.id}-video-${file.name}`
                 : `${Date.now()}-video-${file.name}`;
-            const storagePath = `${STORAGE_PATHS.LESSON_VIDEOS}/${uniqueFileName}`; 
+            const storagePath = `${STORAGE_PATHS.LESSON_VIDEOS}/${uniqueFileName}`;
             const downloadURL = await uploadImage(file, storagePath, setVideoUploadProgress);
-            form.setValue('videoUrl', downloadURL, { shouldValidate: true }); 
+            form.setValue('videoUrl', downloadURL, { shouldValidate: true });
             toast({
                 title: "Video Uploaded",
                 description: "Lesson video successfully uploaded.",
@@ -180,7 +173,7 @@ export function AddEditLessonDialog({
          const file = event.target.files?.[0];
          if (!file) return;
 
-         setIsImageUploading(true); 
+         setIsImageUploading(true);
          setImageUploadProgress(0);
          setImageUploadError(null);
 
@@ -192,7 +185,7 @@ export function AddEditLessonDialog({
 
              const downloadURL = await uploadImage(file, storagePath, setImageUploadProgress);
 
-             form.setValue('featuredImageUrl', downloadURL, { shouldValidate: true }); 
+             form.setValue('featuredImageUrl', downloadURL, { shouldValidate: true });
              toast({
                  title: "Image Uploaded",
                  description: "Featured image successfully uploaded.",
@@ -212,14 +205,14 @@ export function AddEditLessonDialog({
 
 
   const onSubmit = async (data: LessonFormValues) => {
-    if (isSaving || isVideoUploading || isImageUploading) return; // Prevent multiple submissions
+    if (isSaving || isVideoUploading || isImageUploading) return; 
     setIsSaving(true);
 
     try {
       let savedLesson: Lesson | null = null;
 
-       const featuredImageUrl = data.featuredImageUrl?.trim() === '' ? null : data.featuredImageUrl; 
-       const videoUrl = data.videoUrl?.trim() === '' ? null : data.videoUrl; 
+       const featuredImageUrl = data.featuredImageUrl?.trim() === '' ? null : data.featuredImageUrl;
+       const videoUrl = data.videoUrl?.trim() === '' ? null : data.videoUrl;
        const exerciseFilesInfo = data.exerciseFilesInfo?.trim() === '' ? null : data.exerciseFilesInfo;
 
 
@@ -232,9 +225,9 @@ export function AddEditLessonDialog({
 
       const lessonData: LessonFormData = {
         title: data.title,
-        content: data.content, // Content is HTML string from RichTextEditor
-        featuredImageUrl: featuredImageUrl, 
-        videoUrl: videoUrl, 
+        content: data.content,
+        featuredImageUrl: featuredImageUrl,
+        videoUrl: videoUrl,
         exerciseFilesInfo: exerciseFilesInfo,
         isPreviewAvailable: data.isPreviewAvailable,
         playbackTime: playbackTime,
@@ -315,7 +308,6 @@ export function AddEditLessonDialog({
                           Content
                         </FormLabel>
                         <FormControl>
-                           {/* Replace Textarea with RichTextEditor */}
                            <RichTextEditor
                              value={field.value}
                              onChange={field.onChange}
@@ -341,19 +333,19 @@ export function AddEditLessonDialog({
                                          {field.value && !isImageUploading ? (
                                              <div className="relative aspect-video bg-muted rounded-md flex items-center justify-center">
                                                  <Image
-                                                     src={field.value} 
+                                                     src={field.value ?? ''}
                                                      alt="Featured image preview"
                                                      fill
-                                                     style={{ objectFit: 'contain' }} 
+                                                     style={{ objectFit: 'contain' }}
                                                      className="rounded-md"
-                                                     onError={() => field.onChange('')} 
+                                                     onError={() => field.onChange('')}
                                                  />
                                                  <Button
                                                      type="button"
                                                      variant="destructive"
                                                      size="icon"
                                                      className="absolute top-1 right-1 h-6 w-6 opacity-80 hover:opacity-100 z-10"
-                                                     onClick={() => field.onChange('')} 
+                                                     onClick={() => field.onChange('')}
                                                      aria-label="Remove image"
                                                  > <Trash2 className="h-4 w-4" /> </Button>
                                              </div>
@@ -371,7 +363,7 @@ export function AddEditLessonDialog({
                                                  <Input
                                                      id="lesson-image-upload"
                                                      type="file"
-                                                     accept="image/*" 
+                                                     accept="image/*"
                                                      className="hidden"
                                                      onChange={handleImageFileChange}
                                                      disabled={isImageUploading}
@@ -403,7 +395,7 @@ export function AddEditLessonDialog({
                                                     variant="destructive"
                                                     size="icon"
                                                     className="absolute top-1 right-1 h-6 w-6 opacity-80 hover:opacity-100 z-10"
-                                                    onClick={() => field.onChange('')} 
+                                                    onClick={() => field.onChange('')}
                                                     aria-label="Remove video"
                                                 > <Trash2 className="h-4 w-4" /> </Button>
                                             </div>
@@ -421,7 +413,7 @@ export function AddEditLessonDialog({
                                                   <Input
                                                      id="lesson-video-upload"
                                                      type="file"
-                                                     accept="video/*" 
+                                                     accept="video/*"
                                                      className="hidden"
                                                      onChange={handleVideoFileChange}
                                                      disabled={isVideoUploading}
@@ -444,7 +436,7 @@ export function AddEditLessonDialog({
                       <FormField control={form.control} name="playbackMinutes" render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" min="0" max="59" {...field} value={field.value ?? 0} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} className="text-center" /></FormControl><FormLabel className="text-xs text-muted-foreground block text-center">m</FormLabel></FormItem>)} />
                       <FormField control={form.control} name="playbackSeconds" render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" min="0" max="59" {...field} value={field.value ?? 0} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} className="text-center" /></FormControl><FormLabel className="text-xs text-muted-foreground block text-center">s</FormLabel></FormItem>)} />
                     </div>
-                    <FormMessage /> 
+                    <FormMessage />
                   </div>
 
                   <FormField
@@ -472,7 +464,7 @@ export function AddEditLessonDialog({
                                 <Switch checked={field.value} onCheckedChange={field.onChange} />
                              </FormControl>
                           </div>
-                          <Alert variant={field.value ? "success" : "default"} className={`bg-opacity-10 border-opacity-30`}>
+                          <Alert variant={field.value ? "success" : "default"} className="bg-opacity-10 border-opacity-30">
                             <Info className={`h-4 w-4 ${field.value ? 'text-green-600' : 'text-muted-foreground'}`} />
                             <AlertDescription className={`text-xs ${field.value ? 'text-green-800' : 'text-muted-foreground'}`}>
                               {field.value ? "Preview enabled. Non-enrolled users can view this lesson." : "Preview disabled. Only enrolled users can view this lesson."}

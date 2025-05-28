@@ -2,19 +2,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import 'react-quill/dist/quill.snow.css';
+import 'react-quill/dist/quill.snow.css'; // Import Quill styles
 import { Loader2 } from 'lucide-react';
-import dynamic from 'next/dynamic'; // Moved to top
 
-// Dynamically import ReactQuill at the module level
+// Dynamically import ReactQuill only on the client side
 const ReactQuill = dynamic(() => import('react-quill'), {
-    ssr: false,
-    loading: () => (
-        <div className="flex items-center justify-center h-32 border rounded-md bg-muted">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            <p className="ml-2 text-muted-foreground">Loading editor...</p>
-        </div>
-    ),
+  ssr: false, // Ensure it's not server-side rendered
+  // We'll handle loading state within the component itself
 });
 
 interface RichTextEditorProps {
@@ -52,21 +46,22 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    // This effect runs only on the client side, after the initial render.
     setIsClient(true);
   }, []);
 
   if (!isClient) {
-    // This fallback can be the same as the loading state of dynamic import
-    // or a simpler one if preferred.
+    // Render a placeholder or loading state on the server and initial client render.
+    // This must be consistent between server and initial client.
     return (
         <div className="flex items-center justify-center h-32 border rounded-md bg-muted">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            <p className="ml-2 text-muted-foreground">Initializing editor...</p>
+            <p className="ml-2 text-muted-foreground">Loading editor...</p>
         </div>
     );
   }
 
-  // Ensure ReactQuill is only rendered on the client and when it's ready
+  // ReactQuill is now guaranteed to only render on the client after mounting.
   return (
     <ReactQuill
       theme="snow"
