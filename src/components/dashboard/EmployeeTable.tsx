@@ -1,3 +1,4 @@
+// src/components/dashboard/EmployeeTable.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -22,18 +23,24 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import type { User, UserRole, Location, Company } from '@/types/user';
+import type { User, UserRole, Location } from '@/types/user';
 import type { Course, BrandCourse } from '@/types/course';
 import { cn } from '@/lib/utils';
 import { getCourseById as fetchGlobalCourseById } from '@/lib/firestore-data';
 import { getBrandCourseById } from '@/lib/brand-content-data';
 
+const ROLE_HIERARCHY_TABLE: Record<UserRole, number> = {
+  'Super Admin': 5,
+  'Admin': 4,
+  'Owner': 3,
+  'Manager': 2,
+  'Staff': 1,
+};
 
 type EmployeeWithOverallProgress = User & {
     overallProgress: number;
     overallStatus: "Not Started" | "Started" | "In Progress" | "Completed";
 };
-
 
 interface EmployeeTableProps {
   employees: EmployeeWithOverallProgress[];
@@ -43,14 +50,6 @@ interface EmployeeTableProps {
   currentUser: User | null;
   locations: Location[];
 }
-
-const ROLE_HIERARCHY_TABLE: Record<UserRole, number> = {
-  'Super Admin': 5,
-  'Admin': 4,
-  'Owner': 3,
-  'Manager': 2,
-  'Staff': 1,
-};
 
 export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCourse, onEditUser, currentUser, locations = [] }: EmployeeTableProps) {
     const { toast } = useToast();
@@ -72,7 +71,6 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
                         if (!course) {
                             course = await getBrandCourseById(courseId);
                         }
-
                         if (isMounted) {
                             if (course && !course.isDeleted) {
                                 titles[courseId] = course.title;
@@ -101,60 +99,65 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
         return () => { isMounted = false; };
     }, [employees]);
 
-
     const canPerformGeneralAction = (targetUser: User): boolean => {
         if (!currentUser) return false;
-        if (currentUser.id === targetUser.id && currentUser.role !== 'Super Admin' && currentUser.role !== 'Admin' && currentUser.role !== 'Owner') {
+        if (currentUser.id === targetUser.id && !['Super Admin', 'Admin', 'Owner'].includes(currentUser.role)) {
+             console.log(`[EmployeeTable canPerformGeneralAction] Denied: Cannot perform action on self if not SA/Admin/Owner. CU: ${currentUser.role}`);
              return false;
         }
-        if (currentUser.role === 'Super Admin') return true;
-        
-        if (!currentUser.companyId) return false; 
-
-        if (targetUser.companyId !== currentUser.companyId) return false;
-
-        if (currentUser.role === 'Manager') {
-            return (targetUser.role === 'Staff' || targetUser.role === 'Manager');
+        if (currentUser.role === 'Super Admin') {
+             console.log(`[EmployeeTable canPerformGeneralAction] Super Admin: true (unless self for toggle).`);
+             return currentUser.id !== targetUser.id; // SA cannot toggle own status via this table's specific button. Can edit self.
         }
-        return ROLE_HIERARCHY_TABLE[currentUser.role] > ROLE_HIERARCHY_TABLE[targetUser.role];
-    };
-     
+        
+        if (!currentUser.companyId) {
+            console.log(`[EmployeeTable canPerformGeneralAction] Denied: Current user ${currentUser.role} has no companyId.`);
+            return false; 
+        }
 
-    const canAssignCoursesToTarget = (cu: User | null, tu: User): boolean => {
-        if (!cu) {
-            console.log(`[EmployeeTable canAssignCoursesToTarget] No current user (cu): false`);
+        if (targetUser.companyId !== currentUser.companyId) {
+             console.log(`[EmployeeTable canPerformGeneralAction] Denied: Target user ${targetUser.email} in different company (${targetUser.companyId} vs ${currentUser.companyId}).`);
             return false;
         }
-        console.log(`[EmployeeTable canAssignCoursesToTarget] CurrentUser: ${cu.role} (Brand: ${cu.companyId}), TargetUser: ${tu.role} (Brand: ${tu.companyId})`);
 
-        if (cu.role === 'Super Admin') {
-            console.log(`[EmployeeTable canAssignCoursesToTarget] Super Admin: true`);
-            return true;
+        if (currentUser.role === 'Manager') {
+            const canManage = (targetUser.role === 'Staff' || targetUser.role === 'Manager');
+            console.log(`[EmployeeTable canPerformGeneralAction] Manager check: target Staff/Manager (${targetUser.role}) AND same company: ${canManage}`);
+            return canManage; // Manager can edit self or other managers/staff in their brand
         }
-        if (!cu.companyId) {
-            console.log(`[EmployeeTable canAssignCoursesToTarget] Current user ${cu.role} has no companyId: false`);
-            return false; 
-        }
+        
+        const hierarchyCheck = ROLE_HIERARCHY_TABLE[currentUser.role] > ROLE_HIERARCHY_TABLE[targetUser.role];
+        console.log(`[EmployeeTable canPerformGeneralAction] Admin/Owner check: same company AND hierarchy valid (${ROLE_HIERARCHY_TABLE[currentUser.role]} > ${ROLE_HIERARCHY_TABLE[targetUser.role]}): ${hierarchyCheck}`);
+        return hierarchyCheck;
+    };
+     
+    const canAssignCoursesToTarget = (cu: User | null, tu: User): boolean => {
+        if (!cu) return false;
+        console.log(`[EmployeeTable canAssignCoursesToTarget] Permission check for ${cu.email} assigning to ${tu.email}`);
+        console.log(`[EmployeeTable canAssignCoursesToTarget] CU Role: ${cu.role}, CU Brand: ${cu.companyId} | TU Role: ${tu.role}, TU Brand: ${tu.companyId}`);
 
+        if (cu.role === 'Super Admin') return true;
+        if (!cu.companyId) return false; 
+        // Admin/Owner can assign to users in their primary brand or any child brands.
+        // For simplicity here, we assume DashboardPage passes `employees` that are already filtered to be within CU's brand scope (primary or child).
+        // So, we primarily check role hierarchy.
         if (tu.companyId !== cu.companyId) {
-            console.log(`[EmployeeTable canAssignCoursesToTarget] Different companyIds (cu: ${cu.companyId}, tu: ${tu.companyId}): false`);
-            return false; 
+            // This check might be too strict if DashboardPage sends users from child brands.
+            // Assuming for now that if an Admin/Owner sees a user in this table, they should be able to manage their courses if hierarchy allows.
+            // A more robust check would involve verifying tu.companyId is accessible by cu (their own or child).
+            // For now, let's rely on DashboardPage's filtering of `employees`.
+            console.warn(`[EmployeeTable canAssignCoursesToTarget] Target user company ${tu.companyId} might not be directly ${cu.companyId}. Relying on parent page's employee list scope.`);
         }
+
 
         if (cu.role === 'Manager') {
-            const canAssign = (tu.role === 'Staff' || tu.role === 'Manager');
-            console.log(`[EmployeeTable canAssignCoursesToTarget] Manager check: target is Staff/Manager (${tu.role}) AND same company: ${canAssign}`);
-            return canAssign;
+            return (tu.role === 'Staff' || tu.role === 'Manager') && tu.companyId === cu.companyId;
         }
         if (cu.role === 'Admin' || cu.role === 'Owner') {
-            const canAssign = ROLE_HIERARCHY_TABLE[cu.role] > ROLE_HIERARCHY_TABLE[tu.role];
-            console.log(`[EmployeeTable canAssignCoursesToTarget] Admin/Owner check: cu.role > tu.role (${ROLE_HIERARCHY_TABLE[cu.role]} > ${ROLE_HIERARCHY_TABLE[tu.role]}): ${canAssign}`);
-            return canAssign;
+            return ROLE_HIERARCHY_TABLE[cu.role] > ROLE_HIERARCHY_TABLE[tu.role] && tu.companyId === cu.companyId; // Ensure same company for direct Admin/Owner action
         }
-        console.log(`[EmployeeTable canAssignCoursesToTarget] Default fallback for role ${cu.role}: false`);
         return false;
     };
-
 
     const handleToggleClick = (employee: User) => {
         if (currentUser?.id === employee.id) {
@@ -170,14 +173,14 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
 
     const handleAssignClick = (employee: User) => {
          if (!canAssignCoursesToTarget(currentUser, employee)) {
-             toast({ title: "Permission Denied", description: "You cannot assign courses to this user.", variant: "destructive" });
+             toast({ title: "Permission Denied", description: "You do not have permission to assign courses to this user.", variant: "destructive" });
              return;
          }
          onAssignCourse(employee);
     }
 
     const handleEditClick = (employee: User) => {
-        if (!canPerformGeneralAction(employee)) {
+        if (!currentUser || (currentUser.id !== employee.id && !canPerformGeneralAction(employee))) {
              toast({
                 title: "Permission Denied",
                 description: `You do not have permission to edit ${employee.name}.`,
@@ -325,7 +328,7 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
                   </DropdownMenuItem>
                    <DropdownMenuItem
                         onClick={() => handleEditClick(employee)}
-                        disabled={!canPerformGeneralAction(employee)}
+                        disabled={currentUser?.id !== employee.id && !canPerformGeneralAction(employee)}
                     >
                        <Edit className="mr-2 h-4 w-4" />
                        <span>Edit Details</span>

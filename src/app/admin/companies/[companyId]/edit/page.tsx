@@ -139,9 +139,10 @@ export default function EditCompanyPage() {
 
       setCompany(companyData);
       let trialDate: Date | null = null;
-      if (companyData.trialEndsAt) {
-        // Assuming trialEndsAt is stored as an ISO string after serialization
-        trialDate = new Date(companyData.trialEndsAt as string);
+      if (companyData.trialEndsAt && typeof companyData.trialEndsAt === 'string') {
+        trialDate = new Date(companyData.trialEndsAt);
+      } else if (companyData.trialEndsAt instanceof Date) {
+        trialDate = companyData.trialEndsAt;
       }
       
       form.reset({
@@ -175,12 +176,12 @@ export default function EditCompanyPage() {
       console.log('[EditBrand] Fetched companyData.assignedProgramIds:', companyData.assignedProgramIds);
       if (companyData.assignedProgramIds && companyData.assignedProgramIds.length > 0) {
         const [fetchedAllLibCoursesData, programsDetailsPromises] = await Promise.all([
-            getAllCourses(),
-            Promise.all(companyData.assignedProgramIds.map(id => getProgramById(id)))
+            getAllCourses(), // Assuming getAllCourses is already imported
+            Promise.all(companyData.assignedProgramIds.map(id => getProgramById(id))) // Assuming getProgramById is imported
         ]);
         setAllLibraryCourses(fetchedAllLibCoursesData);
         const details = programsDetailsPromises.filter(Boolean) as Program[];
-        console.log('[EditBrand] Fetched assigned program details:', details);
+        console.log('[EditBrand] Fetched program details for assigned programs:', details);
         setAssignedProgramsDetails(details);
       } else {
         setAssignedProgramsDetails([]);
@@ -206,7 +207,7 @@ export default function EditCompanyPage() {
         if (details) {
           fetchCompanyData(details);
         } else {
-          router.push('/');
+          router.push('/'); // Should not happen if firebaseUser is present
         }
       } else {
         setCurrentUser(null);
@@ -267,8 +268,7 @@ export default function EditCompanyPage() {
       const updatedCompany = await updateCompany(companyId, metadataToUpdate);
       if (updatedCompany) {
         setCompany(updatedCompany); 
-        // Re-fetch all data to ensure consistency, especially if assignedProgramIds were affected indirectly
-        fetchCompanyData(currentUser);
+        fetchCompanyData(currentUser); // Re-fetch all data to ensure UI consistency
         toast({ title: "Brand Updated", description: `"${updatedCompany.name}" updated successfully.` });
       } else {
         throw new Error("Failed to update brand details.");
@@ -298,7 +298,10 @@ export default function EditCompanyPage() {
     return <div className="container mx-auto text-center">Brand not found.</div>;
   }
 
+  // Determine if the current user can edit basic info vs. super admin settings
   const userCanEditBasicInfo = currentUser?.role === 'Super Admin' || (currentUser?.companyId === company.id && (currentUser?.role === 'Admin' || currentUser?.role === 'Owner')) || (company.parentBrandId === currentUser?.companyId && (currentUser?.role === 'Admin' || currentUser?.role === 'Owner'));
+  const isSuperAdmin = currentUser?.role === 'Super Admin';
+
 
   return (
     <div className="container mx-auto">
@@ -342,44 +345,41 @@ export default function EditCompanyPage() {
                 </CardContent>
               </Card>
 
-              {/* White-Label Settings Card */}
-              <Card>
-                <CardHeader><CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings</CardTitle></CardHeader>
-                <CardContent>
-                   {currentUser?.role === 'Super Admin' && isMounted && (
-                      <>
-                         <FormField
-                           control={form.control}
-                           name="whiteLabelEnabled"
-                           render={({ field }) => (
-                             <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm mb-4">
-                               <div className="space-y-0.5">
-                                 <FormLabel className="text-base">Enable White-Labeling</FormLabel>
-                                 <FormDescription>Allow this brand to use custom colors and logo for a branded experience.</FormDescription>
-                               </div>
-                               <FormControl>
-                                 <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} /></div>
-                               </FormControl>
-                             </FormItem>
-                           )}
-                         />
-                         {whiteLabelEnabledValue && (
-                           <div className="space-y-4 pt-3 pl-2 border-l-2 border-primary/20 ml-1">
-                             <FormField control={form.control} name="primaryColor" render={({ field }) => (<FormItem><FormLabel>Primary Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                             <FormField control={form.control} name="secondaryColor" render={({ field }) => (<FormItem><FormLabel>Secondary Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                             <FormField control={form.control} name="accentColor" render={({ field }) => (<FormItem><FormLabel>Accent Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                             <FormField control={form.control} name="brandBackgroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Background Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                             <FormField control={form.control} name="brandForegroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Foreground Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                           </div>
-                         )}
-                      </>
-                   )}
-                   {currentUser?.role !== 'Super Admin' && (
-                     <p className="text-sm text-muted-foreground italic">White-label settings can only be managed by a Super Admin.</p>
-                   )}
-                </CardContent>
-              </Card>
-
+                {/* White-Label Settings Card */}
+                <Card>
+                    <CardHeader><CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings</CardTitle></CardHeader>
+                    <CardContent>
+                    {isMounted && (
+                        <>
+                        <FormField
+                            control={form.control}
+                            name="whiteLabelEnabled"
+                            render={({ field }) => (
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm mb-4">
+                                <div className="space-y-0.5">
+                                <FormLabel className="text-base">Enable White-Labeling</FormLabel>
+                                <FormDescription>Allow this brand to use custom colors and logo for a branded experience.</FormDescription>
+                                </div>
+                                <FormControl>
+                                    <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} disabled={!isSuperAdmin} /></div>
+                                </FormControl>
+                            </FormItem>
+                            )}
+                        />
+                        {whiteLabelEnabledValue && isMounted && (
+                            <div className="space-y-4 pt-3 pl-2 border-l-2 border-primary/20 ml-1">
+                            <FormField control={form.control} name="primaryColor" render={({ field }) => (<FormItem><FormLabel>Primary Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} disabled={!isSuperAdmin} /></FormControl><FormMessage /></FormItem>)} />
+                            <FormField control={form.control} name="secondaryColor" render={({ field }) => (<FormItem><FormLabel>Secondary Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} disabled={!isSuperAdmin} /></FormControl><FormMessage /></FormItem>)} />
+                            <FormField control={form.control} name="accentColor" render={({ field }) => (<FormItem><FormLabel>Accent Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} disabled={!isSuperAdmin} /></FormControl><FormMessage /></FormItem>)} />
+                            <FormField control={form.control} name="brandBackgroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Background Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} disabled={!isSuperAdmin} /></FormControl><FormMessage /></FormItem>)} />
+                            <FormField control={form.control} name="brandForegroundColor" render={({ field }) => (<FormItem><FormLabel>Brand Foreground Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} disabled={!isSuperAdmin} /></FormControl><FormMessage /></FormItem>)} />
+                            </div>
+                        )}
+                        </>
+                    )}
+                    {!isSuperAdmin && <p className="text-xs text-muted-foreground italic">White-label settings can only be managed by a Super Admin.</p>}
+                    </CardContent>
+                </Card>
             </div>
 
             <div className="lg:col-span-1 space-y-6">
@@ -396,7 +396,7 @@ export default function EditCompanyPage() {
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                           <div className="space-y-0.5"><FormLabel>Is Trial Account?</FormLabel></div>
                           <FormControl>
-                            <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} disabled={currentUser?.role !== 'Super Admin'} /></div>
+                            <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} disabled={!isSuperAdmin} /></div>
                           </FormControl>
                         </FormItem>
                       )}
@@ -410,14 +410,14 @@ export default function EditCompanyPage() {
                         <FormItem>
                           <FormLabel className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Trial End Date</FormLabel>
                           <FormControl>
-                            <div><DatePickerWithPresets date={field.value} setDate={field.onChange} disabled={currentUser?.role !== 'Super Admin'} /></div>
+                            <div><DatePickerWithPresets date={field.value} setDate={field.onChange} disabled={!isSuperAdmin} /></div>
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
                   )}
-                  {currentUser?.role !== 'Super Admin' && <p className="text-xs text-muted-foreground italic">Trial settings can only be managed by a Super Admin.</p>}
+                  {!isSuperAdmin && <p className="text-xs text-muted-foreground italic">Trial settings can only be managed by a Super Admin.</p>}
                 </CardContent>
               </Card>
 
@@ -436,66 +436,66 @@ export default function EditCompanyPage() {
                                 <FormDescription>Allow this brand's Admins/Owners to create and manage their own courses.</FormDescription>
                                 </div>
                                 <FormControl>
-                                  <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} disabled={currentUser?.role !== 'Super Admin'} /></div>
+                                  <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} disabled={!isSuperAdmin} /></div>
                                 </FormControl>
                             </FormItem>
                             )}
                         />
                     )}
-                    {currentUser?.role !== 'Super Admin' && <p className="text-xs text-muted-foreground italic mt-2">Course management ability can only be set by a Super Admin.</p>}
+                    {!isSuperAdmin && <p className="text-xs text-muted-foreground italic mt-2">Course management ability can only be set by a Super Admin.</p>}
                     </CardContent>
                 </Card>
 
-              {/* Assigned Programs Card */}
-               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><Layers className="h-5 w-5" /> Assigned Programs</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {isLoadingProgramData ? (
-                    <div className="space-y-2"><Skeleton className="h-5 w-3/4" /><Skeleton className="h-4 w-full" /><Skeleton className="h-20 w-full" /></div>
-                  ) : assignedProgramsDetails.length > 0 ? (
-                    <div className="space-y-4">
-                      {assignedProgramsDetails.map(program => (
-                        <div key={program.id} className="border-b pb-3 last:border-b-0 last:pb-0">
-                          <h4 className="font-semibold text-foreground">{program.title}</h4>
-                          <p className="text-sm text-muted-foreground">{program.description}</p>
-                          <p className="text-sm text-muted-foreground mt-1">Base Price: <Badge variant="outline">{program.price}</Badge></p>
-                          {(program.courseIds?.length || 0) > 0 && allLibraryCourses.length > 0 && (
-                            <div>
-                              <h5 className="text-xs font-medium text-muted-foreground mt-2 mb-1">Courses Included:</h5>
-                              <ScrollArea className="h-32 w-full rounded-md border p-2 bg-muted/20">
-                                <ul className="space-y-1">
-                                  {program.courseIds.map(courseId => allLibraryCourses.find(c => c.id === courseId)).filter(Boolean).map(course => (
-                                    <li key={course!.id} className="text-xs text-foreground p-1 rounded-sm flex items-center gap-1.5">
-                                      <BookOpen className="h-3 w-3 flex-shrink-0" /> {course!.title}
-                                      <Badge variant="ghost" className="ml-auto text-xs">{course!.level}</Badge>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </ScrollArea>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                      {currentUser?.role === 'Super Admin' && (
-                        <Button variant="outline" size="sm" className="mt-4 w-full" asChild>
-                          <Link href={`/admin/companies/${companyId}/manage-programs`}>Manage Assigned Programs</Link>
-                        </Button>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-sm text-muted-foreground italic">No programs currently assigned to this brand.</p>
-                      {currentUser?.role === 'Super Admin' && (
-                        <Button variant="outline" size="sm" className="mt-4 w-full" asChild>
-                          <Link href={`/admin/companies/${companyId}/manage-programs`}>Assign Programs</Link>
-                        </Button>
-                      )}
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+                {/* Assigned Programs Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><Layers className="h-5 w-5" /> Assigned Programs</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingProgramData ? (
+                      <div className="space-y-2"><Skeleton className="h-5 w-3/4" /><Skeleton className="h-4 w-full" /><Skeleton className="h-20 w-full" /></div>
+                    ) : assignedProgramsDetails.length > 0 ? (
+                      <div className="space-y-4">
+                        {assignedProgramsDetails.map(program => (
+                          <div key={program.id} className="border-b pb-3 last:border-b-0 last:pb-0">
+                            <h4 className="font-semibold text-foreground">{program.title}</h4>
+                            <p className="text-sm text-muted-foreground">{program.description}</p>
+                            <p className="text-sm text-muted-foreground mt-1">Base Price: <Badge variant="outline">{program.price}</Badge></p>
+                            {(program.courseIds?.length || 0) > 0 && allLibraryCourses.length > 0 && (
+                              <div>
+                                <h5 className="text-xs font-medium text-muted-foreground mt-2 mb-1">Courses Included:</h5>
+                                <ScrollArea className="h-32 w-full rounded-md border p-2 bg-muted/20">
+                                  <ul className="space-y-1">
+                                    {program.courseIds.map(courseId => allLibraryCourses.find(c => c.id === courseId)).filter(Boolean).map(course => (
+                                      <li key={course!.id} className="text-xs text-foreground p-1 rounded-sm flex items-center gap-1.5">
+                                        <BookOpen className="h-3 w-3 flex-shrink-0" /> {course!.title}
+                                        <Badge variant="ghost" className="ml-auto text-xs">{course!.level}</Badge>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </ScrollArea>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {isSuperAdmin && (
+                          <Button variant="outline" size="sm" className="mt-4 w-full" asChild>
+                            <Link href={`/admin/companies/${companyId}/manage-programs`}>Manage Assigned Programs</Link>
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm text-muted-foreground italic">No programs currently assigned to this brand.</p>
+                        {isSuperAdmin && (
+                          <Button variant="outline" size="sm" className="mt-4 w-full" asChild>
+                            <Link href={`/admin/companies/${companyId}/manage-programs`}>Assign Programs</Link>
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
             </div>
           </div>
           <div className="flex justify-end pt-6 border-t">
