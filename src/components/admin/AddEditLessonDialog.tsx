@@ -11,11 +11,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-// Textarea is no longer directly used for main content
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { Textarea } from '@/components/ui/textarea'; // Still needed for exerciseFilesInfo
+import { Textarea } from '@/components/ui/textarea';
 
 import {
   Form,
@@ -30,7 +29,7 @@ import { createLesson, updateLesson } from '@/lib/firestore-data';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import type { Lesson, LessonFormData } from '@/types/course';
 import { Upload, Link as LinkIcon, PlaySquare, Info, FileUp, Image as ImageIconLucide, Trash2, Bold, Italic, Underline, List, ListOrdered, Quote, Link as LinkEditorIcon, Code, Loader2, Video } from 'lucide-react';
-import RichTextEditor from '@/components/ui/RichTextEditor'; // Import the RichTextEditor
+import RichTextEditor from '@/components/ui/RichTextEditor';
 
 const lessonFormSchema = z.object({
   title: z.string().min(3, { message: 'Lesson title must be at least 3 characters.' }),
@@ -292,7 +291,7 @@ export function AddEditLessonDialog({
                       <FormItem>
                         <FormLabel className="text-base font-semibold">Name</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter lesson name" {...field} className="text-base py-2" />
+                          <Input placeholder="Enter lesson name" {...field} value={field.value ?? ''} className="text-base py-2" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -338,6 +337,7 @@ export function AddEditLessonDialog({
                                                      fill
                                                      style={{ objectFit: 'contain' }}
                                                      className="rounded-md"
+                                                     data-ai-hint="lesson image"
                                                      onError={() => field.onChange('')}
                                                  />
                                                  <Button
@@ -447,7 +447,7 @@ export function AddEditLessonDialog({
                         <FormLabel className="text-base font-semibold">Exercise Files (Optional)</FormLabel>
                         <FormLabel className="text-xs text-muted-foreground pt-1 block">Enter File URLs/Names (one per line)</FormLabel>
                         <FormControl>
-                          <Textarea rows={3} placeholder="worksheet.pdf\nhttps://example.com/resource.zip" {...field} value={field.value ?? ''} className="text-sm" />
+                          <Textarea rows={3} placeholder="worksheet.pdf&#10;https://example.com/resource.zip" {...field} value={field.value ?? ''} className="text-sm" />
                         </FormControl> <FormMessage />
                       </FormItem>
                     )}

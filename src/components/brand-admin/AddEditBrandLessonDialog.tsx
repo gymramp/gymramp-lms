@@ -10,9 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose, DialogPortal } from "@/components/ui/dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-// Textarea is no longer directly used for main content
 import { Progress } from "@/components/ui/progress";
-import { Textarea } from '@/components/ui/textarea'; // Still needed for exerciseFilesInfo
+import { Textarea } from '@/components/ui/textarea';
 import {
   Form,
   FormControl,
@@ -25,8 +24,8 @@ import { useToast } from '@/hooks/use-toast';
 import { createBrandLesson, updateBrandLesson } from '@/lib/brand-content-data';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import type { BrandLesson, BrandLessonFormData } from '@/types/course';
-import { Upload, PlaySquare, FileUp, Image as ImageIconLucide, Trash2, Bold, Italic, Underline, List, ListOrdered, Quote, Link as LinkEditorIcon, Code, Loader2, Video } from 'lucide-react';
-import RichTextEditor from '@/components/ui/RichTextEditor'; // Import the RichTextEditor
+import { Upload, PlaySquare, FileUp, Image as ImageIconLucide, Trash2, Loader2, Video } from 'lucide-react';
+import RichTextEditor from '@/components/ui/RichTextEditor';
 
 const brandLessonFormSchema = z.object({
   title: z.string().min(3, { message: 'Lesson title must be at least 3 characters.' }),
@@ -215,7 +214,7 @@ export function AddEditBrandLessonDialog({
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="md:col-span-2 space-y-6">
-                  <FormField control={form.control} name="title" render={({ field }) => ( <FormItem> <FormLabel className="text-base font-semibold">Name</FormLabel> <FormControl><Input placeholder="Enter lesson name" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+                  <FormField control={form.control} name="title" render={({ field }) => ( <FormItem> <FormLabel className="text-base font-semibold">Name</FormLabel> <FormControl><Input placeholder="Enter lesson name" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} />
                   <FormField
                     control={form.control}
                     name="content"
@@ -241,7 +240,7 @@ export function AddEditBrandLessonDialog({
                       <FormLabel className="text-base font-semibold">Featured Image</FormLabel>
                       <FormControl>
                         <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
-                          {field.value && !isImageUploading ? ( <div className="relative aspect-video bg-muted rounded-md"><Image src={field.value ?? ''} alt="Preview" fill style={{ objectFit: 'contain' }} className="rounded-md" onError={() => field.onChange('')} /><Button type="button" variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => field.onChange('')}><Trash2 className="h-4 w-4" /></Button></div> )
+                          {field.value && !isImageUploading ? ( <div className="relative aspect-video bg-muted rounded-md"><Image src={field.value ?? ''} alt="Preview" fill style={{ objectFit: 'contain' }} className="rounded-md" data-ai-hint="lesson image" onError={() => field.onChange('')} /><Button type="button" variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => field.onChange('')}><Trash2 className="h-4 w-4" /></Button></div> )
                           : isImageUploading ? ( <div className="py-8"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" /><Progress value={imageUploadProgress} className="w-full h-2" />{imageUploadError && <p className="text-xs text-destructive mt-2">{imageUploadError}</p>}</div> )
                           : ( <Label htmlFor="brand-lesson-image-upload" className="cursor-pointer block"><ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Upload image</p><Input id="brand-lesson-image-upload" type="file" accept="image/*" className="hidden" onChange={handleImageFileChange} disabled={isImageUploading} /></Label> )}
                         </div>
