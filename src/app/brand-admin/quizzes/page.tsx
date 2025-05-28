@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getUserByEmail } from '@/lib/user-data';
-import { getCompanyById } from '@/lib/company-data'; // Corrected import path
+import { getCompanyById } from '@/lib/company-data'; 
 import { useRouter } from 'next/navigation';
 
 const DEFAULT_ROWS_PER_PAGE = 10;
@@ -139,11 +139,11 @@ export default function BrandAdminQuizzesPage() {
   };
 
   if (!currentUser || !currentBrand || !isAuthorized) {
-    return <div className="container mx-auto py-12 text-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /><p className="mt-2">Verifying access...</p></div>;
+    return <div className="container mx-auto text-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /><p className="mt-2">Verifying access...</p></div>;
   }
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-primary">My Brand's Quizzes</h1>
         <Button onClick={handleAddQuiz} className="bg-accent text-accent-foreground hover:bg-accent/90">

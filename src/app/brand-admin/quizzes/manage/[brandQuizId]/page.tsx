@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowLeft, PlusCircle, Edit, Trash2, CheckCircle, Loader2, HelpCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { BrandQuiz, BrandQuestion, User, Company } from '@/types/course'; // Assuming Company is in course.ts for now or adjust import
+import type { BrandQuiz, BrandQuestion, User, Company } from '@/types/course'; 
 import { getBrandQuizById, deleteBrandQuestionFromBrandQuiz } from '@/lib/brand-content-data';
 import { AddEditBrandQuestionDialog } from '@/components/brand-admin/AddEditBrandQuestionDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -109,15 +109,15 @@ export default function ManageBrandQuizQuestionsPage() {
   };
 
   if (!currentUser || !currentBrand || !isAuthorized) {
-    return <div className="container mx-auto py-12 text-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    return <div className="container mx-auto text-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
   if (isLoading) {
-    return <div className="container py-12 text-center"><Skeleton className="h-10 w-1/2 mb-4"/><Skeleton className="h-64 w-full"/></div>;
+    return <div className="container text-center"><Skeleton className="h-10 w-1/2 mb-4"/><Skeleton className="h-64 w-full"/></div>;
   }
-  if (!quiz) return <div className="container py-12 text-center">Quiz not found.</div>;
+  if (!quiz) return <div className="container text-center">Quiz not found.</div>;
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <Button variant="outline" onClick={() => router.push('/brand-admin/quizzes')} className="mb-6">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to My Brand's Quizzes
       </Button>

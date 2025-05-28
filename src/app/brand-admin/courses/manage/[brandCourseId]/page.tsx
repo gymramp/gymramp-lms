@@ -12,11 +12,11 @@ import { useToast } from '@/hooks/use-toast';
 import type { BrandCourse, BrandLesson, BrandQuiz, Course } from '@/types/course';
 import type { User, Company } from '@/types/user';
 import { getBrandCourseById, getBrandLessonsByBrandId, getBrandQuizzesByBrandId, updateBrandCourseCurriculum } from '@/lib/brand-content-data';
-import { getCompanyById } from '@/lib/company-data'; // Corrected import path
-import { getUserByEmail } from '@/lib/user-data'; // getUserByEmail is from user-data
+import { getCompanyById } from '@/lib/company-data'; 
+import { getUserByEmail } from '@/lib/user-data'; 
 
 import { AddBrandLessonToCurriculumDialog } from '@/components/brand-admin/AddBrandLessonToCurriculumDialog';
-import { AddBrandQuizToCurriculumDialog } from '@/components/brand-admin/AddBrandQuizToCurriculumDialog'; // Import AddBrandQuizToCurriculumDialog
+import { AddBrandQuizToCurriculumDialog } from '@/components/brand-admin/AddBrandQuizToCurriculumDialog'; 
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -133,10 +133,18 @@ export default function ManageBrandCourseCurriculumPage() {
     if (itemToAdd && brandCourse) {
       const prefixedId = `${itemType}-${itemId}`;
       const newItem: BrandCurriculumItem = { id: prefixedId, type: itemType, data: itemToAdd };
-      setCurriculumItems(prev => [...prev, newItem]);
-      const newCurriculumIds = [...curriculumItems.map(item => item.id), prefixedId];
+      // Check if item already exists to prevent duplicates
+      if (curriculumItems.some(item => item.id === prefixedId)) {
+        toast({ title: "Item Already Added", description: "This item is already in the curriculum.", variant: "default" });
+        if (itemType === 'brandLesson') setIsAddLessonDialogOpen(false);
+        else setIsAddQuizDialogOpen(false);
+        return;
+      }
+      const newCurriculumItems = [...curriculumItems, newItem];
+      setCurriculumItems(newCurriculumItems); // Optimistic update
+      const newCurriculumIds = newCurriculumItems.map(item => item.id);
       await saveCurriculum(newCurriculumIds);
-      fetchBrandCourseAndData(); 
+      fetchBrandCourseAndData(); // Re-fetch to sync available items
     }
     if (itemType === 'brandLesson') setIsAddLessonDialogOpen(false);
     else setIsAddQuizDialogOpen(false);
@@ -144,10 +152,10 @@ export default function ManageBrandCourseCurriculumPage() {
 
   const handleRemoveItem = async (itemIdToRemove: string) => {
     const newCurriculumItems = curriculumItems.filter(item => item.id !== itemIdToRemove);
-    setCurriculumItems(newCurriculumItems);
+    setCurriculumItems(newCurriculumItems); // Optimistic update
     const newCurriculumIds = newCurriculumItems.map(item => item.id);
     await saveCurriculum(newCurriculumIds);
-    fetchBrandCourseAndData();
+    fetchBrandCourseAndData(); // Re-fetch to sync available items
   };
 
   const saveCurriculum = async (newCurriculumIds: string[]) => {
@@ -163,6 +171,8 @@ export default function ManageBrandCourseCurriculumPage() {
       }
     } catch (error) {
       toast({ title: "Save Error", description: "Could not save curriculum.", variant: "destructive" });
+      // Revert optimistic update if save fails by re-fetching
+      fetchBrandCourseAndData();
     } finally {
       setIsSaving(false);
     }
@@ -205,16 +215,16 @@ export default function ManageBrandCourseCurriculumPage() {
   );
 
   if (!currentUser || !currentBrandDetails || !isAuthorized) {
-    return <div className="container mx-auto py-12 text-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /><p className="mt-2">Verifying access...</p></div>;
+    return <div className="container mx-auto text-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /><p className="mt-2">Verifying access...</p></div>;
   }
   if (isLoading) {
-    return (<div className="container mx-auto py-12 md:py-16 lg:py-20 space-y-8"><Skeleton className="h-8 w-1/4" /><div className="flex items-center justify-between"><Skeleton className="h-10 w-64" /><div className="flex space-x-2"><Skeleton className="h-10 w-32" /><Skeleton className="h-10 w-32" /></div></div><Skeleton className="h-64 w-full" /></div>);
+    return (<div className="container mx-auto space-y-8"><Skeleton className="h-8 w-1/4" /><div className="flex items-center justify-between"><Skeleton className="h-10 w-64" /><div className="flex space-x-2"><Skeleton className="h-10 w-32" /><Skeleton className="h-10 w-32" /></div></div><Skeleton className="h-64 w-full" /></div>);
   }
-  if (!brandCourse) return <div className="container mx-auto py-12 text-center">Brand Course not found.</div>;
+  if (!brandCourse) return <div className="container mx-auto text-center">Brand Course not found.</div>;
 
   return (
     <DragDropContext onDragEnd={onDragEnd}>
-      <div className="container mx-auto py-12 md:py-16 lg:py-20">
+      <div className="container mx-auto">
         <Button variant="outline" onClick={() => router.push('/brand-admin/courses')} className="mb-6">
           <ArrowLeft className="mr-2 h-4 w-4" /> Back to My Brand's Courses
         </Button>
@@ -270,5 +280,3 @@ export default function ManageBrandCourseCurriculumPage() {
     </DragDropContext>
   );
 }
-
-    

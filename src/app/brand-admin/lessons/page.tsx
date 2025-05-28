@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getUserByEmail } from '@/lib/user-data';
-import { getCompanyById } from '@/lib/company-data'; // Corrected import path
+import { getCompanyById } from '@/lib/company-data'; 
 import { useRouter } from 'next/navigation';
 
 const DEFAULT_ROWS_PER_PAGE = 10;
@@ -177,7 +177,7 @@ export default function BrandAdminLessonsPage() {
 
   if (!currentUser || !currentBrand || !isAuthorized) {
     return (
-      <div className="container mx-auto py-12 text-center">
+      <div className="container mx-auto text-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         <p className="mt-2">Verifying access...</p>
       </div>
@@ -185,7 +185,7 @@ export default function BrandAdminLessonsPage() {
   }
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-primary">My Brand's Lessons</h1>
         <Button onClick={handleAddLesson} className="bg-accent text-accent-foreground hover:bg-accent/90">
@@ -234,8 +234,7 @@ export default function BrandAdminLessonsPage() {
                             <DropdownMenuItem onClick={() => handleEditLesson(lesson)}><Edit className="mr-2 h-4 w-4" />Edit Details</DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => openDeleteConfirmation(lesson)} disabled={isDeleting && lessonToDelete?.id === lesson.id}>
-                              {isDeleting && lessonToDelete?.id === lesson.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Trash2 className="mr-2 h-4 w-4" />}
-                              Delete Lesson
+                              {isDeleting && lessonToDelete?.id === lesson.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Trash2 className="mr-2 h-4 w-4" />} Delete Lesson
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -292,5 +291,3 @@ export default function BrandAdminLessonsPage() {
     </div>
   );
 }
-
-    
