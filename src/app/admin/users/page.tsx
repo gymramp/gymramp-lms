@@ -1,3 +1,4 @@
+
 // src/app/admin/users/page.tsx
 'use client';
 
@@ -24,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from '@/components/ui/input'; // Import Input for read-only display
 import { useToast } from '@/hooks/use-toast';
 import type { User, UserRole, Company, Location } from '@/types/user';
 import { getAllUsers as fetchAllSystemUsers, toggleUserStatus, deleteUser, updateUser, getUserByEmail, assignMissingCompanyToUsers, getUsersByCompanyId, getUserOverallProgress } from '@/lib/user-data';
@@ -50,7 +52,7 @@ type EmployeeWithOverallProgress = User & {
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<EmployeeWithOverallProgress[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<EmployeeWithOverallProgress[]>([]);
-  
+
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingFilters, setIsLoadingFilters] = useState(true);
 
@@ -58,7 +60,7 @@ export default function AdminUsersPage() {
   const [isEditUserDialogOpen, setIsEditUserDialogOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  
+
   const [accessibleBrandsForFilter, setAccessibleBrandsForFilter] = useState<Company[]>([]);
   const [allLocationsForSystem, setAllLocationsForSystem] = useState<Location[]>([]);
   const [locationsForLocationFilter, setLocationsForLocationFilter] = useState<Location[]>([]);
@@ -66,7 +68,7 @@ export default function AdminUsersPage() {
   const [selectedBrandIdForFilter, setSelectedBrandIdForFilter] = useState<string>('');
   const [selectedLocationIdForFilter, setSelectedLocationIdForFilter] = useState<string>('all');
   const [lastGeneratedPasswordForNewUser, setLastGeneratedPasswordForNewUser] = useState<string | null>(null);
-  
+
   const router = useRouter();
   const { toast } = useToast();
 
@@ -80,11 +82,11 @@ export default function AdminUsersPage() {
       setAccessibleBrandsForFilter(fetchedBrands);
 
       if (user.role === 'Manager' && user.assignedLocationIds) {
-        setAllLocationsForSystem(fetchedLocations.filter(loc => user.assignedLocationIds!.includes(loc.id)));
+        setAllLocationsForSystem(fetchedLocations.filter(loc => user.assignedLocationIds!.includes(loc.id) && loc.companyId === user.companyId));
       } else {
         setAllLocationsForSystem(fetchedLocations);
       }
-      
+
       let initialBrandId = '';
       if (user.role === 'Super Admin') {
         initialBrandId = 'all';
@@ -125,29 +127,39 @@ export default function AdminUsersPage() {
   useEffect(() => {
     if (isLoadingFilters || !currentUser) {
       setLocationsForLocationFilter([]);
-      setSelectedLocationIdForFilter('all');
+      // Do not reset selectedLocationIdForFilter here to 'all' unconditionally
       return;
     }
-    
+
     let currentBrandLocations: Location[] = [];
     if (selectedBrandIdForFilter === 'all') {
       if (currentUser.role === 'Super Admin') {
         currentBrandLocations = allLocationsForSystem;
-      } else { 
+      } else { // Admin or Owner viewing "All Accessible Brands"
         const brandIds = accessibleBrandsForFilter.map(b => b.id);
         currentBrandLocations = allLocationsForSystem.filter(loc => brandIds.includes(loc.companyId));
       }
-    } else if (selectedBrandIdForFilter) {
+    } else if (selectedBrandIdForFilter) { // Specific brand selected
       currentBrandLocations = allLocationsForSystem.filter(loc => loc.companyId === selectedBrandIdForFilter);
     }
-    
+
+    // If manager, further restrict locations to only those they are assigned to
     if (currentUser.role === 'Manager' && currentUser.assignedLocationIds) {
         setLocationsForLocationFilter(currentBrandLocations.filter(loc => currentUser.assignedLocationIds!.includes(loc.id)));
     } else {
         setLocationsForLocationFilter(currentBrandLocations);
     }
-    setSelectedLocationIdForFilter('all');
-  }, [selectedBrandIdForFilter, allLocationsForSystem, currentUser, accessibleBrandsForFilter, isLoadingFilters]);
+    // Only reset location filter if the list of available locations changes *and* the current selection is no longer valid
+    if (!currentBrandLocations.some(loc => loc.id === selectedLocationIdForFilter) && selectedLocationIdForFilter !== 'all') {
+        setSelectedLocationIdForFilter('all');
+    }
+
+  }, [selectedBrandIdForFilter, allLocationsForSystem, currentUser, accessibleBrandsForFilter, isLoadingFilters, selectedLocationIdForFilter]);
+
+  // Effect to reset location filter when brand selection changes
+  useEffect(() => {
+      setSelectedLocationIdForFilter('all');
+  }, [selectedBrandIdForFilter]);
 
   const fetchUsersForCurrentFilters = useCallback(async () => {
     if (!currentUser || isLoadingFilters) {
@@ -176,7 +188,7 @@ export default function AdminUsersPage() {
         } else if (currentUser.role === 'Manager' && currentUser.companyId) {
              usersData = await getUsersByCompanyId(currentUser.companyId);
         }
-        
+
         const usersWithProgressPromises = usersData.map(async (user) => {
             const overallProgress = await getUserOverallProgress(user.id);
             let overallStatus: EmployeeWithOverallProgress['overallStatus'] = "Not Started";
@@ -197,31 +209,32 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     fetchUsersForCurrentFilters();
-  }, [fetchUsersForCurrentFilters]);
+  }, [fetchUsersForCurrentFilters]); // This will re-run when currentUser or selectedBrandIdForFilter changes
 
   useEffect(() => {
     if (isLoading || !currentUser) { setFilteredUsers([]); return; }
-    
+
     let tempUsers = [...users];
 
     if (selectedLocationIdForFilter && selectedLocationIdForFilter !== 'all') {
          tempUsers = tempUsers.filter(user => (user.assignedLocationIds || []).includes(selectedLocationIdForFilter));
-    } else if (currentUser.role === 'Manager' && selectedLocationIdForFilter === 'all') {
+    } else if (currentUser.role === 'Manager' && selectedBrandIdForFilter === currentUser.companyId && selectedLocationIdForFilter === 'all') {
+        // Manager viewing "All Locations" (meaning all locations they are assigned to within their brand)
         const managerLocations = currentUser.assignedLocationIds || [];
         if (managerLocations.length > 0) {
-            tempUsers = tempUsers.filter(emp => 
-                emp.id === currentUser.id || 
+            tempUsers = tempUsers.filter(emp =>
+                emp.id === currentUser.id || // Always include the manager
                 (emp.assignedLocationIds || []).some(locId => managerLocations.includes(locId))
             );
-        } else { 
+        } else { // If manager has no locations assigned, they should only see themselves
             tempUsers = tempUsers.filter(emp => emp.id === currentUser.id);
         }
     }
     setFilteredUsers(tempUsers);
-  }, [users, selectedLocationIdForFilter, currentUser, isLoading]);
+  }, [users, selectedLocationIdForFilter, currentUser, isLoading, selectedBrandIdForFilter]); // Added selectedBrandIdForFilter
 
   const refreshUsersAndShowPassword = (user: User, tempPassword?: string) => {
-     fetchUsersForCurrentFilters(); 
+     fetchUsersForCurrentFilters();
      if (tempPassword) {
          setLastGeneratedPasswordForNewUser(tempPassword);
      }
@@ -231,8 +244,8 @@ export default function AdminUsersPage() {
      if (!currentUser || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role)) {
        toast({ title: "Permission Denied", variant: "destructive"}); return;
      }
-     if (currentUser.role === 'Super Admin' && accessibleBrandsForFilter.length === 0 && selectedBrandIdForFilter === 'all') {
-        toast({ title: "No Brands Exist", description: "Please add a brand first.", variant: "destructive"}); return;
+     if (currentUser.role === 'Super Admin' && accessibleBrandsForFilter.length === 0 && (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter)) {
+        toast({ title: "No Brands Exist", description: "Please add a brand first or select a specific brand.", variant: "destructive"}); return;
      }
      if (currentUser.role !== 'Super Admin' && !currentUser.companyId) {
         toast({ title: "Brand Required", description: "You must be associated with a brand to add users.", variant: "destructive"}); return;
@@ -242,9 +255,9 @@ export default function AdminUsersPage() {
   };
 
   const handleDeleteUser = async (userId: string, userName: string) => {
-    const success = await deleteUser(userId);
+    const success = await deleteUser(userId); // This is a soft delete
     if (success) {
-        fetchUsersForCurrentFilters(); 
+        fetchUsersForCurrentFilters();
         toast({ title: 'User Deactivated', description: `"${userName}" has been deactivated.` });
     } else {
          toast({ title: 'Error', description: `Failed to deactivate user "${userName}".`, variant: 'destructive' });
@@ -281,22 +294,25 @@ export default function AdminUsersPage() {
   const handleUserUpdated = () => { fetchUsersForCurrentFilters(); setIsEditUserDialogOpen(false); setUserToEdit(null); };
 
   const canPerformAction = (targetUser: User): boolean => {
-    if (!currentUser) return false; 
-    if (currentUser.role === 'Super Admin') return currentUser.id !== targetUser.id;
-    if (currentUser.id === targetUser.id) return false;
-    
+    if (!currentUser) return false;
+    if (currentUser.role === 'Super Admin') return currentUser.id !== targetUser.id; // SA cannot deactivate self
+    if (currentUser.id === targetUser.id) return false; // No user can deactivate self here
+
     const currentUserBrandId = currentUser.companyId;
     const targetUserBrandId = targetUser.companyId;
 
-    if (!currentUserBrandId || !targetUserBrandId) return false;
+    if (!currentUserBrandId) return false; // Current admin must belong to a brand
 
+    // Check if target user's brand is accessible to current admin
     const isTargetBrandAccessible = accessibleBrandsForFilter.some(b => b.id === targetUserBrandId);
     if (!isTargetBrandAccessible) return false;
+
 
     if (currentUser.role === 'Admin' || currentUser.role === 'Owner') {
         return ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[targetUser.role];
     }
     if (currentUser.role === 'Manager') {
+        // Manager can deactivate Staff or other Managers within their own brand
         return targetUserBrandId === currentUserBrandId && (targetUser.role === 'Staff' || targetUser.role === 'Manager');
     }
     return false;
@@ -304,13 +320,13 @@ export default function AdminUsersPage() {
 
   const canEditUser = (targetUser: User): boolean => {
      if (!currentUser) return false;
-     if (currentUser.id === targetUser.id) return true; 
+     if (currentUser.id === targetUser.id) return true; // Users can edit their own details
      if (currentUser.role === 'Super Admin') return true;
 
      const currentUserBrandId = currentUser.companyId;
      const targetUserBrandId = targetUser.companyId;
-     if (!currentUserBrandId || !targetUserBrandId) return false;
-     
+     if (!currentUserBrandId) return false;
+
      const isTargetBrandAccessible = accessibleBrandsForFilter.some(b => b.id === targetUserBrandId);
      if (!isTargetBrandAccessible) return false;
 
@@ -318,6 +334,7 @@ export default function AdminUsersPage() {
          return ROLE_HIERARCHY[currentUser.role] >= ROLE_HIERARCHY[targetUser.role];
      }
      if (currentUser.role === 'Manager') {
+         // Manager can edit Staff or other Managers within their own brand
          return targetUserBrandId === currentUserBrandId && (targetUser.role === 'Staff' || targetUser.role === 'Manager');
      }
      return false;
@@ -330,8 +347,15 @@ export default function AdminUsersPage() {
   };
 
   const getInitials = (name?: string | null): string => name ? name.split(' ').map(n => n[0]).join('').toUpperCase() : '??';
+  const managerPrimaryBrand = useMemo(() => {
+    if (currentUser?.role === 'Manager' && currentUser.companyId) {
+        return accessibleBrandsForFilter.find(b => b.id === currentUser.companyId);
+    }
+    return null;
+  }, [currentUser, accessibleBrandsForFilter]);
 
-  if (isLoadingFilters && !currentUser) { 
+
+  if (isLoadingFilters && !currentUser) {
     return ( <div className="container mx-auto"> <Skeleton className="h-10 w-1/3 mb-8" /> <div className="flex flex-wrap items-center gap-4 mb-6 p-4 bg-secondary rounded-lg shadow-sm"> <Skeleton className="h-8 w-24" /> <Skeleton className="h-10 w-48" /> <Skeleton className="h-10 w-48" /> <Skeleton className="h-10 w-32" /> </div> <Card><CardHeader><Skeleton className="h-8 w-1/4" /><Skeleton className="h-4 w-1/2 mt-2" /></CardHeader><CardContent><div className="space-y-4 py-4"> <Skeleton className="h-12 w-full" /> <Skeleton className="h-10 w-full" /> <Skeleton className="h-10 w-full" /> </div></CardContent></Card> </div> );
   }
   if (!currentUser || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role)) {
@@ -343,17 +367,17 @@ export default function AdminUsersPage() {
        <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-primary">User Management</h1>
          <div className="flex items-center gap-2">
-            <AddUserDialog 
-                onUserAdded={refreshUsersAndShowPassword} 
-                isOpen={isAddUserDialogOpen} 
+            <AddUserDialog
+                onUserAdded={refreshUsersAndShowPassword}
+                isOpen={isAddUserDialogOpen}
                 setIsOpen={setIsAddUserDialogOpen}
                 companies={accessibleBrandsForFilter}
-                locations={allLocationsForSystem}
-                currentUser={currentUser} 
+                locations={allLocationsForSystem} // Pass all locations system-wide (they'll be filtered in dialog based on selected company)
+                currentUser={currentUser}
             />
             <Button onClick={handleAddUserClick} className="bg-accent text-accent-foreground hover:bg-accent/90"
-                disabled={isLoadingFilters || !currentUser || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role) || (accessibleBrandsForFilter.length === 0 && currentUser.role === 'Super Admin' && selectedBrandIdForFilter === 'all')}
-                title={ (accessibleBrandsForFilter.length === 0 && currentUser?.role === 'Super Admin' && selectedBrandIdForFilter === 'all') ? "Add a brand first" : (!['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser?.role || 'Staff') ? "Permission Denied" : "")} >
+                disabled={isLoadingFilters || !currentUser || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role) || (accessibleBrandsForFilter.length === 0 && currentUser.role === 'Super Admin' && (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter))}
+                title={ (accessibleBrandsForFilter.length === 0 && currentUser?.role === 'Super Admin' && (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter)) ? "Add a brand first or select a specific brand" : (!['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser?.role || 'Staff') ? "Permission Denied" : "")} >
                 <PlusCircle className="mr-2 h-4 w-4" /> Add New User
             </Button>
          </div>
@@ -362,27 +386,34 @@ export default function AdminUsersPage() {
         {lastGeneratedPasswordForNewUser && ( <Alert variant="success" className="mb-6 border-green-300 bg-green-50 dark:bg-green-900/30"> <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400" /> <AlertTitle className="text-green-800 dark:text-green-300">New User Added!</AlertTitle> <AlertDescription className="text-green-700 dark:text-green-400"> The temporary password for the new user is: <strong className="font-bold">{lastGeneratedPasswordForNewUser}</strong><br/> A welcome email has been sent. They will be required to change this password on their first login. <Button variant="ghost" size="sm" onClick={() => setLastGeneratedPasswordForNewUser(null)} className="ml-4 text-green-700 hover:text-green-800">Dismiss</Button> </AlertDescription> </Alert> )}
 
        <div className="flex flex-wrap items-end gap-4 mb-6 p-4 bg-secondary rounded-lg shadow-sm">
-         <h2 className="text-lg font-semibold mr-4 self-center">Filters:</h2>
+         <h2 className="text-lg font-semibold mr-4 self-center text-foreground">Filters:</h2>
            <div className="flex flex-col space-y-1">
              <Label htmlFor="brand-filter">Brand:</Label>
-             <Select value={selectedBrandIdForFilter}
-               onValueChange={(value) => setSelectedBrandIdForFilter(value)}
-               disabled={isLoadingFilters || (accessibleBrandsForFilter.length === 0 && currentUser.role === 'Super Admin') || currentUser.role === 'Manager'}
-              >
-               <SelectTrigger id="brand-filter" className="w-[220px] bg-background h-10">
-                 <SelectValue placeholder="Select Brand" />
-               </SelectTrigger>
-               <SelectContent>
-                 {(currentUser.role === 'Super Admin' || ((currentUser.role === 'Admin' || currentUser.role === 'Owner') && accessibleBrandsForFilter.length > 1)) && <SelectItem value="all">All Accessible Brands</SelectItem>}
-                 {accessibleBrandsForFilter.map(brand => ( <SelectItem key={brand.id} value={brand.id}>{brand.name} {brand.parentBrandId ? "(Child)" : ""}</SelectItem> ))}
-                 {accessibleBrandsForFilter.length === 1 && (currentUser.role === 'Admin' || currentUser.role === 'Owner' || currentUser.role === 'Manager') &&
-                     <SelectItem value={accessibleBrandsForFilter[0].id}>{accessibleBrandsForFilter[0].name}</SelectItem>
-                 }
-                 {accessibleBrandsForFilter.length === 0 && currentUser.role === 'Super Admin' && (
-                    <SelectItem value="no-brands" disabled>No Brands Found</SelectItem>
-                 )}
-               </SelectContent>
-             </Select>
+             {currentUser?.role === 'Manager' && managerPrimaryBrand ? (
+                <Input
+                    id="brand-filter-manager"
+                    value={managerPrimaryBrand.name}
+                    readOnly
+                    disabled
+                    className="w-[220px] bg-background/50 h-10"
+                />
+             ) : (
+                <Select value={selectedBrandIdForFilter}
+                  onValueChange={(value) => setSelectedBrandIdForFilter(value)}
+                  disabled={isLoadingFilters || (accessibleBrandsForFilter.length === 0 && currentUser.role === 'Super Admin')}
+                >
+                  <SelectTrigger id="brand-filter" className="w-[220px] bg-background h-10">
+                    <SelectValue placeholder="Select Brand" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(currentUser.role === 'Super Admin' || ((currentUser.role === 'Admin' || currentUser.role === 'Owner') && accessibleBrandsForFilter.length > 1)) && <SelectItem value="all">All Accessible Brands</SelectItem>}
+                    {accessibleBrandsForFilter.map(brand => ( <SelectItem key={brand.id} value={brand.id}>{brand.name} {brand.parentBrandId ? "(Child)" : ""}</SelectItem> ))}
+                    {accessibleBrandsForFilter.length === 0 && currentUser.role === 'Super Admin' && (
+                        <SelectItem value="no-brands" disabled>No Brands Found</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+             )}
            </div>
            <div className="flex flex-col space-y-1">
                 <Label htmlFor="location-filter">Location:</Label>
@@ -395,6 +426,7 @@ export default function AdminUsersPage() {
                         <SelectItem value="all">All Locations</SelectItem>
                         {locationsForLocationFilter.map(location => ( <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem> ))}
                          {selectedBrandIdForFilter && selectedBrandIdForFilter !== 'all' && locationsForLocationFilter.length === 0 && ( <SelectItem value="no-locs" disabled>No locations in this brand</SelectItem> )}
+                         {(selectedBrandIdForFilter === 'all' && currentUser?.role !== 'Super Admin' && locationsForLocationFilter.length === 0) && (<SelectItem value="no-locs-all" disabled>No locations in accessible brands</SelectItem>)}
                     </SelectContent>
                 </Select>
             </div>
@@ -429,7 +461,7 @@ export default function AdminUsersPage() {
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" className="h-8 w-8 p-0" >
-                                      <span> 
+                                      <span>
                                         <span className="sr-only">Open menu for {user.name}</span>
                                         <MoreHorizontal className="h-4 w-4" />
                                       </span>
@@ -450,7 +482,7 @@ export default function AdminUsersPage() {
                                           disabled={!canPerformAction(user)}
                                         >
                                            <Trash2 className="mr-2 h-4 w-4" />
-                                          <span>Deactivate User</span>
+                                          <span>Deactivate User</span> {/* Changed from Delete User for clarity on soft delete */}
                                         </DropdownMenuItem>
                                       </>
                                     )}
@@ -467,17 +499,19 @@ export default function AdminUsersPage() {
        </CardContent>
       </Card>
 
-       {isEditUserDialogOpen && userToEdit && currentUser && ( 
-         <EditUserDialog 
-            isOpen={isEditUserDialogOpen} 
-            setIsOpen={setIsEditUserDialogOpen} 
-            user={userToEdit} 
-            onUserUpdated={handleUserUpdated} 
-            currentUser={currentUser} 
-            companies={accessibleBrandsForFilter}
-            locations={allLocationsForSystem}
-         /> 
+       {isEditUserDialogOpen && userToEdit && currentUser && (
+         <EditUserDialog
+            isOpen={isEditUserDialogOpen}
+            setIsOpen={setIsEditUserDialogOpen}
+            user={userToEdit}
+            onUserUpdated={handleUserUpdated}
+            currentUser={currentUser}
+            companies={accessibleBrandsForFilter} // Pass accessible brands
+            locations={allLocationsForSystem} // Pass all system locations (dialog filters by selected company)
+         />
         )}
     </div>
   );
 }
+
+    
