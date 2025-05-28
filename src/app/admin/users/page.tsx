@@ -1,4 +1,3 @@
-
 // src/app/admin/users/page.tsx
 'use client';
 
@@ -28,8 +27,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import type { UserRole, User, Company, Location } from '@/types/user';
-import { getAllUsers as fetchAllSystemUsers, toggleUserStatus, deleteUser, updateUser, getUserByEmail, assignMissingCompanyToUsers, getUsersByCompanyId, getUserOverallProgress } from '@/lib/user-data';
-import { getAllCompanies as fetchAllAccessibleBrandsForUser, getAllLocations as fetchAllSystemLocations, getLocationsByCompanyId, getCompanyById } from '@/lib/company-data';
+import { getUserByEmail, toggleUserStatus as toggleUserDataStatus, getAllUsers as fetchAllSystemUsers, toggleUserCourseAssignments, getUserOverallProgress, updateUser, getUsersByCompanyId } from '@/lib/user-data';
+import { getCompanyById, getLocationsByCompanyId, getAllLocations as fetchAllSystemLocations, getAllCompanies as fetchAllAccessibleBrandsForUser } from '@/lib/company-data';
 import { EditUserDialog } from '@/components/admin/EditUserDialog';
 import { AddUserDialog } from '@/components/admin/AddUserDialog';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -65,7 +64,7 @@ export default function AdminUsersPage() {
 
   const [accessibleBrandsForFilter, setAccessibleBrandsForFilter] = useState<Company[]>([]);
   const [userPrimaryBrandForManager, setUserPrimaryBrandForManager] = useState<Company | null>(null);
-  const [allLocationsForSystem, setAllLocationsForSystem] = useState<Location[]>([]);
+  const [allSystemLocations, setAllSystemLocations] = useState<Location[]>([]);
   const [locationsForLocationFilter, setLocationsForLocationFilter] = useState<Location[]>([]);
 
   const [selectedBrandIdForFilter, setSelectedBrandIdForFilter] = useState<string>('');
@@ -77,62 +76,62 @@ export default function AdminUsersPage() {
 
   const fetchInitialFilterData = useCallback(async (user: User) => {
     setIsLoadingFilters(true);
-    setUserPrimaryBrandForManager(null); 
-    console.log("[UsersPage fetchInitialFilterData] Starting. User:", user.email, "Role:", user.role, "User's companyId:", user.companyId);
+    setUserPrimaryBrandForManager(null);
+    console.log("[UsersPage fetchInitialFilterData] Starting for user:", user.email, "Role:", user.role);
     try {
-      const fetchedBrands = await fetchAllAccessibleBrandsForUser(user);
-      console.log("[UsersPage fetchInitialFilterData] Fetched accessible brands for user:", JSON.stringify(fetchedBrands, null, 2));
-      setAccessibleBrandsForFilter(fetchedBrands);
-
-      const fetchedLocations = await fetchAllSystemLocations(); // This fetches ALL locations in the system initially
-      let relevantLocations = fetchedLocations;
-
-      // Scope down allSystemLocations based on role for subsequent filtering
-      if (user.role === 'Manager' && user.companyId && user.assignedLocationIds) {
-        // For a manager, allSystemLocations should only contain locations they are *assigned to* within their *own brand*.
-        relevantLocations = fetchedLocations.filter(loc => user.assignedLocationIds!.includes(loc.id) && loc.companyId === user.companyId);
-        console.log("[UsersPage fetchInitialFilterData] Manager: Scoped allSystemLocations to their assigned locations in their brand:", JSON.stringify(relevantLocations, null, 2));
-      } else if ((user.role === 'Admin' || user.role === 'Owner') && user.companyId) {
-        // For Admin/Owner, allSystemLocations includes locations from their primary brand and its children.
-        const accessibleBrandIds = fetchedBrands.map(b => b.id);
-        relevantLocations = fetchedLocations.filter(loc => accessibleBrandIds.includes(loc.companyId));
-        console.log("[UsersPage fetchInitialFilterData] Admin/Owner: Scoped allSystemLocations by their accessible brands:", JSON.stringify(relevantLocations, null, 2));
-      }
-      // For Super Admin, relevantLocations remains all fetchedLocations.
-      setAllLocationsForSystem(relevantLocations);
-
+      let fetchedBrands: Company[] = [];
       let initialBrandId = '';
+      let relevantSystemLocations: Location[] = await fetchAllSystemLocations(); // Fetch all once
+
       if (user.role === 'Super Admin') {
+        fetchedBrands = await fetchAllAccessibleBrandsForUser(user);
         initialBrandId = 'all';
-      } else if (user.companyId) { // For Admin, Owner, Manager
-        initialBrandId = user.companyId; 
-        if (user.role === 'Manager') {
-          // `fetchedBrands` for a manager should *only* contain their specific brand.
-          const managerCompany = fetchedBrands.find(b => b.id === user.companyId);
-          console.log(`[UsersPage fetchInitialFilterData] Manager's user.companyId from user object: ${user.companyId}`);
-          console.log(`[UsersPage fetchInitialFilterData] Manager's company found in fetchedBrands:`, JSON.stringify(managerCompany, null, 2));
-          setUserPrimaryBrandForManager(managerCompany || null);
-          if (!managerCompany) {
-            console.error(`[UsersPage fetchInitialFilterData] CRITICAL: Manager's brand (ID: ${user.companyId}) was not found in their 'fetchedBrands' list. This indicates a data issue or a problem with fetchAllAccessibleBrandsForUser for Managers.`);
-          }
+      } else if ((user.role === 'Admin' || user.role === 'Owner') && user.companyId) {
+        fetchedBrands = await fetchAllAccessibleBrandsForUser(user);
+        initialBrandId = user.companyId;
+        const accessibleBrandIds = fetchedBrands.map(b => b.id);
+        relevantSystemLocations = relevantSystemLocations.filter(loc => accessibleBrandIds.includes(loc.companyId));
+      } else if (user.role === 'Manager' && user.companyId) {
+        console.log(`[UsersPage fetchInitialFilterData] Manager detected. companyId: ${user.companyId}`);
+        const managerBrand = await getCompanyById(user.companyId); // Direct fetch for manager's brand
+        if (managerBrand) {
+          fetchedBrands = [managerBrand]; // Manager only sees their own brand in the filter context
+          setUserPrimaryBrandForManager(managerBrand);
+          console.log(`[UsersPage fetchInitialFilterData] Manager's primary brand set:`, JSON.stringify(managerBrand, null, 2));
+        } else {
+          console.error(`[UsersPage fetchInitialFilterData] CRITICAL: Manager's brand (ID: ${user.companyId}) not found via direct fetch.`);
+          setUserPrimaryBrandForManager(null);
         }
+        initialBrandId = user.companyId;
+        if (user.assignedLocationIds && user.assignedLocationIds.length > 0) {
+            relevantSystemLocations = relevantSystemLocations.filter(loc => loc.companyId === user.companyId && user.assignedLocationIds!.includes(loc.id));
+        } else {
+            relevantSystemLocations = []; // Manager with no assigned locations sees no locations
+        }
+      } else {
+        initialBrandId = user.companyId || '';
       }
+      
+      console.log("[UsersPage fetchInitialFilterData] Fetched accessible brands:", JSON.stringify(fetchedBrands, null, 2));
+      setAccessibleBrandsForFilter(fetchedBrands);
+      setAllSystemLocations(relevantSystemLocations); // Set system locations scoped by role
+      
       setSelectedBrandIdForFilter(initialBrandId);
-      setSelectedLocationIdForFilter('all'); // Default to 'all' locations for the selected brand
-      console.log("[UsersPage fetchInitialFilterData] Initial filter state set. SelectedBrandIdForFilter:", initialBrandId, "SelectedLocationIdForFilter:", 'all');
+      setSelectedLocationIdForFilter('all');
+      console.log("[UsersPage fetchInitialFilterData] Initial filter state: SelectedBrandId:", initialBrandId, "SelectedLocationId: 'all'");
 
     } catch (error) {
-      console.error("[UsersPage fetchInitialFilterData] Error fetching initial filter data:", error);
-      toast({ title: "Error", description: "Could not load filter selection data.", variant: "destructive" });
+      console.error("[UsersPage fetchInitialFilterData] Error:", error);
+      toast({ title: "Error", description: "Could not load filter data.", variant: "destructive" });
     } finally {
       setIsLoadingFilters(false);
       console.log("[UsersPage fetchInitialFilterData] Finished.");
     }
-  }, [toast]); 
+  }, [toast]);
 
   useEffect(() => {
+    setIsLoadingFilters(true);
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setIsLoadingFilters(true);
       if (firebaseUser && firebaseUser.email) {
         const userDetails = await getUserByEmail(firebaseUser.email);
         setCurrentUser(userDetails);
@@ -177,7 +176,8 @@ export default function AdminUsersPage() {
         } else if (selectedBrandIdForFilter && accessibleBrandsForFilter.some(b => b.id === selectedBrandIdForFilter)) {
           usersData = await getUsersByCompanyId(selectedBrandIdForFilter);
         }
-      } else if (currentUser.role === 'Manager' && currentUser.companyId === selectedBrandIdForFilter) {
+      } else if (currentUser.role === 'Manager' && currentUser.companyId) {
+         // For Manager, selectedBrandIdForFilter should always be their companyId
          usersData = await getUsersByCompanyId(currentUser.companyId);
       }
 
@@ -189,7 +189,7 @@ export default function AdminUsersPage() {
         return { ...user, overallProgress, overallStatus };
       });
       setUsers(await Promise.all(usersWithProgressPromises));
-      console.log(`[UsersPage fetchUsersForCurrentFilters] Fetched ${usersData.length} users for brand ${selectedBrandIdForFilter}.`);
+      console.log(`[UsersPage fetchUsersForCurrentFilters] Fetched ${usersData.length} base users for brand filter ${selectedBrandIdForFilter}.`);
     } catch (error) {
       console.error("[UsersPage fetchUsersForCurrentFilters] Error fetching users:", error);
       toast({ title: "Error", description: "Could not load users.", variant: "destructive" });
@@ -209,39 +209,46 @@ export default function AdminUsersPage() {
       return;
     }
     let currentBrandLocations: Location[] = [];
-    // allLocationsForSystem is already pre-filtered by role in fetchInitialFilterData
-    if (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter) {
-        currentBrandLocations = allLocationsForSystem;
-    } else if (selectedBrandIdForFilter) {
-      // If a specific brand is selected, filter allSystemLocations for that brand.
-      // This ensures that if allSystemLocations was scoped for a Manager, it remains scoped.
-      currentBrandLocations = allLocationsForSystem.filter(loc => loc.companyId === selectedBrandIdForFilter);
+    
+    if (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter) { // "All Accessible Brands"
+      if (currentUser.role === 'Super Admin') {
+        currentBrandLocations = allSystemLocations; // SA with "All" selected sees all system locations
+      } else { // Admin/Owner with "All Accessible" selected
+        currentBrandLocations = allSystemLocations; // allSystemLocations is already scoped for Admin/Owner
+      }
+    } else if (selectedBrandIdForFilter) { // Specific brand selected
+      currentBrandLocations = allSystemLocations.filter(loc => loc.companyId === selectedBrandIdForFilter);
     }
     
     setLocationsForLocationFilter(currentBrandLocations);
     
+    // Reset location filter if the new list doesn't contain the currently selected location (unless it's 'all')
     if (!currentBrandLocations.some(loc => loc.id === selectedLocationIdForFilter) && selectedLocationIdForFilter !== 'all') {
         setSelectedLocationIdForFilter('all');
     }
-  }, [selectedBrandIdForFilter, allLocationsForSystem, currentUser, isLoadingFilters, selectedLocationIdForFilter]);
+  }, [selectedBrandIdForFilter, allSystemLocations, currentUser, isLoadingFilters, selectedLocationIdForFilter]);
 
   useEffect(() => {
     if (isLoading || !currentUser) { setFilteredUsers([]); return; }
     let tempUsers = [...users];
 
+    // Filter by location
     if (selectedLocationIdForFilter && selectedLocationIdForFilter !== 'all') {
          tempUsers = tempUsers.filter(user => (user.assignedLocationIds || []).includes(selectedLocationIdForFilter));
     } else if (currentUser.role === 'Manager' && selectedBrandIdForFilter === currentUser.companyId && selectedLocationIdForFilter === 'all') {
+        // For a Manager viewing "All Locations" (which means all locations they are assigned to)
         const managerLocations = currentUser.assignedLocationIds || [];
         if (managerLocations.length > 0) {
             tempUsers = tempUsers.filter(emp =>
-                emp.id === currentUser.id || 
-                (emp.assignedLocationIds || []).some(locId => managerLocations.includes(locId))
+                emp.id === currentUser.id || // Always include the manager themselves
+                (emp.assignedLocationIds || []).some(locId => managerLocations.includes(locId)) // Include employees in any of manager's locations
             );
         } else { 
+            // Manager assigned to no locations can only see themselves
             tempUsers = tempUsers.filter(emp => emp.id === currentUser.id);
         }
     }
+    console.log(`[UsersPage setFilteredUsers] After location filter ('${selectedLocationIdForFilter}'), ${tempUsers.length} users shown.`);
     setFilteredUsers(tempUsers);
   }, [users, selectedLocationIdForFilter, currentUser, isLoading, selectedBrandIdForFilter]);
 
@@ -267,7 +274,7 @@ export default function AdminUsersPage() {
   };
 
   const handleDeleteUser = async (userId: string, userName: string) => {
-    const success = await toggleUserStatus(userId); 
+    const success = await toggleUserDataStatus(userId); 
     if (success) {
         fetchUsersForCurrentFilters();
         toast({ title: 'User Deactivated', description: `"${userName}" has been deactivated.` });
@@ -284,10 +291,8 @@ export default function AdminUsersPage() {
     if (!targetUser) {
          toast({ title: "Error", description: "User not found.", variant: "destructive"}); return;
     }
-    if (!canPerformAction(targetUser)) {
-        toast({ title: "Permission Denied", description: "You do not have permission to change this user's status.", variant: "destructive"}); return;
-    }
-    const updatedUser = await toggleUserStatus(userId);
+    // Permission logic is now handled by EmployeeTable's canPerformGeneralAction
+    const updatedUser = await toggleUserDataStatus(userId);
     if (updatedUser) {
       fetchUsersForCurrentFilters();
       toast({ title: currentIsActive ? "User Deactivated" : "User Reactivated", description: `${userName}'s status updated.`, variant: currentIsActive ? "destructive" : "default" });
@@ -297,59 +302,20 @@ export default function AdminUsersPage() {
   };
 
   const openEditUserDialog = (userToEditData: User) => {
-      if (!canEditUser(userToEditData)) {
-          toast({ title: "Permission Denied", description: "You cannot edit this user's details.", variant: "destructive"}); return;
-      }
+      // Permission to edit is handled by EmployeeTable's canEditUser
       setUserToEdit(userToEditData); setIsEditUserDialogOpen(true);
   };
 
   const handleUserUpdated = () => { fetchUsersForCurrentFilters(); setIsEditUserDialogOpen(false); setUserToEdit(null); };
 
-  const canPerformAction = (targetUser: User): boolean => {
-    if (!currentUser) return false;
-    if (currentUser.role === 'Super Admin') return currentUser.id !== targetUser.id; 
-    if (currentUser.id === targetUser.id) return false; 
-
-    const currentUserBrandId = currentUser.companyId;
-    const targetUserBrandId = targetUser.companyId;
-
-    if (!currentUserBrandId) return false; 
-
-    const isTargetBrandAccessibleByCurrentUser = accessibleBrandsForFilter.some(b => b.id === targetUserBrandId);
-    if (!isTargetBrandAccessibleByCurrentUser) return false;
-
-    if (currentUser.role === 'Manager') {
-        return targetUserBrandId === currentUserBrandId && (targetUser.role === 'Staff' || targetUser.role === 'Manager');
-    }
-    if (currentUser.role === 'Admin' || currentUser.role === 'Owner') {
-        return ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[targetUser.role];
-    }
-    return false;
-  };
-
-  const canEditUser = (targetUser: User): boolean => {
-     if (!currentUser) return false;
-     if (currentUser.id === targetUser.id) return true; 
-     if (currentUser.role === 'Super Admin') return true;
-
-     const currentUserBrandId = currentUser.companyId;
-     const targetUserBrandId = targetUser.companyId;
-     if (!currentUserBrandId) return false;
-
-     const isTargetBrandAccessibleByCurrentUser = accessibleBrandsForFilter.some(b => b.id === targetUserBrandId);
-     if (!isTargetBrandAccessibleByCurrentUser) return false;
-
-     if ((currentUser.role === 'Admin' || currentUser.role === 'Owner')) {
-         return ROLE_HIERARCHY[currentUser.role] >= ROLE_HIERARCHY[targetUser.role];
-     }
-     if (currentUser.role === 'Manager') {
-         return targetUserBrandId === currentUserBrandId && (targetUser.role === 'Staff' || targetUser.role === 'Manager');
-     }
-     return false;
-  };
 
   const handleResetFilters = () => {
-      const initialBrandId = currentUser?.role === 'Super Admin' ? 'all' : (currentUser?.companyId || '');
+      let initialBrandId = '';
+      if (currentUser?.role === 'Super Admin') {
+        initialBrandId = 'all';
+      } else if (currentUser?.companyId) {
+        initialBrandId = currentUser.companyId;
+      }
       setSelectedBrandIdForFilter(initialBrandId);
       setSelectedLocationIdForFilter('all');
   };
@@ -360,6 +326,9 @@ export default function AdminUsersPage() {
   if (!currentUser || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role)) {
      return <div className="container mx-auto text-center">Access Denied. Redirecting...</div>;
   }
+  
+  const managerBrandNameForDisplay = userPrimaryBrandForManager?.name || (isLoadingFilters ? 'Loading brand...' : 'Brand Not Found');
+
 
   return (
     <div className="container mx-auto">
@@ -383,7 +352,7 @@ export default function AdminUsersPage() {
              {currentUser?.role === 'Manager' ? (
                 <Input
                     id="brand-filter-users-manager"
-                    value={isLoadingFilters ? 'Loading brand...' : userPrimaryBrandForManager?.name || 'Brand Not Found'}
+                    value={managerBrandNameForDisplay}
                     readOnly
                     disabled
                     className="w-[220px] bg-background/50 h-10"
@@ -420,7 +389,7 @@ export default function AdminUsersPage() {
                         {locationsForLocationFilter.map(location => ( <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem> ))}
                          {selectedBrandIdForFilter && selectedBrandIdForFilter !== 'all' && locationsForLocationFilter.length === 0 && ( <SelectItem value="no-locs" disabled>No locations in this brand</SelectItem> )}
                          {(selectedBrandIdForFilter === 'all' && currentUser?.role !== 'Super Admin' && locationsForLocationFilter.length === 0) && (<SelectItem value="no-locs-all" disabled>No locations in accessible brands</SelectItem>)}
-                         {(selectedBrandIdForFilter === 'all' && currentUser?.role === 'Super Admin' && allLocationsForSystem.length === 0) && (<SelectItem value="no-locs-sys" disabled>No locations in system</SelectItem>)}
+                         {(selectedBrandIdForFilter === 'all' && currentUser?.role === 'Super Admin' && allSystemLocations.length === 0) && (<SelectItem value="no-locs-sys" disabled>No locations in system</SelectItem>)}
                     </SelectContent>
                 </Select>
             </div>
@@ -435,11 +404,11 @@ export default function AdminUsersPage() {
             <EmployeeTable
                 employees={filteredUsers}
                 onToggleEmployeeStatus={handleToggleUserStatus}
-                onAssignCourse={() => { /* Placeholder for now, or pass a function to open AssignCourseDialog */ }}
+                onAssignCourse={() => { /* Placeholder for now, handled by Dashboard's dialog */ }}
                 onEditUser={openEditUserDialog}
                 currentUser={currentUser}
-                locations={allLocationsForSystem} // Pass all locations relevant to the current admin's scope
-                companies={accessibleBrandsForFilter} // Pass brands accessible to the current admin
+                locations={allSystemLocations}
+                companies={accessibleBrandsForFilter}
             />
            )}
        </CardContent>
@@ -450,7 +419,7 @@ export default function AdminUsersPage() {
         isOpen={isAddUserDialogOpen}
         setIsOpen={setIsAddUserDialogOpen}
         companies={accessibleBrandsForFilter}
-        locations={allLocationsForSystem}
+        locations={allSystemLocations} 
         currentUser={currentUser}
       />
       {isEditUserDialogOpen && userToEdit && currentUser && (
@@ -460,8 +429,8 @@ export default function AdminUsersPage() {
             user={userToEdit}
             onUserUpdated={handleUserUpdated}
             currentUser={currentUser}
-            companies={accessibleBrandsForFilter}
-            locations={allLocationsForSystem}
+            companies={accessibleBrandsForFilter} 
+            locations={allSystemLocations}
          />
         )}
     </div>
