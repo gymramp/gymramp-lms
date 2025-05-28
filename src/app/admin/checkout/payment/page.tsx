@@ -14,7 +14,7 @@ import { processCheckout } from '@/actions/checkout';
 import { createPaymentIntent } from '@/actions/stripe';
 import type { CheckoutFormData, RevenueSharePartner } from '@/types/user';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Label } from "@/components/ui/label"; // Added Label import
+import { Label } from "@/components/ui/label"; 
 import { getProgramById } from '@/lib/firestore-data';
 import type { Program } from '@/types/course';
 
@@ -119,7 +119,7 @@ function PaymentFormElements({ orderDetails, programTitle, onCheckoutComplete }:
 
       if (result.success && result.tempPassword) {
         toast({ title: "Checkout Complete!", description: `Brand "${orderDetails.companyName}" and admin user created.` });
-        onCheckoutComplete(result.tempPassword); // Pass password to parent
+        onCheckoutComplete(result.tempPassword); 
         router.push(`/admin/companies/${result.companyId}/edit`);
       } else {
         throw new Error(result.error || "Checkout failed after payment/finalization.");
@@ -133,7 +133,6 @@ function PaymentFormElements({ orderDetails, programTitle, onCheckoutComplete }:
   };
 
   return (
-    // No <Form> needed here as we're not using react-hook-form for this simple payment button
     <form onSubmit={(e) => { e.preventDefault(); handlePaymentSubmit(); }} className="space-y-6">
       <Card>
         <CardHeader><CardTitle>Step 2: Payment & Account Finalization</CardTitle></CardHeader>
@@ -183,7 +182,7 @@ function PaymentPageContent() {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null); // State for password
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null); 
   const { toast } = useToast();
 
   useEffect(() => {
@@ -242,7 +241,7 @@ function PaymentPageContent() {
             throw new Error(paymentIntentResult.error || "Failed to initialize payment.");
           }
         } else {
-          setClientSecret('pi_0_free_checkout'); // Placeholder for $0 amounts
+          setClientSecret('pi_0_free_checkout'); 
         }
       } catch (e: any) {
         console.error("Error loading payment page:", e);
@@ -270,7 +269,7 @@ function PaymentPageContent() {
 
   if (error || !orderDetails) {
     return (
-      <div className="container mx-auto py-12 text-center">
+      <div className="container mx-auto text-center">
         <Alert variant="destructive" className="max-w-md mx-auto">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error Loading Payment Page</AlertTitle>
@@ -289,7 +288,7 @@ function PaymentPageContent() {
       : undefined;
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20 flex flex-col items-center gap-6">
+    <div className="container mx-auto flex flex-col items-center gap-6">
       {generatedPassword && (
         <Alert variant="success" className="max-w-md w-full border-green-300 bg-green-50 dark:bg-green-900/30">
           <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -306,7 +305,6 @@ function PaymentPageContent() {
             <PaymentFormElements orderDetails={orderDetails} programTitle={programTitle} onCheckoutComplete={handleCheckoutCompletion} />
           </Elements>
         ) : orderDetails.finalTotalAmountCents <= 0 ? (
-          // Render form for $0 checkout (no Stripe elements needed, but keeps structure)
           <PaymentFormElements orderDetails={orderDetails} programTitle={programTitle} onCheckoutComplete={handleCheckoutCompletion} />
         ) : (
           <Alert variant="destructive" className="max-w-md mx-auto">
@@ -327,3 +325,5 @@ export default function AdminCheckoutPaymentPage() {
     </Suspense>
   );
 }
+
+    

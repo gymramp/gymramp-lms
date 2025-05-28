@@ -16,11 +16,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { ArrowLeft, BookCheck, Layers, Loader2 } from 'lucide-react';
+import { ArrowLeft, BookCheck, Layers, Loader2, Save } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod'; // Added this import
+import { zodResolver } from '@hookform/resolvers/zod';
 
 const manageCoursesFormSchema = z.object({
   assignedCourseIds: z.array(z.string()).optional(),
@@ -64,7 +64,10 @@ export default function ManageProgramCoursesPage() {
   }, [router, toast]);
 
   const fetchProgramAndCourses = useCallback(async () => {
-    if (!programId || !currentUser || currentUser.role !== 'Super Admin') return;
+    if (!programId || !currentUser || currentUser.role !== 'Super Admin') {
+        setIsLoading(false);
+        return;
+    }
     setIsLoading(true);
     try {
       const [programData, coursesData] = await Promise.all([
@@ -115,12 +118,12 @@ export default function ManageProgramCoursesPage() {
   };
 
   if (!currentUser || currentUser.role !== 'Super Admin') {
-    return <div className="container mx-auto py-12 text-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    return <div className="container mx-auto text-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
 
   if (isLoading) {
     return (
-      <div className="container mx-auto py-12 md:py-16 lg:py-20 space-y-6">
+      <div className="container mx-auto space-y-6">
         <Skeleton className="h-8 w-1/4" />
         <Skeleton className="h-10 w-1/2" />
         <Card>
@@ -133,11 +136,11 @@ export default function ManageProgramCoursesPage() {
   }
 
   if (!program) {
-    return <div className="container mx-auto py-12 text-center">Program not found.</div>;
+    return <div className="container mx-auto text-center">Program not found.</div>;
   }
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <Button variant="outline" onClick={() => router.push('/admin/programs')} className="mb-6">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Programs
       </Button>
@@ -181,9 +184,10 @@ export default function ManageProgramCoursesPage() {
                                           : currentIds.filter((value) => value !== course.id);
                                         field.onChange(newIds);
                                       }}
+                                      id={`course-${course.id}`}
                                     />
                                   </FormControl>
-                                  <FormLabel className="font-normal flex items-center gap-2 cursor-pointer flex-1">
+                                  <FormLabel htmlFor={`course-${course.id}`} className="font-normal flex items-center gap-2 cursor-pointer flex-1">
                                     <BookCheck className="h-4 w-4 text-muted-foreground" />
                                     {course.title}
                                     <span className="text-xs text-muted-foreground">({course.level})</span>
@@ -204,7 +208,7 @@ export default function ManageProgramCoursesPage() {
           <div className="flex justify-end">
             <Button type="submit" size="lg" className="bg-primary hover:bg-primary/90" disabled={isSaving}>
               {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Course Assignments
+              <Save className="mr-2 h-4 w-4" /> Save Course Assignments
             </Button>
           </div>
         </form>
@@ -212,3 +216,5 @@ export default function ManageProgramCoursesPage() {
     </div>
   );
 }
+
+    

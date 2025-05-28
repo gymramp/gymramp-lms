@@ -105,9 +105,9 @@ export default function AdminCustomersPage() {
     setFilteredRecords(filtered);
   }, [searchTerm, purchaseRecords]);
 
-  const formatDate = (timestamp: Timestamp | undefined): string => {
-    if (!timestamp) return 'N/A';
-    return timestamp.toDate().toLocaleDateString();
+  const formatDate = (timestampString: string | undefined | null): string => {
+    if (!timestampString) return 'N/A';
+    return new Date(timestampString).toLocaleDateString();
   };
 
   const openDeleteConfirmation = (record: CustomerPurchaseRecord) => {
@@ -136,11 +136,11 @@ export default function AdminCustomersPage() {
   };
 
   if (!currentUser || currentUser.role !== 'Super Admin') {
-    return <div className="container mx-auto py-12 text-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
+    return <div className="container mx-auto text-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
   }
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-primary flex items-center gap-2">
           <ShoppingBag className="h-7 w-7" /> Customer Purchases
@@ -194,7 +194,7 @@ export default function AdminCustomersPage() {
                     </TableCell>
                     <TableCell>{record.selectedProgramTitle || 'N/A'}</TableCell>
                     <TableCell>{record.adminUserEmail}</TableCell>
-                    <TableCell>{formatDate(record.purchaseDate)}</TableCell>
+                    <TableCell>{formatDate(record.purchaseDate as string | undefined)}</TableCell>
                     <TableCell className="text-right">${record.totalAmountPaid.toFixed(2)}</TableCell>
                     <TableCell>
                       {record.revenueSharePartners && record.revenueSharePartners.length > 0 ? (
@@ -274,3 +274,5 @@ export default function AdminCustomersPage() {
     </div>
   );
 }
+
+    

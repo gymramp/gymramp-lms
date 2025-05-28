@@ -14,6 +14,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { getAllPrograms, getCourseById, getAllCourses } from '@/lib/firestore-data'; // Fetch programs
+import { processCheckout } from '@/actions/checkout'; // Corrected import path
+import { createTestPaymentIntent } from '@/actions/stripe'; // For the test payment
 import type { Program, Course } from '@/types/course'; // Import Program type
 import type { User, RevenueSharePartner } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
@@ -24,6 +26,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Import Select
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
 
 const checkoutSetupFormSchema = z.object({
   customerName: z.string().min(2, { message: 'Customer name is required.' }),
@@ -56,6 +62,10 @@ interface CheckoutSetupFormContentProps {
   selectedProgramId: string | null;
   setSelectedProgramId: React.Dispatch<React.SetStateAction<string | null>>;
   coursesInSelectedProgram: Course[];
+  finalTotalAmount: number; // Pass finalTotalAmount for Stripe button
+  clientSecret: string | null; // Pass clientSecret for Stripe Elements
+  paymentIntentError: string | null; // Pass error for Stripe
+  isPaying: boolean; // Pass paying state for Stripe
 }
 
 function CheckoutSetupFormContent({
@@ -65,10 +75,14 @@ function CheckoutSetupFormContent({
   selectedProgramId,
   setSelectedProgramId,
   coursesInSelectedProgram,
+  finalTotalAmount,
+  clientSecret,
+  paymentIntentError,
+  isPaying,
 }: CheckoutSetupFormContentProps) {
   const { toast } = useToast();
   const router = useRouter();
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isProcessingSetup, setIsProcessingSetup] = useState(false);
   const [discountPercentInput, setDiscountPercentInput] = useState('');
 
   const setupForm = useForm<CheckoutSetupFormValues>({
@@ -94,20 +108,21 @@ function CheckoutSetupFormContent({
   
   const selectedProgram = allPrograms.find(p => p.id === selectedProgramId);
 
-  const subtotalAmount = (selectedProgram && typeof selectedProgram.price === 'string') ? parseFloat(selectedProgram.price.replace(/[$,/mo]/gi, '')) : 0;
-  const discountAmount = (subtotalAmount * (parseFloat(discountPercentInput) || 0)) / 100;
-  const finalTotalAmount = subtotalAmount - discountAmount;
+  const localSubtotalAmount = (selectedProgram && typeof selectedProgram.price === 'string') ? parseFloat(selectedProgram.price.replace(/[$,/mo]/gi, '')) : 0;
+  const localDiscountAmount = (localSubtotalAmount * (parseFloat(discountPercentInput) || 0)) / 100;
+  const localFinalTotalAmount = localSubtotalAmount - localDiscountAmount;
+
 
   const onProceedToPayment = async (formData: CheckoutSetupFormValues) => {
-    setIsProcessing(true);
+    setIsProcessingSetup(true);
     
     if (!selectedProgram) {
       toast({ title: "Error", description: "Please select a Program before proceeding.", variant: "destructive" });
-      setIsProcessing(false);
+      setIsProcessingSetup(false);
       return;
     }
 
-    const finalTotalAmountCents = Math.round(finalTotalAmount * 100);
+    const finalTotalAmountCents = Math.round(localFinalTotalAmount * 100);
 
     const revenueShareParams = formData.revenueSharePartners && formData.revenueSharePartners.length > 0
         ? { revenueSharePartners: JSON.stringify(formData.revenueSharePartners.map(p => ({ name: p.name, companyName: p.companyName || null, percentage: p.percentage, shareBasis: p.shareBasis }))) }
@@ -126,14 +141,14 @@ function CheckoutSetupFormContent({
       selectedProgramId: formData.selectedProgramId,
       ...(maxUsers !== null && maxUsers !== undefined && { maxUsers: String(maxUsers) }),
       finalTotalAmountCents: String(finalTotalAmountCents),
-      subtotalAmount: String(subtotalAmount),
+      subtotalAmount: String(localSubtotalAmount),
       appliedDiscountPercent: String(parseFloat(discountPercentInput) || 0),
-      appliedDiscountAmount: String(discountAmount),
+      appliedDiscountAmount: String(localDiscountAmount),
     });
 
     toast({ title: "Information Saved", description: "Proceeding to payment..." });
     router.push(`/admin/checkout/payment?${queryParams.toString()}`);
-    setIsProcessing(false); // Reset processing state
+    setIsProcessingSetup(false);
   };
 
   useEffect(() => {
@@ -349,18 +364,20 @@ function CheckoutSetupFormContent({
             </Card>
         )}
 
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2">
-            <CardHeader><CardTitle className="flex items-center gap-2"><Tag className="h-5 w-5" /> Account Order Summary</CardTitle></CardHeader>
+        {/* Combined Order Summary & Proceed Button Card */}
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Tag className="h-5 w-5" /> Account Order Summary</CardTitle>
+                <CardDescription>Review the details before proceeding to payment & finalization.</CardDescription>
+            </CardHeader>
             <CardContent className="space-y-3">
-              {selectedProgram ? (
+                {selectedProgram ? (
                 <>
-                  <div className="flex justify-between text-sm"><span>Program Base Price (One-time):</span> <span className="font-medium">${subtotalAmount.toFixed(2)}</span></div>
-                  <FormItem>
+                    <div className="flex justify-between text-sm"><span>Program Base Price (One-time):</span> <span className="font-medium">${localSubtotalAmount.toFixed(2)}</span></div>
+                    <FormItem>
                     <FormLabel htmlFor="discountPercent" className="text-sm">Discount (% on Program Base Price):</FormLabel>
                     <FormControl>
-                      <Input
+                        <Input
                         id="discountPercent"
                         type="number"
                         min="0"
@@ -369,38 +386,28 @@ function CheckoutSetupFormContent({
                         onChange={(e) => setDiscountPercentInput(e.target.value)}
                         placeholder="e.g., 10"
                         className="h-9"
-                      />
+                        />
                     </FormControl>
-                  </FormItem>
-                  {discountAmount > 0 && <div className="flex justify-between text-sm text-green-600"><span>Discount Applied:</span> <span className="font-medium">-${discountAmount.toFixed(2)}</span></div>}
-                  <hr />
-                  <div className="flex justify-between text-lg font-bold text-primary"><span>Total Account Value (One-time):</span> <span>${finalTotalAmount.toFixed(2)}</span></div>
+                    </FormItem>
+                    {localDiscountAmount > 0 && <div className="flex justify-between text-sm text-green-600"><span>Discount Applied:</span> <span className="font-medium">-${localDiscountAmount.toFixed(2)}</span></div>}
+                    <hr />
+                    <div className="flex justify-between text-lg font-bold text-primary"><span>Total Account Value (One-time):</span> <span>${localFinalTotalAmount.toFixed(2)}</span></div>
                 </>
-              ) : (
+                ) : (
                 <p className="text-muted-foreground italic">Select a Program to see the order summary.</p>
-              )}
+                )}
             </CardContent>
-          </Card>
-
-          <div className="lg:col-span-1 flex items-end">
-            <Card className="w-full">
-              <CardHeader>
-                <CardTitle>Proceed to Payment</CardTitle>
-                <CardDescription>Review details and continue to the payment step.</CardDescription>
-              </CardHeader>
-              <CardFooter>
+            <CardFooter>
                 <Button
                   type="submit"
                   className="w-full bg-primary hover:bg-primary/90"
-                  disabled={isProcessing || !selectedProgramId}
+                  disabled={isProcessingSetup || !selectedProgramId}
                 >
-                  {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
-                  {isProcessing ? 'Processing...' : 'Proceed to Payment & Finalize'}
+                  {isProcessingSetup ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
+                  {isProcessingSetup ? 'Processing...' : 'Proceed to Payment & Finalize'}
                 </Button>
-              </CardFooter>
-            </Card>
-          </div>
-        </div>
+            </CardFooter>
+        </Card>
       </form>
     </Form>
   );
@@ -444,7 +451,6 @@ export default function AdminCheckoutPage() {
     return () => unsubscribe();
   }, [router, toast]);
 
-  // Effect for fetching programs and courses
   useEffect(() => {
     if (currentUser && !isCheckingAuth) {
       (async () => {
@@ -468,7 +474,6 @@ export default function AdminCheckoutPage() {
     }
   }, [currentUser, isCheckingAuth, toast]);
 
-  // Effect for auto-selecting program if only one exists
   useEffect(() => {
     if (!isLoadingData && allPrograms.length === 1 && !selectedProgramId) {
       setSelectedProgramId(allPrograms[0].id);
@@ -476,7 +481,6 @@ export default function AdminCheckoutPage() {
   }, [allPrograms, isLoadingData, selectedProgramId]);
 
 
-  // Effect for updating courses in selected program
   useEffect(() => {
     if (selectedProgramId && allPrograms.length > 0 && allCourses.length > 0) {
       const program = allPrograms.find(p => p.id === selectedProgramId);
@@ -492,15 +496,19 @@ export default function AdminCheckoutPage() {
   }, [selectedProgramId, allPrograms, allCourses]);
 
 
+  const selectedProgramDetails = allPrograms.find(p => p.id === selectedProgramId);
+  const subtotalAmount = selectedProgramDetails ? parseFloat(selectedProgramDetails.price.replace(/[$,/mo]/gi, '')) : 0;
+  // Discount state and final amount calculation now happens within CheckoutSetupFormContent
+
   if (isCheckingAuth || !currentUser) {
-    return ( <div className="container mx-auto py-12 text-center"> <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /> <p className="mt-4 text-muted-foreground">Verifying access…</p> </div> );
+    return ( <div className="container mx-auto text-center"> <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /> <p className="mt-4 text-muted-foreground">Verifying access…</p> </div> );
   }
   if (isLoadingData) {
-    return ( <div className="container mx-auto py-12 text-center"> <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /> <p className="mt-4 text-muted-foreground">Loading programs & courses…</p> </div> );
+    return ( <div className="container mx-auto text-center"> <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /> <p className="mt-4 text-muted-foreground">Loading programs & courses…</p> </div> );
   }
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <h1 className="text-3xl font-bold tracking-tight text-primary mb-8">New Customer Checkout - Step 1: Setup</h1>
       <CheckoutSetupFormContent
         allPrograms={allPrograms}
@@ -509,7 +517,13 @@ export default function AdminCheckoutPage() {
         selectedProgramId={selectedProgramId}
         setSelectedProgramId={setSelectedProgramId}
         coursesInSelectedProgram={coursesInSelectedProgram}
+        finalTotalAmount={0} // Placeholder, actual calc is inside form content now
+        clientSecret={null} // Not used here anymore
+        paymentIntentError={null} // Not used here anymore
+        isPaying={false} // Not used here anymore
       />
     </div>
   );
 }
+
+    

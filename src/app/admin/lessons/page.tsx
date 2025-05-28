@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react'; 
@@ -155,7 +156,7 @@ export default function AdminLessonsPage() {
     };
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
        <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-primary">Lesson Management</h1>
         <Button onClick={handleAddLesson} className="bg-accent text-accent-foreground hover:bg-accent/90">
@@ -323,3 +324,5 @@ export default function AdminLessonsPage() {
     </div>
   );
 }
+
+    

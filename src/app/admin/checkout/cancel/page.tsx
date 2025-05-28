@@ -5,11 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { XCircle, ArrowLeft } from 'lucide-react';
 
-// This page might be used if Stripe redirects back after payment cancellation,
-// though the current implementation handles the result directly.
 export default function CheckoutCancelPage() {
   return (
-    <div className="container py-12 md:py-16 lg:py-20 flex items-center justify-center min-h-[calc(100vh-theme(spacing.14)*2)]">
+    <div className="container flex items-center justify-center min-h-[calc(100vh-theme(spacing.14)*2)]">
       <Card className="w-full max-w-lg text-center shadow-lg">
         <CardHeader>
           <XCircle className="h-16 w-16 mx-auto text-destructive mb-4" />
@@ -34,3 +32,5 @@ export default function CheckoutCancelPage() {
     </div>
   );
 }
+
+    

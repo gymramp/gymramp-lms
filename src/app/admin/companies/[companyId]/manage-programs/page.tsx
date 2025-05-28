@@ -32,7 +32,7 @@ type ManageProgramsFormValues = z.infer<typeof manageProgramsFormSchema>;
 export default function ManageBrandProgramsPage() {
   const params = useParams();
   const router = useRouter();
-  const brandId = params.companyId as string;
+  const brandId = params.companyId as string; // companyId from URL is brandId
 
   const [brand, setBrand] = useState<Company | null>(null);
   const [allLibraryPrograms, setAllLibraryPrograms] = useState<Program[]>([]);
@@ -120,12 +120,12 @@ export default function ManageBrandProgramsPage() {
   };
 
   if (!currentUser || currentUser.role !== 'Super Admin') {
-    return <div className="container mx-auto py-12 text-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    return <div className="container mx-auto text-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
 
   if (isLoading) {
     return (
-      <div className="container mx-auto py-12 md:py-16 lg:py-20 space-y-6">
+      <div className="container mx-auto space-y-6">
         <Skeleton className="h-8 w-1/4" />
         <Skeleton className="h-10 w-1/2" />
         <Card>
@@ -138,11 +138,11 @@ export default function ManageBrandProgramsPage() {
   }
 
   if (!brand) {
-    return <div className="container mx-auto py-12 text-center">Brand not found.</div>;
+    return <div className="container mx-auto text-center">Brand not found.</div>;
   }
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <Button variant="outline" onClick={() => router.push(`/admin/companies/${brandId}/edit`)} className="mb-6">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Edit Brand: {brand.name}
       </Button>
@@ -221,3 +221,4 @@ export default function ManageBrandProgramsPage() {
   );
 }
 
+    

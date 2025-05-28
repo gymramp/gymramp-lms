@@ -31,7 +31,7 @@ export default function MyCertificatesPage() {
     const [userBrand, setUserBrand] = useState<Company | null>(null);
     const [completedCourses, setCompletedCourses] = useState<CompletedCourseDisplay[]>([]);
     const [isLoadingUser, setIsLoadingUser] = useState(true);
-    const [isLoadingCertificates, setIsLoadingCertificates] = useState(false); // New state
+    const [isLoadingCertificates, setIsLoadingCertificates] = useState(false);
     const { toast } = useToast();
 
     const [selectedCertificate, setSelectedCertificate] = useState<CompletedCourseDisplay | null>(null);
@@ -89,11 +89,9 @@ export default function MyCertificatesPage() {
 
                 const progressData = await getUserCourseProgress(currentUser.id, courseId);
                 if (progressData.status === 'Completed') {
-                    const completionDateObject = progressData.lastUpdated instanceof Timestamp
-                        ? progressData.lastUpdated.toDate()
-                        : progressData.lastUpdated instanceof Date
-                            ? progressData.lastUpdated
-                            : null;
+                    const completionDateObject = progressData.lastUpdated
+                        ? new Date(progressData.lastUpdated as string)
+                        : null;
                     return { ...courseData, completionDate: completionDateObject, effectiveCourseId: courseId };
                 }
                 return null;
@@ -129,7 +127,7 @@ export default function MyCertificatesPage() {
     const isLoading = isLoadingUser || isLoadingCertificates;
 
     return (
-        <div className="container mx-auto py-12 md:py-16 lg:py-20">
+        <div className="container mx-auto">
             <div className="mb-8 text-center">
                 <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl text-primary">
                     My Certificates
@@ -212,8 +210,8 @@ export default function MyCertificatesPage() {
                             courseName={selectedCertificate.title}
                             userName={currentUser.name}
                             completionDate={selectedCertificate.completionDate || new Date()}
-                            brandName={userBrand?.name} // Use userBrand for certificate
-                            brandLogoUrl={userBrand?.logoUrl} // Use userBrand for certificate
+                            brandName={userBrand?.name} 
+                            brandLogoUrl={userBrand?.logoUrl} 
                         />
                     </DialogContent>
                 </Dialog>
@@ -221,3 +219,5 @@ export default function MyCertificatesPage() {
         </div>
     );
 }
+
+    

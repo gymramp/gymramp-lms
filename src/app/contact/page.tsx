@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -32,7 +33,7 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
        <div className="mb-12 text-center">
         <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl text-primary">
           Contact Us
@@ -142,3 +143,5 @@ export default function ContactPage() {
     </div>
   );
 }
+
+    

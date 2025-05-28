@@ -36,15 +36,15 @@ interface RevenueShareReportEntry {
   purchaseRecordId: string;
   brandId: string;
   brandName: string;
-  brandCreatedAt?: Timestamp | Date | null;
+  brandPurchaseDate?: string | null; // Changed from brandCreatedAt
   programSoldTitle?: string | null;
   partnerName: string;
   partnerCompany?: string | null;
   partnerPercentage: number;
   shareBasis: 'coursePrice' | 'subscriptionPrice';
-  saleAmountForShareCalculation: number; // The base amount used for this partner's share
+  saleAmountForShareCalculation: number; 
   calculatedRevShareAmount: number;
-  basisNote?: string; // Optional note about how basis was determined
+  basisNote?: string; 
 }
 
 export default function RevenueShareReportPage() {
@@ -115,8 +115,8 @@ export default function RevenueShareReportPage() {
         let saleBaseForShare = 0;
         let basisNote = "";
 
-        if (partner.shareBasis === 'coursePrice') { // Now means Program Base Price
-            saleBaseForShare = record.totalAmountPaid; // This is the Program's base price
+        if (partner.shareBasis === 'coursePrice') { 
+            saleBaseForShare = record.totalAmountPaid; 
             basisNote = "Program Base Price";
         } else if (partner.shareBasis === 'subscriptionPrice') {
             if (programDetails && programDetails.firstSubscriptionPrice) {
@@ -124,17 +124,16 @@ export default function RevenueShareReportPage() {
                 saleBaseForShare = isNaN(subPrice) ? 0 : subPrice;
                 basisNote = "Program 1st Sub Price (Hypothetical)";
             } else {
-                saleBaseForShare = 0; // Or handle as error / N/A
+                saleBaseForShare = 0; 
                 basisNote = "Subscription Price N/A for Program";
             }
-            // Critical: This calculation is still hypothetical until actual subscription charges are tracked.
         }
 
         return {
           purchaseRecordId: record.id,
           brandId: record.brandId,
           brandName: record.brandName,
-          brandCreatedAt: record.purchaseDate, // Use purchaseDate of the record
+          brandPurchaseDate: record.purchaseDate as string | undefined, 
           programSoldTitle: record.selectedProgramTitle || programDetails?.title || 'Unknown Program',
           partnerName: partner.name,
           partnerCompany: partner.companyName,
@@ -165,16 +164,16 @@ export default function RevenueShareReportPage() {
       const startOfDay = new Date(startDate);
       startOfDay.setHours(0, 0, 0, 0);
       filtered = filtered.filter(entry => {
-        const entryDate = entry.brandCreatedAt instanceof Timestamp ? entry.brandCreatedAt.toDate() : entry.brandCreatedAt;
-        return entryDate && new Date(entryDate) >= startOfDay;
+        const entryDate = entry.brandPurchaseDate ? new Date(entry.brandPurchaseDate) : null;
+        return entryDate && entryDate >= startOfDay;
       });
     }
     if (endDate) {
       const endOfDay = new Date(endDate);
       endOfDay.setHours(23, 59, 59, 999);
       filtered = filtered.filter(entry => {
-        const entryDate = entry.brandCreatedAt instanceof Timestamp ? entry.brandCreatedAt.toDate() : entry.brandCreatedAt;
-        return entryDate && new Date(entryDate) <= endOfDay;
+        const entryDate = entry.brandPurchaseDate ? new Date(entry.brandPurchaseDate) : null;
+        return entryDate && entryDate <= endOfDay;
       });
     }
     setFilteredReportData(filtered);
@@ -184,11 +183,9 @@ export default function RevenueShareReportPage() {
     return filteredReportData.reduce((sum, entry) => sum + entry.calculatedRevShareAmount, 0);
   }, [filteredReportData]);
   
-  // Sum of unique sale amounts for the brands in the filtered report
   const totalSaleAmountSumForDisplayedBrands = useMemo(() => {
     const uniqueBrandSaleAmounts = new Map<string, number>();
     filteredReportData.forEach(entry => {
-      // We need the original totalAmountPaid from the purchase record to sum unique brand sales
       const originalPurchaseRecord = allPurchaseRecords.find(pr => pr.id === entry.purchaseRecordId);
       if (originalPurchaseRecord && !uniqueBrandSaleAmounts.has(originalPurchaseRecord.brandId)) {
         uniqueBrandSaleAmounts.set(originalPurchaseRecord.brandId, originalPurchaseRecord.totalAmountPaid);
@@ -197,10 +194,13 @@ export default function RevenueShareReportPage() {
     return Array.from(uniqueBrandSaleAmounts.values()).reduce((sum, amount) => sum + amount, 0);
   }, [filteredReportData, allPurchaseRecords]);
 
-  const formatDate = (dateInput: Timestamp | Date | undefined | null): string => {
-    if (!dateInput) return 'N/A';
-    const date = dateInput instanceof Timestamp ? dateInput.toDate() : dateInput;
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  const formatDateForDisplay = (dateString: string | undefined | null): string => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch (error) {
+      return "Invalid Date";
+    }
   };
   
   const handleResetFilters = () => {
@@ -211,11 +211,11 @@ export default function RevenueShareReportPage() {
 
 
   if (!currentUser || currentUser.role !== 'Super Admin') {
-    return <div className="container mx-auto py-12 text-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
+    return <div className="container mx-auto text-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
   }
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <Button variant="outline" onClick={() => router.push('/admin/dashboard')} className="mb-6">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
       </Button>
@@ -225,9 +225,9 @@ export default function RevenueShareReportPage() {
       <div className="mb-6 p-4 border border-amber-500 bg-amber-50 rounded-md">
           <h3 className="text-amber-700 font-semibold flex items-center gap-2"><AlertTriangle className="h-5 w-5" />Report Calculation Notice</h3>
           <p className="text-sm text-amber-600">
-              This report reflects revenue share based on the **one-time Program base price** at checkout.
-              For partners with "Program Subscription Price" as their share basis, the calculation uses the Program's **first subscription price tier** as a *hypothetical* base.
-              Actual recurring subscription charges and revenue share based on them are **not yet implemented or tracked**. This part of the report is for estimation purposes only.
+              This report reflects revenue share based on the one-time Program base price at checkout.
+              For partners with "Program Subscription Price" as their share basis, the calculation uses the Program's first subscription price tier as a hypothetical base.
+              Actual recurring subscription charges and revenue share based on them are not yet implemented or tracked. This part of the report is for estimation purposes only.
           </p>
       </div>
       <div className="mb-6 flex flex-wrap items-end gap-4">
@@ -293,7 +293,7 @@ export default function RevenueShareReportPage() {
                 <TableBody>
                   {filteredReportData.map((entry, index) => (
                     <TableRow key={`${entry.purchaseRecordId}-${entry.partnerName}-${index}`}>
-                      <TableCell>{formatDate(entry.brandCreatedAt)}</TableCell>
+                      <TableCell>{formatDateForDisplay(entry.brandPurchaseDate)}</TableCell>
                       <TableCell className="font-medium">{entry.brandName}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{entry.programSoldTitle}</TableCell>
                       <TableCell>{entry.partnerName}</TableCell>
@@ -334,3 +334,5 @@ export default function RevenueShareReportPage() {
     </div>
   );
 }
+
+    

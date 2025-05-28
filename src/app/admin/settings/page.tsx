@@ -46,7 +46,7 @@ export default function AdminSettingsPage() {
 
   if (isLoading || !currentUser) {
     return (
-      <div className="container mx-auto py-12 text-center">
+      <div className="container mx-auto text-center">
         <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
         <p className="mt-4 text-muted-foreground">Verifying access…</p>
       </div>
@@ -54,7 +54,7 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <h1 className="text-3xl font-bold tracking-tight text-primary mb-8">Application Settings</h1>
       <Card className="w-full max-w-2xl mx-auto shadow-lg">
         <CardHeader>

@@ -154,7 +154,7 @@ export default function AccountPage() {
   };
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <Card className="w-full max-w-2xl mx-auto shadow-lg">
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-primary flex items-center gap-2">
@@ -184,7 +184,7 @@ export default function AccountPage() {
                  <Label className="text-base font-semibold">Profile Image</Label>
                  <div className="flex items-center gap-6">
                      <Avatar className="h-20 w-20 border-2 border-primary/20">
-                        <AvatarImage src={currentUser.profileImageUrl || undefined} alt={currentUser.name} />
+                        <AvatarImage src={currentUser.profileImageUrl || undefined} alt={currentUser.name || 'User Avatar'} />
                         <AvatarFallback className="text-2xl">{getInitials(currentUser.name)}</AvatarFallback>
                      </Avatar>
                      <div className="flex flex-col gap-2">
@@ -230,7 +230,7 @@ export default function AccountPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="name" className="flex items-center gap-1 text-muted-foreground"><UserIcon className="h-4 w-4" /> Name</Label>
-                <Input id="name" value={currentUser.name} readOnly disabled />
+                <Input id="name" value={currentUser.name || ''} readOnly disabled />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email" className="flex items-center gap-1 text-muted-foreground"><Mail className="h-4 w-4" /> Email</Label>
@@ -256,3 +256,5 @@ export default function AccountPage() {
     </div>
   );
 }
+
+    

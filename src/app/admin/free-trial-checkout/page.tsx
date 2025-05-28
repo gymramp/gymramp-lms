@@ -14,7 +14,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { getAllPrograms, getCourseById, getAllCourses } from '@/lib/firestore-data';
-import { processFreeTrialCheckout } from '@/actions/checkout';
+import { processFreeTrialCheckout } from '@/actions/checkout'; 
 import type { Program, Course } from '@/types/course';
 import type { User } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
@@ -322,7 +322,7 @@ export default function FreeTrialCheckoutPage() {
     if (currentUser && !isCheckingAuth) {
       (async () => {
         setIsLoadingData(true);
-        setGeneratedPassword(null); // Clear password on new load
+        setGeneratedPassword(null); 
         try {
           const [programsData, coursesData] = await Promise.all([
              getAllPrograms(),
@@ -366,7 +366,7 @@ export default function FreeTrialCheckoutPage() {
 
   if (isCheckingAuth || !currentUser) {
     return (
-      <div className="container mx-auto py-12 text-center">
+      <div className="container mx-auto text-center">
         <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
         <p className="mt-4 text-muted-foreground">Verifying access…</p>
       </div>
@@ -375,7 +375,7 @@ export default function FreeTrialCheckoutPage() {
 
   if (isLoadingData) {
     return (
-      <div className="container mx-auto py-12 text-center">
+      <div className="container mx-auto text-center">
         <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
         <p className="mt-4 text-muted-foreground">Loading programs & courses…</p>
       </div>
@@ -383,7 +383,7 @@ export default function FreeTrialCheckoutPage() {
   }
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <h1 className="text-3xl font-bold tracking-tight text-primary mb-8">New Customer - Free Trial Checkout</h1>
        {generatedPassword && (
         <Alert variant="success" className="mb-6 border-green-300 bg-green-50 dark:bg-green-900/30">

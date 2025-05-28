@@ -1,15 +1,14 @@
 
 'use client';
 
-import React, { useEffect, Suspense } from 'react'; // Import Suspense
+import React, { useEffect, Suspense } from 'react'; 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, Package, Loader2 } from 'lucide-react'; // Import Loader2
+import { CheckCircle, Package, Loader2 } from 'lucide-react'; 
 import { useToast } from '@/hooks/use-toast';
 
-// Renamed original component
 function CheckoutSuccessPageContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
@@ -33,7 +32,7 @@ function CheckoutSuccessPageContent() {
   }, [sessionId, toast]);
 
   return (
-    <div className="container py-12 md:py-16 lg:py-20 flex items-center justify-center min-h-[calc(100vh-theme(spacing.14)*2)]">
+    <div className="container flex items-center justify-center min-h-[calc(100vh-theme(spacing.14)*2)]">
       <Card className="w-full max-w-lg text-center shadow-lg">
         <CardHeader>
           <CheckCircle className="h-16 w-16 mx-auto text-green-500 mb-4" />
@@ -69,7 +68,6 @@ function CheckoutSuccessPageContent() {
   );
 }
 
-// New default export with Suspense
 export default function CheckoutSuccessPage() {
   return (
     <Suspense fallback={
@@ -82,3 +80,5 @@ export default function CheckoutSuccessPage() {
     </Suspense>
   );
 }
+
+    

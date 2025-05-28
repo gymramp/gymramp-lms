@@ -20,10 +20,8 @@ import type { Course, Lesson, Quiz } from '@/types/course';
 import { getCourseById, getAllLessons, updateCourseCurriculum, getLessonById, getAllQuizzes, getQuizById } from '@/lib/firestore-data';
 import { AddLessonToCurriculumDialog } from '@/components/admin/AddLessonToCurriculumDialog';
 import { AddQuizToCurriculumDialog } from '@/components/admin/AddQuizToCurriculumDialog';
-// import { EditModuleTitleDialog } from '@/components/admin/EditModuleTitleDialog'; // REMOVED
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-// import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'; // REMOVED
 import { cn } from '@/lib/utils';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
@@ -47,9 +45,6 @@ export default function ManageCourseCurriculumPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isAddLessonDialogOpen, setIsAddLessonDialogOpen] = useState(false);
   const [isAddQuizDialogOpen, setIsAddQuizDialogOpen] = useState(false);
-  // const [isEditModuleDialogOpen, setIsEditModuleDialogOpen] = useState(false); // REMOVED
-  // const [editingModuleIndex, setEditingModuleIndex] = useState<number | null>(null); // REMOVED
-  // const [editingModuleTitle, setEditingModuleTitle] = useState<string>(''); // REMOVED
   const [availableLessonsForDialog, setAvailableLessonsForDialog] = useState<Lesson[]>([]); 
   const [availableQuizzesForDialog, setAvailableQuizzesForDialog] = useState<Quiz[]>([]); 
 
@@ -130,7 +125,7 @@ export default function ManageCourseCurriculumPage() {
      setIsAddQuizDialogOpen(false);
    };
 
-  const handleRemoveItem = async (itemId: string, sourceIndex: number) => { // Simplified sourceId
+  const handleRemoveItem = async (itemId: string, sourceIndex: number) => { 
     let newCurriculumItems = [...curriculumItems];
     newCurriculumItems.splice(sourceIndex, 1);
 
@@ -144,7 +139,7 @@ export default function ManageCourseCurriculumPage() {
      if (!courseId || !course) return; 
      setIsSaving(true);
      try {
-       const success = await updateCourseCurriculum(courseId, newCurriculumIds); // Pass only curriculum IDs
+       const success = await updateCourseCurriculum(courseId, newCurriculumIds); 
        if (success) {
          toast({ title: "Curriculum Updated", description: "Curriculum saved." });
          setCourse(prev => prev ? { ...prev, curriculum: newCurriculumIds } : null);
@@ -174,7 +169,7 @@ export default function ManageCourseCurriculumPage() {
     saveCurriculum(newCurriculumIds);
 };
 
-   const renderCurriculumItemRow = (item: CurriculumItem, index: number) => ( // Simplified parameters
+   const renderCurriculumItemRow = (item: CurriculumItem, index: number) => ( 
        <Draggable key={item.id} draggableId={item.id} index={index}>
            {(provided) => (
                <TableRow
@@ -207,7 +202,7 @@ export default function ManageCourseCurriculumPage() {
                            variant="ghost"
                            size="icon"
                            className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8"
-                           onClick={() => handleRemoveItem(item.id, index)} // Pass index directly
+                           onClick={() => handleRemoveItem(item.id, index)} 
                            disabled={isSaving}
                            aria-label={`Remove ${item.data.title}`}
                        >
@@ -222,7 +217,7 @@ export default function ManageCourseCurriculumPage() {
 
   if (isLoading) {
     return (
-         <div className="container mx-auto py-12 md:py-16 lg:py-20 space-y-8">
+         <div className="container mx-auto space-y-8">
             <Skeleton className="h-8 w-1/4" /> 
             <div className="flex items-center justify-between">
                 <div>
@@ -240,12 +235,12 @@ export default function ManageCourseCurriculumPage() {
   }
 
   if (!course) {
-      return <div className="container mx-auto py-12 text-center">Course not found.</div>;
+      return <div className="container mx-auto text-center">Course not found.</div>;
   }
 
   return (
    <DragDropContext onDragEnd={onDragEnd}>
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <Button variant="outline" onClick={() => router.back()} className="mb-6">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Courses
       </Button>
@@ -335,9 +330,9 @@ export default function ManageCourseCurriculumPage() {
             availableQuizzes={availableQuizzesForDialog} 
             onAddQuiz={handleAddQuizToCurriculum}
         />
-        {/* EditModuleTitleDialog REMOVED */}
     </div>
     </DragDropContext>
   );
 }
 
+    

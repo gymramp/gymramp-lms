@@ -72,11 +72,11 @@ export default function AdminCompaniesPage() {
       return;
     }
     setIsLoading(true);
-    setIsLoadingCounts(true); // This can be used for the initial loading of all data
+    setIsLoadingCounts(true); 
     try {
       const [companiesData, allProgramsData] = await Promise.all([
-        getAllCompanies(user), // Pass current user
-        getAllPrograms() // Fetch all programs to calculate course counts
+        getAllCompanies(user), 
+        getAllPrograms() 
       ]);
 
       const programsMap = new Map(allProgramsData.map(p => [p.id, p]));
@@ -155,7 +155,6 @@ export default function AdminCompaniesPage() {
 
   const openDeleteConfirmation = (company: Company) => {
      if (!currentUser) return;
-     // Allow Super Admin OR (Admin/Owner if it's their own company or their child company)
      let canDelete = false;
      if (currentUser.role === 'Super Admin') {
          canDelete = true;
@@ -179,7 +178,7 @@ export default function AdminCompaniesPage() {
     try {
       const success = await deleteCompany(companyToDelete.id);
       if (success) {
-        await fetchCompanies(currentUser); // Refetch to update the list
+        await fetchCompanies(currentUser); 
         toast({
           title: 'Brand Deleted',
           description: `Brand "${companyToDelete.name}" and its direct associations (users, locations) have been marked as deleted. Child brands are not automatically deleted.`,
@@ -204,10 +203,8 @@ export default function AdminCompaniesPage() {
      }
      let added: Company | null = null;
      if (currentUser.role === 'Super Admin') {
-       // Super Admin creates a Parent Brand
        added = await addCompany(companyData, currentUser.id, null);
      } else if ((currentUser.role === 'Admin' || currentUser.role === 'Owner') && currentUser.companyId) {
-       // Brand Admin/Owner creates a Child Brand under their own brand
        added = await addCompany(companyData, currentUser.id, currentUser.companyId);
      } else {
        toast({ title: "Permission Denied", description: "You do not have the necessary permissions or brand association to create a new brand.", variant: "destructive" });
@@ -217,7 +214,7 @@ export default function AdminCompaniesPage() {
 
      if (added) {
         toast({ title: "Brand Added", description: `"${added.name}" added successfully.` });
-        fetchCompanies(currentUser); // Refetch companies after adding
+        fetchCompanies(currentUser); 
      } else {
          toast({ title: "Error", description: "Failed to add brand.", variant: "destructive" });
      }
@@ -225,11 +222,11 @@ export default function AdminCompaniesPage() {
    };
 
    if (!currentUser || !(currentUser.role === 'Super Admin' || currentUser.role === 'Admin' || currentUser.role === 'Owner')) {
-     return <div className="container mx-auto py-12 text-center">Loading or Access Denied...</div>;
+     return <div className="container mx-auto text-center">Loading or Access Denied...</div>;
    }
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-primary">Brand Management</h1>
         <Button onClick={handleAddCompanyClick} className="bg-accent text-accent-foreground hover:bg-accent/90">
@@ -265,7 +262,7 @@ export default function AdminCompaniesPage() {
                 {filteredCompanies.map((company) => {
                     let trialStatusDisplay;
                     if (company.isTrial && company.trialEndsAt) {
-                        const endsAt = new Date(company.trialEndsAt); // Assuming trialEndsAt is ISO string
+                        const endsAt = new Date(company.trialEndsAt as string); 
                         if (endsAt < new Date()) {
                             trialStatusDisplay = <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3" />Ended: {endsAt.toLocaleDateString()}</Badge>;
                         } else {
@@ -347,5 +344,7 @@ export default function AdminCompaniesPage() {
     </div>
   );
 }
+
+    
 
     

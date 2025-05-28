@@ -135,7 +135,7 @@ export default function AdminCoursesPage() {
 
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
        <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-primary">Course Management</h1>
         <Button onClick={handleAddCourseClick} className="bg-accent text-accent-foreground hover:bg-accent/90">
@@ -178,8 +178,6 @@ export default function AdminCoursesPage() {
                   <TableHead>Level</TableHead>
                   <TableHead>Curriculum Items</TableHead>
                   <TableHead>Quizzes (In Curriculum)</TableHead>
-                  {/* REMOVED: <TableHead>Price</TableHead> */}
-                  {/* REMOVED: <TableHead>Subscription Price</TableHead> */}
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -192,8 +190,6 @@ export default function AdminCoursesPage() {
                     </TableCell>
                     <TableCell>{course.curriculum?.length || 0}</TableCell>
                     <TableCell>{course.curriculum?.filter(id => id.startsWith('quiz-')).length || 0}</TableCell>
-                    {/* REMOVED: <TableCell>{course.price}</TableCell> */}
-                    {/* REMOVED: <TableCell>{course.subscriptionPrice || 'N/A'}</TableCell> */}
                     <TableCell className="text-right space-x-1">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -280,3 +276,4 @@ export default function AdminCoursesPage() {
   );
 }
 
+    

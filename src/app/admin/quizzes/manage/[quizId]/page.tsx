@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, PlusCircle, Edit, Trash2, CheckCircle } from 'lucide-react';
+import { ArrowLeft, PlusCircle, Edit, Trash2, CheckCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Quiz, Question } from '@/types/course';
 import { getQuizById, deleteQuestion, addQuestionToQuiz, updateQuestion } from '@/lib/firestore-data';
@@ -122,15 +122,15 @@ export default function ManageQuizQuestionsPage() {
    };
 
   if (isLoading) {
-    return <div className="container py-12 text-center">Loading quiz questions...</div>;
+    return <div className="container mx-auto text-center">Loading quiz questions...</div>;
   }
 
   if (!quiz) {
-      return <div className="container py-12 text-center">Quiz not found.</div>;
+      return <div className="container mx-auto text-center">Quiz not found.</div>;
   }
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <Button variant="outline" onClick={() => router.push('/admin/quizzes')} className="mb-6">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Quiz Library
       </Button>
@@ -242,3 +242,5 @@ export default function ManageQuizQuestionsPage() {
     </div>
   );
 }
+
+    

@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,7 +15,7 @@ const managedCourses = [
 
 export default function ManageCoursesPage() {
   return (
-    <div className="space-y-8">
+    <div className="container mx-auto space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-primary">Course Management</h1>
@@ -122,3 +123,5 @@ export default function ManageCoursesPage() {
     </div>
   );
 }
+
+    

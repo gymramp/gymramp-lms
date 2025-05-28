@@ -9,7 +9,7 @@ import { CheckCircle, ArrowLeft } from 'lucide-react';
 // though the current implementation handles the result directly.
 export default function CheckoutSuccessPage() {
   return (
-    <div className="container py-12 md:py-16 lg:py-20 flex items-center justify-center min-h-[calc(100vh-theme(spacing.14)*2)]">
+    <div className="container flex items-center justify-center min-h-[calc(100vh-theme(spacing.14)*2)]">
       <Card className="w-full max-w-lg text-center shadow-lg">
         <CardHeader>
           <CheckCircle className="h-16 w-16 mx-auto text-green-500 mb-4" />
@@ -30,7 +30,7 @@ export default function CheckoutSuccessPage() {
             </Button>
             <Button asChild className="bg-primary hover:bg-primary/90">
                 <Link href="/admin/companies">
-                    View Companies
+                    View Brands
                  </Link>
             </Button>
           </div>
@@ -39,3 +39,5 @@ export default function CheckoutSuccessPage() {
     </div>
   );
 }
+
+    

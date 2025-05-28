@@ -63,7 +63,7 @@ export default function AdminCompanyLocationsPage() {
   const [selectedBrandIdInFilter, setSelectedBrandIdInFilter] = useState<string>(brandIdFromUrl);
   const [isLoadingAccessibleBrands, setIsLoadingAccessibleBrands] = useState(true);
 
-  const fetchInitialDataAndAuthorize = useCallback(async (user: User | null) => {
+  const authorizeAndFetchData = useCallback(async (user: User | null) => {
     if (!user || !brandIdFromUrl) {
       setIsLoadingLocations(false);
       setIsLoadingAccessibleBrands(false);
@@ -101,7 +101,6 @@ export default function AdminCompanyLocationsPage() {
       const allAccessibleBrands = await getAllCompanies(user);
       setAccessibleBrandsForFilter(allAccessibleBrands);
       
-      // Ensure selectedBrandIdInFilter is valid among accessible brands, otherwise default to user's brand or first accessible brand
       const initialFilterId = allAccessibleBrands.some(b => b.id === brandIdFromUrl) ? brandIdFromUrl : (user.companyId || allAccessibleBrands[0]?.id || '');
       setSelectedBrandIdInFilter(initialFilterId);
 
@@ -128,7 +127,7 @@ export default function AdminCompanyLocationsPage() {
         const userDetails = await getUserByEmail(firebaseUser.email);
         setCurrentUser(userDetails);
         if (userDetails) {
-          fetchInitialDataAndAuthorize(userDetails);
+          authorizeAndFetchData(userDetails);
         } else {
           router.push('/'); // Should not happen if firebaseUser is present
         }
@@ -139,11 +138,10 @@ export default function AdminCompanyLocationsPage() {
       setIsAuthLoading(false);
     });
     return () => unsubscribe();
-  }, [fetchInitialDataAndAuthorize, router]);
+  }, [authorizeAndFetchData, router]);
 
-  // Effect to fetch locations when selectedBrandIdInFilter changes
   useEffect(() => {
-    if (!selectedBrandIdInFilter || isAuthLoading || !currentUser) return;
+    if (!selectedBrandIdInFilter || isAuthLoading || !currentUser || isLoadingAccessibleBrands) return;
 
     const fetchLocationsForSelectedBrand = async () => {
       setIsLoadingLocations(true);
@@ -159,7 +157,7 @@ export default function AdminCompanyLocationsPage() {
       }
     };
     fetchLocationsForSelectedBrand();
-  }, [selectedBrandIdInFilter, isAuthLoading, currentUser, toast]);
+  }, [selectedBrandIdInFilter, isAuthLoading, currentUser, isLoadingAccessibleBrands, toast]);
 
 
   const handleAddLocationClick = () => {
@@ -183,11 +181,10 @@ export default function AdminCompanyLocationsPage() {
 
   const confirmDeleteLocation = async () => {
     if (!locationToDelete) return;
-    setIsLoadingLocations(true); // Indicate loading state for the table
+    setIsLoadingLocations(true); 
     try {
       const success = await deleteLocation(locationToDelete.id);
       if (success) {
-        // Re-fetch locations for the currently selected brand
         const locationsData = await getLocationsByCompanyId(selectedBrandIdInFilter);
         setLocationsToDisplay(locationsData);
         toast({ title: 'Location Deleted', description: `Location "${locationToDelete.name}" has been successfully deleted.` });
@@ -209,7 +206,6 @@ export default function AdminCompanyLocationsPage() {
     setIsLoadingLocations(true);
     try {
       if (editingLocation) {
-        // Ensure we only update the name; companyId should not change on edit via this dialog
         savedLocation = await updateLocation(editingLocation.id, { name: locationData.name });
       } else {
         const newLocationData = { name: locationData.name, companyId: selectedBrandIdInFilter, createdBy: currentUser.id };
@@ -217,7 +213,7 @@ export default function AdminCompanyLocationsPage() {
       }
       if (savedLocation) {
         toast({ title: editingLocation ? "Location Updated" : "Location Added", description: `"${savedLocation.name}" saved successfully.` });
-        const locationsData = await getLocationsByCompanyId(selectedBrandIdInFilter); // Refresh list for selected brand
+        const locationsData = await getLocationsByCompanyId(selectedBrandIdInFilter); 
         setLocationsToDisplay(locationsData);
       } else {
         throw new Error("Failed to save location.");
@@ -235,7 +231,7 @@ export default function AdminCompanyLocationsPage() {
 
   if (isAuthLoading || (isLoadingAccessibleBrands && !brandForPageTitle)) {
     return ( 
-      <div className="container mx-auto py-12"> 
+      <div className="container mx-auto"> 
         <Skeleton className="h-8 w-1/4 mb-6" /> 
         <Skeleton className="h-10 w-1/2 mb-4" /> 
         <Skeleton className="h-10 w-1/3 mb-8" /> 
@@ -244,11 +240,11 @@ export default function AdminCompanyLocationsPage() {
     );
   }
   if (!currentUser || !brandForPageTitle) { 
-    return <div className="container mx-auto py-12 text-center">Brand data not available or access denied.</div>; 
+    return <div className="container mx-auto text-center">Brand data not available or access denied.</div>; 
   }
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <Button variant="outline" onClick={() => router.push('/admin/companies')} className="mb-6">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Brands
       </Button>
@@ -274,7 +270,7 @@ export default function AdminCompanyLocationsPage() {
                 onValueChange={(value) => setSelectedBrandIdInFilter(value)}
             >
                 <SelectTrigger id="brand-filter-locations" className="w-full max-w-sm">
-                    <SelectValue placeholder="Select a brand to view locations..." />
+                     <SelectValue placeholder="Select a brand..." />
                 </SelectTrigger>
                 <SelectContent>
                     {accessibleBrandsForFilter.length === 0 ? (
@@ -312,7 +308,7 @@ export default function AdminCompanyLocationsPage() {
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" className="h-8 w-8 p-0">
-                            <span> {/* Wrapper span for Button children */}
+                            <span>
                               <span className="sr-only">Open menu for {location.name}</span>
                               <MoreHorizontal className="h-4 w-4" />
                             </span>

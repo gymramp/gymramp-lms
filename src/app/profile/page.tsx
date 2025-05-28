@@ -1,3 +1,4 @@
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -22,7 +23,7 @@ const enrolledCourses = [
 
 export default function ProfilePage() {
   return (
-    <div className="space-y-8">
+    <div className="container mx-auto space-y-8">
       <Card className="overflow-hidden shadow-lg">
         <CardHeader className="bg-gradient-to-r from-primary/20 to-accent/20 p-8 flex flex-col md:flex-row items-center gap-6">
           <Avatar className="h-32 w-32 border-4 border-background shadow-md">
@@ -91,3 +92,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+    

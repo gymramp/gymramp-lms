@@ -1,7 +1,7 @@
 
 export default function TermsPage() {
     return (
-      <div className="container mx-auto py-12 md:py-16 lg:py-20">
+      <div className="container mx-auto">
         <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl text-primary mb-8 text-center">
           Terms of Service
         </h1>
@@ -54,3 +54,5 @@ export default function TermsPage() {
     );
   }
   
+
+    

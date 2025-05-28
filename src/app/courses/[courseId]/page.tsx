@@ -12,7 +12,7 @@ export default async function CourseDetailPage({ params }: { params: { courseId:
   const course = await getCourseById(params.courseId); 
 
   if (!course) {
-    return <div className="container mx-auto py-12 text-center">Course not found.</div>;
+    return <div className="container mx-auto text-center">Course not found.</div>;
   }
 
   const curriculumItemDetails = await Promise.all(
@@ -32,7 +32,7 @@ export default async function CourseDetailPage({ params }: { params: { courseId:
 
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
        <div className="grid md:grid-cols-3 gap-8 lg:gap-12">
         <div className="md:col-span-1 space-y-6">
            <Image
@@ -65,15 +65,6 @@ export default async function CourseDetailPage({ params }: { params: { courseId:
                     <BookOpen className="h-5 w-5 text-primary" /> 
                     <span>Items: {course.curriculum?.length || 0}</span>
                 </div>
-                {/* REMOVED Price Display
-                <div className="pt-4">
-                    <span className="text-3xl font-bold text-primary">{course.price}</span>
-                    <p className="text-xs text-muted-foreground">One-time purchase per team license</p>
-                </div>
-                 <Button size="lg" className="w-full mt-4 bg-accent text-accent-foreground hover:bg-accent/90">
-                    Enroll Team Now
-                 </Button>
-                */}
                  <p className="text-xs text-muted-foreground pt-4">Pricing and enrollment are managed at the Program level.</p>
              </CardContent>
            </Card>
@@ -107,7 +98,7 @@ export default async function CourseDetailPage({ params }: { params: { courseId:
              <div className="pt-6">
                  <p className="text-muted-foreground">This course is typically included as part of a Program. Check available Programs for enrollment options.</p>
                  <Button size="lg" variant="outline" asChild className="mt-2">
-                    <Link href="/#programs">View Programs</Link> {/* TODO: Update link if programs page is different */}
+                    <Link href="/#programs">View Programs</Link> 
                  </Button>
              </div>
         </div>
@@ -115,3 +106,5 @@ export default async function CourseDetailPage({ params }: { params: { courseId:
     </div>
   );
 }
+
+    

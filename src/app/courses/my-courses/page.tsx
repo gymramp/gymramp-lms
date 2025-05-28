@@ -13,20 +13,19 @@ import { useToast } from '@/hooks/use-toast';
 import type { Course, BrandCourse } from '@/types/course';
 import type { User, UserCourseProgressData } from '@/types/user';
 import { getUserByEmail, getUserCourseProgress } from '@/lib/user-data';
-import { getCourseById, getAllPrograms } from '@/lib/firestore-data'; // Added getAllPrograms
-import { getBrandCourseById, getBrandCoursesByBrandId } from '@/lib/brand-content-data'; // Added getBrandCoursesByBrandId
-import { getCompanyById } from '@/lib/company-data'; // Added getCompanyById
+import { getCourseById, getAllPrograms } from '@/lib/firestore-data'; 
+import { getBrandCourseById, getBrandCoursesByBrandId } from '@/lib/brand-content-data'; 
+import { getCompanyById } from '@/lib/company-data'; 
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { cn } from '@/lib/utils';
-import type { Timestamp } from 'firebase/firestore'; // Correct import if Timestamp is used
+import type { Timestamp } from 'firebase/firestore'; 
 
-// Define CourseWithProgress to accept either Course or BrandCourse structure
 type CourseWithProgress = (Course | BrandCourse) & {
   progress: number;
   status: "Not Started" | "Started" | "In Progress" | "Completed";
   completedItems: string[];
-  lastUpdated?: string | null; // Changed to string | null to match serialized data
+  lastUpdated?: string | null; 
 };
 
 
@@ -60,14 +59,13 @@ export default function MyCoursesPage() {
   const fetchCourseData = useCallback(async () => {
     if (!currentUser || !currentUser.id) {
       setAssignedCoursesWithProgress([]);
-      setIsLoadingCourses(false); // Ensure loading is false if no user
+      setIsLoadingCourses(false); 
       return;
     }
     setIsLoadingCourses(true);
     try {
       let effectiveAssignedCourseIds = new Set<string>(currentUser.assignedCourseIds || []);
 
-      // If user belongs to a brand, get courses from their brand's assigned programs
       if (currentUser.companyId) {
         const brand = await getCompanyById(currentUser.companyId);
         if (brand && brand.assignedProgramIds && brand.assignedProgramIds.length > 0) {
@@ -77,7 +75,6 @@ export default function MyCoursesPage() {
             (program.courseIds || []).forEach(courseId => effectiveAssignedCourseIds.add(courseId));
           });
         }
-        // Also add courses created by the brand if canManageCourses is enabled
         if (brand && brand.canManageCourses) {
             const brandCreatedCourses = await getBrandCoursesByBrandId(brand.id);
             brandCreatedCourses.forEach(bc => effectiveAssignedCourseIds.add(bc.id));
@@ -107,12 +104,12 @@ export default function MyCoursesPage() {
         
         const progressData = await getUserCourseProgress(currentUser.id, courseId);
         return {
-          ...courseDetails, // Spreading Course or BrandCourse
+          ...courseDetails, 
           progress: progressData.progress,
           status: progressData.status,
           completedItems: progressData.completedItems,
-          lastUpdated: progressData.lastUpdated // This will be string | null
-        } as CourseWithProgress; // Cast to the union type
+          lastUpdated: progressData.lastUpdated as string | null 
+        } as CourseWithProgress; 
       });
 
       const coursesWithProgressData = (await Promise.all(courseProgressPromises))
@@ -141,7 +138,7 @@ export default function MyCoursesPage() {
   const isLoading = isLoadingUser || isLoadingCourses;
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <div className="mb-8 text-center">
         <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl text-primary">
           My Learning
