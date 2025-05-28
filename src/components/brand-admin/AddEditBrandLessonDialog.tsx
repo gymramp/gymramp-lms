@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose, DialogPortal } from "@/components/ui/dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -26,6 +26,7 @@ import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import type { BrandLesson, BrandLessonFormData } from '@/types/course';
 import { Upload, PlaySquare, FileUp, Image as ImageIconLucide, Trash2, Loader2, Video } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import RichTextEditor from '@/components/ui/RichTextEditor'; // Import the RichTextEditor
 
 const brandLessonFormSchema = z.object({
   title: z.string().min(3, { message: 'Lesson title must be at least 3 characters.' }),
@@ -36,7 +37,6 @@ const brandLessonFormSchema = z.object({
   playbackMinutes: z.coerce.number().min(0).max(59).optional(),
   playbackSeconds: z.coerce.number().min(0).max(59).optional(),
   exerciseFilesInfo: z.string().optional().or(z.literal('')),
-  // isPreviewAvailable is omitted for BrandLessons for now
 });
 
 type BrandLessonFormValues = z.infer<typeof brandLessonFormSchema>;
@@ -44,7 +44,7 @@ type BrandLessonFormValues = z.infer<typeof brandLessonFormSchema>;
 interface AddEditBrandLessonDialogProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
-  brandId: string; // Brand ID is required
+  brandId: string; 
   initialData: BrandLesson | null;
   onLessonSaved: (lesson: BrandLesson) => void;
 }
@@ -70,7 +70,7 @@ export function AddEditBrandLessonDialog({
     resolver: zodResolver(brandLessonFormSchema),
     defaultValues: {
       title: '',
-      content: '',
+      content: '', // Will be HTML from RichTextEditor
       featuredImageUrl: '',
       videoUrl: '',
       playbackHours: 0,
@@ -113,6 +113,7 @@ export function AddEditBrandLessonDialog({
         }
         setIsVideoUploading(false); setVideoUploadProgress(0); setVideoUploadError(null);
         setIsImageUploading(false); setImageUploadProgress(0); setImageUploadError(null);
+        setIsSaving(false);
     }
   }, [initialData, form, isOpen]);
 
@@ -166,7 +167,7 @@ export function AddEditBrandLessonDialog({
       const lessonPayload: BrandLessonFormData = {
         brandId: brandId,
         title: data.title,
-        content: data.content,
+        content: data.content, // HTML from RichTextEditor
         featuredImageUrl: data.featuredImageUrl?.trim() === '' ? null : data.featuredImageUrl,
         videoUrl: data.videoUrl?.trim() === '' ? null : data.videoUrl,
         exerciseFilesInfo: data.exerciseFilesInfo?.trim() === '' ? null : data.exerciseFilesInfo,
@@ -198,72 +199,90 @@ export function AddEditBrandLessonDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl w-full max-h-[90vh] flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b">
-          <div className="flex items-center space-x-2">
-            <PlaySquare className="h-6 w-6 text-primary" />
-            <DialogTitle className="text-xl">{isEditing ? 'Edit Brand Lesson' : 'Create New Brand Lesson'}</DialogTitle>
-          </div>
-          <DialogDescription>
-            {isEditing ? 'Update the details of this brand-specific lesson.' : 'Create a new lesson for your brand.'}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogPortal>
+        <DialogContent className="max-w-4xl w-full max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b">
+            <div className="flex items-center space-x-2">
+              <PlaySquare className="h-6 w-6 text-primary" />
+              <DialogTitle className="text-xl">{isEditing ? 'Edit Brand Lesson' : 'Create New Brand Lesson'}</DialogTitle>
+            </div>
+            <DialogDescription>
+              {isEditing ? 'Update the details of this brand-specific lesson.' : 'Create a new lesson for your brand.'}
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="md:col-span-2 space-y-6">
-                <FormField control={form.control} name="title" render={({ field }) => ( <FormItem> <FormLabel className="text-base font-semibold">Name</FormLabel> <FormControl><Input placeholder="Enter lesson name" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
-                <FormField control={form.control} name="content" render={({ field }) => ( <FormItem> <FormLabel className="text-base font-semibold">Content</FormLabel> <FormControl><Textarea rows={10} placeholder="Lesson content..." {...field} /></FormControl> <FormMessage /> </FormItem> )} />
-              </div>
-
-              <div className="md:col-span-1 space-y-6">
-                <FormField control={form.control} name="featuredImageUrl" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-base font-semibold">Featured Image</FormLabel>
-                    <FormControl>
-                      <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
-                        {field.value && !isImageUploading ? ( <div className="relative aspect-video bg-muted rounded-md"><Image src={field.value} alt="Preview" fill style={{ objectFit: 'contain' }} className="rounded-md" onError={() => field.onChange('')} /><Button type="button" variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => field.onChange('')}><Trash2 className="h-4 w-4" /></Button></div> )
-                        : isImageUploading ? ( <div className="py-8"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" /><Progress value={imageUploadProgress} className="w-full h-2" />{imageUploadError && <p className="text-xs text-destructive mt-2">{imageUploadError}</p>}</div> )
-                        : ( <Label htmlFor="brand-lesson-image-upload" className="cursor-pointer block"><ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Upload image</p><Input id="brand-lesson-image-upload" type="file" accept="image/*" className="hidden" onChange={handleImageFileChange} disabled={isImageUploading} /></Label> )}
-                      </div>
-                    </FormControl> <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="videoUrl" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-base font-semibold">Lesson Video</FormLabel>
-                    <FormControl>
-                      <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
-                        {field.value && !isVideoUploading ? ( <div className="relative aspect-video bg-muted rounded-md flex items-center justify-center"><Video className="h-10 w-10 text-muted-foreground" /><p className="text-xs text-muted-foreground mt-1 truncate w-full px-2">{field.value}</p><Button type="button" variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => field.onChange('')}><Trash2 className="h-4 w-4" /></Button></div> )
-                        : isVideoUploading ? ( <div className="py-8"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" /><Progress value={videoUploadProgress} className="w-full h-2" />{videoUploadError && <p className="text-xs text-destructive mt-2">{videoUploadError}</p>}</div> )
-                        : ( <Label htmlFor="brand-lesson-video-upload" className="cursor-pointer block"><FileUp className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Upload video</p><Input id="brand-lesson-video-upload" type="file" accept="video/*" className="hidden" onChange={handleVideoFileChange} disabled={isVideoUploading} /></Label> )}
-                      </div>
-                    </FormControl> <FormMessage />
-                  </FormItem>
-                )} />
-                <div className="space-y-2">
-                  <Label className="text-base font-semibold">Playback Time (Optional)</Label>
-                  <div className="flex items-center space-x-2">
-                    <FormField control={form.control} name="playbackHours" render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" min="0" {...field} /></FormControl><FormLabel className="text-xs text-muted-foreground block text-center">h</FormLabel></FormItem>)} />
-                    <FormField control={form.control} name="playbackMinutes" render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" min="0" max="59" {...field} /></FormControl><FormLabel className="text-xs text-muted-foreground block text-center">m</FormLabel></FormItem>)} />
-                    <FormField control={form.control} name="playbackSeconds" render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" min="0" max="59" {...field} /></FormControl><FormLabel className="text-xs text-muted-foreground block text-center">s</FormLabel></FormItem>)} />
-                  </div>
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-2 space-y-6">
+                  <FormField control={form.control} name="title" render={({ field }) => ( <FormItem> <FormLabel className="text-base font-semibold">Name</FormLabel> <FormControl><Input placeholder="Enter lesson name" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+                  <FormField
+                    control={form.control}
+                    name="content"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-base font-semibold">Content</FormLabel>
+                        <FormControl>
+                          <RichTextEditor
+                            value={field.value}
+                            onChange={field.onChange}
+                            placeholder="Enter the main text content for this lesson..."
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
-                <FormField control={form.control} name="exerciseFilesInfo" render={({ field }) => ( <FormItem><FormLabel className="text-base font-semibold">Exercise Files (Optional)</FormLabel><FormControl><Textarea rows={3} placeholder="File URLs/Names (one per line)" {...field} /></FormControl><FormMessage /></FormItem> )} />
-              </div>
-            </form>
-          </Form>
-        </div>
 
-        <DialogFooter className="px-6 pb-6 pt-4 border-t bg-background z-10">
-          <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
-          <Button type="submit" onClick={form.handleSubmit(onSubmit)} className="bg-primary hover:bg-primary/90" disabled={isSaving || isVideoUploading || isImageUploading}>
-            {(isSaving || isVideoUploading || isImageUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEditing ? 'Save Changes' : 'Create Lesson'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
+                <div className="md:col-span-1 space-y-6">
+                  <FormField control={form.control} name="featuredImageUrl" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base font-semibold">Featured Image</FormLabel>
+                      <FormControl>
+                        <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
+                          {field.value && !isImageUploading ? ( <div className="relative aspect-video bg-muted rounded-md"><Image src={field.value} alt="Preview" fill style={{ objectFit: 'contain' }} className="rounded-md" onError={() => field.onChange('')} /><Button type="button" variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => field.onChange('')}><Trash2 className="h-4 w-4" /></Button></div> )
+                          : isImageUploading ? ( <div className="py-8"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" /><Progress value={imageUploadProgress} className="w-full h-2" />{imageUploadError && <p className="text-xs text-destructive mt-2">{imageUploadError}</p>}</div> )
+                          : ( <Label htmlFor="brand-lesson-image-upload" className="cursor-pointer block"><ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Upload image</p><Input id="brand-lesson-image-upload" type="file" accept="image/*" className="hidden" onChange={handleImageFileChange} disabled={isImageUploading} /></Label> )}
+                        </div>
+                      </FormControl> <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="videoUrl" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base font-semibold">Lesson Video</FormLabel>
+                      <FormControl>
+                        <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
+                          {field.value && !isVideoUploading ? ( <div className="relative aspect-video bg-muted rounded-md flex items-center justify-center"><Video className="h-10 w-10 text-muted-foreground" /><p className="text-xs text-muted-foreground mt-1 truncate w-full px-2">{field.value}</p><Button type="button" variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => field.onChange('')}><Trash2 className="h-4 w-4" /></Button></div> )
+                          : isVideoUploading ? ( <div className="py-8"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" /><Progress value={videoUploadProgress} className="w-full h-2" />{videoUploadError && <p className="text-xs text-destructive mt-2">{videoUploadError}</p>}</div> )
+                          : ( <Label htmlFor="brand-lesson-video-upload" className="cursor-pointer block"><FileUp className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Upload video</p><Input id="brand-lesson-video-upload" type="file" accept="video/*" className="hidden" onChange={handleVideoFileChange} disabled={isVideoUploading} /></Label> )}
+                        </div>
+                      </FormControl> <FormMessage />
+                    </FormItem>
+                  )} />
+                  <div className="space-y-2">
+                    <Label className="text-base font-semibold">Playback Time (Optional)</Label>
+                    <div className="flex items-center space-x-2">
+                      <FormField control={form.control} name="playbackHours" render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" min="0" {...field} value={field.value ?? 0} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} /></FormControl><FormLabel className="text-xs text-muted-foreground block text-center">h</FormLabel></FormItem>)} />
+                      <FormField control={form.control} name="playbackMinutes" render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" min="0" max="59" {...field} value={field.value ?? 0} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} /></FormControl><FormLabel className="text-xs text-muted-foreground block text-center">m</FormLabel></FormItem>)} />
+                      <FormField control={form.control} name="playbackSeconds" render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" min="0" max="59" {...field} value={field.value ?? 0} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} /></FormControl><FormLabel className="text-xs text-muted-foreground block text-center">s</FormLabel></FormItem>)} />
+                    </div>
+                  </div>
+                  <FormField control={form.control} name="exerciseFilesInfo" render={({ field }) => ( <FormItem><FormLabel className="text-base font-semibold">Exercise Files (Optional)</FormLabel><FormControl><Textarea rows={3} placeholder="File URLs/Names (one per line)" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem> )} />
+                </div>
+              </form>
+            </Form>
+          </div>
+
+          <DialogFooter className="px-6 pb-6 pt-4 border-t bg-background z-10">
+            <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+            <Button type="submit" onClick={form.handleSubmit(onSubmit)} className="bg-primary hover:bg-primary/90" disabled={isSaving || isVideoUploading || isImageUploading}>
+              {(isSaving || isVideoUploading || isImageUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isEditing ? 'Save Changes' : 'Create Lesson'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </DialogPortal>
     </Dialog>
   );
 }
