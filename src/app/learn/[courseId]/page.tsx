@@ -7,7 +7,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle as DialogUITitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription as DialogUIDescription } from '@/components/ui/dialog';
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle, Lock, PlayCircle, FileText, HelpCircle, ChevronLeft, ChevronRight, Menu, Award, MousePointerClick, Video as VideoIcon } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { getUserByEmail, getUserCourseProgress, updateEmployeeProgress, updateUserVideoProgress } from '@/lib/user-data'; // Added updateUserVideoProgress
+import { getUserByEmail, getUserCourseProgress, updateEmployeeProgress, updateUserVideoProgress } from '@/lib/user-data';
 import { getCompanyById as getBrandDetailsForCertificate } from '@/lib/company-data';
 import type { User, UserCourseProgressData, Company } from '@/types/user';
 import { QuizTaking } from '@/components/learn/QuizTaking';
@@ -60,13 +60,11 @@ export default function LearnCoursePage() {
     const [isBrandSpecificCourse, setIsBrandSpecificCourse] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
 
-    // Video progress states
     const [highestWatchedTime, setHighestWatchedTime] = useState(0);
     const [lastSavedVideoTime, setLastSavedVideoTime] = useState<number | null>(null);
     const saveProgressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const isVideoLesson = currentContentItem?.type === 'lesson' || currentContentItem?.type === 'brandLesson';
-    const currentVideoUrl = isVideoLesson ? (currentContentItem?.data as Lesson | BrandLesson).videoUrl : null;
 
     useEffect(() => {
         setIsMounted(true);
@@ -120,12 +118,12 @@ export default function LearnCoursePage() {
                     if (isBrandCourse) {
                         if (typePrefix === 'brandLesson') itemData = await getBrandLessonById(id);
                         else if (typePrefix === 'brandQuiz') itemData = await getBrandQuizById(id);
-                        else {
+                        else { // Fallback for mixed content in a brand course (less likely but possible)
                             if (typePrefix === 'lesson') itemData = await getLessonById(id);
                             else if (typePrefix === 'quiz') itemData = await getQuizById(id);
-                            itemType = typePrefix as 'lesson' | 'quiz';
+                            itemType = typePrefix as 'lesson' | 'quiz'; // Correct the type if it was mixed
                         }
-                    } else {
+                    } else { // Global course
                         if (typePrefix === 'lesson') itemData = await getLessonById(id);
                         else if (typePrefix === 'quiz') itemData = await getQuizById(id);
                         itemType = typePrefix as 'lesson' | 'quiz';
@@ -144,13 +142,15 @@ export default function LearnCoursePage() {
                     if (progressData.status !== 'Completed') {
                         const firstUncompletedIndex = orderedItems.findIndex(item => !(progressData.completedItems || []).includes(item.id));
                         initialItemIndex = firstUncompletedIndex !== -1 ? firstUncompletedIndex : Math.max(0, orderedItems.length - 1);
+                    } else {
+                         initialItemIndex = 0; // If completed, start at the beginning for review
                     }
                 }
                 setCurrentContentItem(orderedItems[initialItemIndex] || null);
                 setCurrentIndex(initialItemIndex);
 
                 if (progressData.status === "Completed" && orderedItems.length > 0 && !hasShownInitialCertificate) {
-                     // setShowCertificateDialog(true); // Consider if auto-popup is desired on load
+                     // setShowCertificateDialog(true); // Auto-popup on load is now handled by advancing to end of course
                      // setHasShownInitialCertificate(true);
                 }
             } else {
@@ -158,46 +158,43 @@ export default function LearnCoursePage() {
                 router.push('/courses/my-courses');
             }
         } catch (error) {
+            console.error("Error loading course data:", error);
             toast({ title: "Error", description: "Could not load course data.", variant: "destructive" });
         } finally {
             setIsLoading(false);
         }
-    }, [courseId, router, toast]);
+    }, [courseId, router, toast, hasShownInitialCertificate]); // Removed hasShownInitialCertificate from deps, it controls pop-up not data load
 
     useEffect(() => {
         if (currentUser?.id) {
             loadCourseData(currentUser.id, currentUser.companyId);
         }
-    }, [currentUser, courseId, loadCourseData]); // Added courseId dependency
-
+    }, [currentUser, courseId, loadCourseData]);
 
     const isCourseCompleted = userProgressData?.status === "Completed";
 
-    // Effect to reset video states when currentContentItem changes
     useEffect(() => {
-        setIsVideoWatched(false); // Reset for new item
+        setIsVideoWatched(false);
         setHighestWatchedTime(0);
         setLastSavedVideoTime(null);
         if (saveProgressTimeoutRef.current) {
             clearTimeout(saveProgressTimeoutRef.current);
             saveProgressTimeoutRef.current = null;
         }
-        // If the new item is a video, attempt to load its saved progress
+
         if (currentContentItem && (currentContentItem.type === 'lesson' || currentContentItem.type === 'brandLesson')) {
             const videoData = currentContentItem.data as Lesson | BrandLesson;
             if (videoData.videoUrl && userProgressData?.videoProgress) {
                 const savedTime = userProgressData.videoProgress[currentContentItem.id] ?? 0;
-                setHighestWatchedTime(savedTime); // Initialize highest watched
-                setLastSavedVideoTime(savedTime); // Initialize last saved for throttling
-                if (videoRef.current) { // If video element is already rendered
-                    videoRef.current.currentTime = savedTime;
-                }
+                setHighestWatchedTime(savedTime);
+                setLastSavedVideoTime(savedTime);
+                 // Video current time is set in handleVideoLoadedMetadata
             }
             if (completedItemIds.includes(currentContentItem.id)) {
-                setIsVideoWatched(true); // If item already completed, mark video as watched for UI
+                setIsVideoWatched(true);
             }
         } else {
-            setIsVideoWatched(true); // Non-video items are considered "watched"
+            setIsVideoWatched(true); // Non-video items are considered "watched" for completion purposes
         }
     }, [currentContentItem, userProgressData, completedItemIds]);
 
@@ -208,16 +205,14 @@ export default function LearnCoursePage() {
         const actualTimeToSave = typeof timeToSave === 'number' ? timeToSave : videoElement?.currentTime;
 
         if (typeof actualTimeToSave !== 'number' || isNaN(actualTimeToSave)) return;
-
-        // Only save if time has changed significantly or if it's a forced save (timeToSave provided)
-        if (typeof timeToSave === 'number' || Math.abs(actualTimeToSave - (lastSavedVideoTime ?? -SAVE_PROGRESS_INTERVAL)) >= (SAVE_PROGRESS_INTERVAL / 1000 -1) ) {
+        
+        const lastSaved = lastSavedVideoTime ?? -SAVE_PROGRESS_INTERVAL; // Ensure it saves if null
+        if (typeof timeToSave === 'number' || Math.abs(actualTimeToSave - lastSaved) >= (SAVE_PROGRESS_INTERVAL / 1000 - 1) ) {
             try {
                 await updateUserVideoProgress(currentUser.id, courseId, currentContentItem.id, actualTimeToSave);
                 setLastSavedVideoTime(actualTimeToSave);
-                console.log(`Video progress saved for ${currentContentItem.id}: ${actualTimeToSave.toFixed(2)}s`);
             } catch (error) {
                 console.error("Failed to save video progress:", error);
-                // Optionally show a non-intrusive toast
             }
         }
     }, [currentUser, courseId, currentContentItem, isVideoLesson, lastSavedVideoTime, isMounted]);
@@ -227,9 +222,17 @@ export default function LearnCoursePage() {
         const overallIndex = curriculumItems.findIndex(item => item.id === itemIdToComplete);
         if (overallIndex === -1) return false;
 
+        // Prevent re-completing an already completed item if the course itself isn't yet completed
+        if (completedItemIds.includes(itemIdToComplete) && !isCourseCompleted) {
+            console.log(`Item ${itemIdToComplete} already completed, but course not fully completed. Skipping re-completion Firestore call.`);
+            return true; // Still allow advancing
+        }
+        // If course is fully completed, allow "re-completion" for timestamp update if desired, but it won't change status
+        // Or, if item not yet completed, proceed.
+
         try {
             await updateEmployeeProgress(currentUser.id, courseId, overallIndex);
-            const updatedProgressData = await getUserCourseProgress(currentUser.id, courseId); // Re-fetch
+            const updatedProgressData = await getUserCourseProgress(currentUser.id, courseId);
             setUserProgressData(updatedProgressData);
             setCompletedItemIds(updatedProgressData.completedItems || []);
 
@@ -241,10 +244,10 @@ export default function LearnCoursePage() {
             toast({ title: "Error", description: "Could not update your progress.", variant: "destructive"});
             return false;
         }
-    }, [currentUser?.id, courseId, curriculumItems, toast, isCourseCompleted, hasShownInitialCertificate]);
+    }, [currentUser?.id, courseId, curriculumItems, toast, isCourseCompleted, hasShownInitialCertificate, completedItemIds]);
 
     const isItemLocked = useCallback((itemIndex: number) => {
-        if (isCourseCompleted) return false;
+        if (isCourseCompleted) return false; // If course is done, all items are unlocked for review
         if (itemIndex === 0) return false;
         for (let i = 0; i < itemIndex; i++) {
             if (!completedItemIds.includes(curriculumItems[i].id)) return true;
@@ -266,42 +269,88 @@ export default function LearnCoursePage() {
             if (!isItemLocked(nextItemIndex) || isCourseCompleted) {
                 setCurrentContentItem(curriculumItems[nextItemIndex]); setCurrentIndex(nextItemIndex);
             } else {
+                // This case should be rare if button logic is correct, but good for robustness
                 toast({ title: "Next Item Locked", description: "Complete the current item to proceed.", variant: "default" });
             }
-        } else if (currentUser?.id) {
-            const finalProgress = await getUserCourseProgress(currentUser.id, courseId); // Re-fetch
-            setUserProgressData(finalProgress); setCompletedItemIds(finalProgress.completedItems || []);
+        } else if (currentUser?.id) { // Reached end of curriculum
+            const finalProgress = await getUserCourseProgress(currentUser.id, courseId); // Re-fetch to ensure status is "Completed"
+            setUserProgressData(finalProgress);
+            setCompletedItemIds(finalProgress.completedItems || []);
             if (finalProgress.status === "Completed" && !hasShownInitialCertificate) {
                 toast({ title: "Course Complete!", description: `Congratulations on finishing ${course?.title}!`, variant: "success" });
                 setShowCertificateDialog(true); setHasShownInitialCertificate(true);
             } else if (finalProgress.status === "Completed") {
+                 // If already shown, or just reviewing
                 toast({ title: "End of Course", description: `You have reviewed all items in ${course?.title}.`, variant: "default" });
+                // Optionally show certificate again if they click a "Finish/View Certificate" button at the end
             }
         }
     }, [currentIndex, curriculumItems, isItemLocked, toast, currentUser, courseId, course?.title, hasShownInitialCertificate, isCourseCompleted]);
 
-    const handleQuizComplete = async (quizId: string, score: number, passed: boolean) => {
-        if (!currentContentItem || !currentContentItem.id) return;
-        const currentItemFullId = currentContentItem.id;
-        const expectedPrefix = isBrandSpecificCourse ? `brandQuiz-` : `quiz-`;
-        if (!currentItemFullId.startsWith(expectedPrefix) || !currentItemFullId.endsWith(quizId)) return;
-        if (passed) { if (await handleItemCompletion(currentItemFullId)) advanceToNextItem(); }
-        else { toast({ title: "Quiz Failed", description: "Please try the quiz again to proceed.", variant: "destructive" }); }
+    const handleMainActionClick = async () => {
+        if (!currentContentItem || !currentContentItem.id || !currentUser?.id) return;
+
+        const isCurrentItemCompleted = completedItemIds.includes(currentContentItem.id);
+        const isLastItem = currentIndex === curriculumItems.length - 1;
+
+        if (currentContentItem.type === 'lesson' || currentContentItem.type === 'brandLesson') {
+            const lessonData = currentContentItem.data as (Lesson | BrandLesson);
+            const hasVideo = !!lessonData.videoUrl;
+
+            if (isCourseCompleted) { // Reviewing a completed course
+                if (isLastItem) { setShowCertificateDialog(true); setHasShownInitialCertificate(true); }
+                else { advanceToNextItem(); }
+                return;
+            }
+
+            if (isCurrentItemCompleted) { // Item is done, but course might not be
+                if (isLastItem) { // Last item, and it's completed - course might complete now
+                    if (await handleItemCompletion(currentContentItem.id)) { // Ensure last update
+                       const finalProgress = await getUserCourseProgress(currentUser.id, courseId);
+                       if (finalProgress.status === "Completed") {
+                           setShowCertificateDialog(true); setHasShownInitialCertificate(true);
+                       } else { // Should not happen if it's the last item, but safety
+                           advanceToNextItem();
+                       }
+                    }
+                } else { advanceToNextItem(); }
+            } else { // Item is not done - try to complete it
+                if (hasVideo && !isVideoWatched) {
+                    toast({ title: "Video Not Watched", description: "Please watch the entire video.", variant: "default"}); return;
+                }
+                if (await handleItemCompletion(currentContentItem.id)) {
+                    advanceToNextItem(); // Auto-advance after completion
+                }
+            }
+        } else if (currentContentItem.type === 'quiz' || currentContentItem.type === 'brandQuiz') {
+            // For quizzes, the primary action is within QuizTaking component.
+            // This button acts as "Next Item" if quiz is already completed and reviewing.
+            if (isCurrentItemCompleted || isCourseCompleted) {
+                if (isLastItem) { setShowCertificateDialog(true); setHasShownInitialCertificate(true); }
+                else { advanceToNextItem(); }
+            }
+            // Else, if quiz is not completed, this button should be disabled (handled by getButtonState).
+        }
     };
 
-    const handleMarkLessonComplete = async () => {
-       if (!currentContentItem || !currentContentItem.id) return;
-       if (!(currentContentItem.type === 'lesson' || currentContentItem.type === 'brandLesson')) return;
-       const lessonData = currentContentItem.data as (Lesson | BrandLesson);
-       const hasVideo = !!lessonData.videoUrl;
-       const isCurrentItemCompleted = completedItemIds.includes(currentContentItem.id);
 
-       if (isCourseCompleted) { advanceToNextItem(); return; }
-       if (isCurrentItemCompleted) { advanceToNextItem(); return; }
-       if (hasVideo && !isVideoWatched) {
-           toast({ title: "Video Not Watched", description: "Please watch the entire video before marking complete.", variant: "default"}); return;
-       }
-       if (await handleItemCompletion(currentContentItem.id)) advanceToNextItem();
+    const handleQuizComplete = async (quizId: string, score: number, passed: boolean) => {
+        if (!currentContentItem || !currentContentItem.id || !currentUser?.id) return;
+        
+        const currentItemFullId = currentContentItem.id;
+        const isCurrentItemNowCompleted = completedItemIds.includes(currentItemFullId);
+
+        if (passed) {
+            if (!isCurrentItemNowCompleted || isCourseCompleted) { // Only complete if not already done, or if course is complete (for timestamp)
+                if (await handleItemCompletion(currentItemFullId)) {
+                    advanceToNextItem(); // Auto-advance after quiz pass and completion
+                }
+            } else { // Quiz was already completed, user is just reviewing and passed again
+                advanceToNextItem();
+            }
+        } else {
+            toast({ title: "Quiz Failed", description: "Please review the material and try the quiz again.", variant: "destructive" });
+        }
     };
 
     const handlePrevious = () => {
@@ -309,12 +358,10 @@ export default function LearnCoursePage() {
         if (prevItemIndex >= 0) { setCurrentContentItem(curriculumItems[prevItemIndex]); setCurrentIndex(prevItemIndex); setIsSidebarOpen(false); }
     };
 
-    // Video specific handlers
     const handleVideoLoadedMetadata = useCallback(() => {
         if (videoRef.current && currentContentItem && userProgressData?.videoProgress) {
             const savedTime = userProgressData.videoProgress[currentContentItem.id] ?? 0;
-            if (videoRef.current.readyState >= 1) { // HAVE_METADATA
-                // Only set if significantly different to avoid seek loops on some browsers
+            if (videoRef.current.readyState >= 1) { 
                 if (Math.abs(videoRef.current.currentTime - savedTime) > 0.5) {
                      videoRef.current.currentTime = savedTime;
                 }
@@ -325,22 +372,20 @@ export default function LearnCoursePage() {
     }, [currentContentItem, userProgressData]);
 
     const handleVideoTimeUpdate = useCallback(() => {
-        if (videoRef.current && isVideoLesson) {
+        if (videoRef.current && isVideoLesson && currentContentItem) {
             const currentTime = videoRef.current.currentTime;
             const duration = videoRef.current.duration;
             setHighestWatchedTime((prev) => Math.max(prev, currentTime));
 
-            if (duration && currentTime >= duration - 1.5 && !isVideoWatched && !completedItemIds.includes(currentContentItem!.id)) {
-                setIsVideoWatched(true); // Mark as watched if near the end
+            if (duration && currentTime >= duration - 1.5 && !isVideoWatched && !completedItemIds.includes(currentContentItem.id)) {
+                setIsVideoWatched(true);
             }
-            // Throttled save
             if (saveProgressTimeoutRef.current) clearTimeout(saveProgressTimeoutRef.current);
             saveProgressTimeoutRef.current = setTimeout(() => {
                 saveCurrentVideoProgress();
             }, SAVE_PROGRESS_INTERVAL);
         }
     }, [isVideoLesson, isVideoWatched, completedItemIds, currentContentItem, saveCurrentVideoProgress]);
-
 
     const handleVideoSeeking = useCallback(() => {
         if (videoRef.current && isVideoLesson) {
@@ -352,21 +397,23 @@ export default function LearnCoursePage() {
     }, [isVideoLesson, highestWatchedTime, isCourseCompleted]);
 
     const handleVideoEnded = useCallback(() => {
-        if (currentContentItem && !completedItemIds.includes(currentContentItem.id)) {
+        if (currentContentItem && isVideoLesson) { // Ensure it's a video lesson
             setIsVideoWatched(true);
             if (videoRef.current) {
-                setHighestWatchedTime(videoRef.current.duration);
-                saveCurrentVideoProgress(videoRef.current.duration); // Force save at end
+                const duration = videoRef.current.duration;
+                setHighestWatchedTime(duration);
+                saveCurrentVideoProgress(duration); 
             }
-            toast({ title: "Video Watched", description: "You can now mark this lesson as complete.", variant: "success" });
+            if(!completedItemIds.includes(currentContentItem.id)) {
+                toast({ title: "Video Watched", description: "You can now mark this lesson as complete.", variant: "success" });
+            }
         }
-    }, [currentContentItem, completedItemIds, saveCurrentVideoProgress, toast]);
+    }, [currentContentItem, completedItemIds, saveCurrentVideoProgress, toast, isVideoLesson]);
 
     const handleVideoPause = useCallback(() => {
         saveCurrentVideoProgress();
     }, [saveCurrentVideoProgress]);
 
-     // Effect to attach/detach video event listeners and save progress on cleanup
      useEffect(() => {
         const video = videoRef.current;
         if (isVideoLesson && video) {
@@ -383,55 +430,84 @@ export default function LearnCoursePage() {
                 video.removeEventListener('ended', handleVideoEnded);
                 video.removeEventListener('pause', handleVideoPause);
                 if (saveProgressTimeoutRef.current) clearTimeout(saveProgressTimeoutRef.current);
-                saveCurrentVideoProgress(); // Save on navigating away from video lesson
+                saveCurrentVideoProgress(); 
             };
         }
-         // Clear timeout if navigating away from a non-video lesson or initially
          if (!isVideoLesson && saveProgressTimeoutRef.current) {
             clearTimeout(saveProgressTimeoutRef.current);
         }
-
     }, [isVideoLesson, handleVideoLoadedMetadata, handleVideoTimeUpdate, handleVideoSeeking, handleVideoEnded, handleVideoPause, saveCurrentVideoProgress]);
+
+
+    const getButtonState = () => {
+        if (!currentContentItem) return { text: "Loading...", disabled: true, variant: "default" as const };
+
+        const isCurrentItemCompleted = completedItemIds.includes(currentContentItem.id);
+        const isLastItem = currentIndex === curriculumItems.length - 1;
+        
+        if (currentContentItem.type === 'lesson' || currentContentItem.type === 'brandLesson') {
+            const lessonData = currentContentItem.data as (Lesson | BrandLesson);
+            const hasVideo = !!lessonData.videoUrl;
+            const videoCompletionRequired = hasVideo && !isVideoWatched && !isCurrentItemCompleted && !isCourseCompleted;
+
+            if (isCourseCompleted) {
+                return { text: isLastItem ? "View Certificate" : "Next Item", disabled: false, variant: "outline" as const };
+            }
+            if (isCurrentItemCompleted) {
+                return { text: isLastItem ? "Finish & View Certificate" : "Next Item", disabled: false, variant: "outline" as const };
+            }
+            // Item not completed
+            return {
+                text: isLastItem ? "Mark Complete & Finish" : "Mark Complete & Next",
+                disabled: videoCompletionRequired,
+                title: videoCompletionRequired ? "Please watch the video to enable completion." : undefined,
+                variant: "default" as const
+            };
+        }
+
+        if (currentContentItem.type === 'quiz' || currentContentItem.type === 'brandQuiz') {
+            if (isCourseCompleted) { // Reviewing completed course
+                 return { text: isLastItem ? "View Certificate" : "Next Item", disabled: false, variant: "outline" as const };
+            }
+            if (isCurrentItemCompleted) { // Reviewing completed quiz within incomplete course
+                 return { text: isLastItem ? "Finish Course" : "Next Item", disabled: false, variant: "outline" as const };
+            }
+            // Quiz is active and not yet completed by user
+            return { text: "Submit Quiz in Section Above", disabled: true, variant: "secondary" as const };
+        }
+        return { text: "Next Item", disabled: false, variant: "default" as const }; // Default fallback
+    };
+
+    const { text: buttonText, disabled: isButtonDisabled, title: buttonTitle, variant: buttonVariant } = getButtonState();
 
 
     const renderContent = () => {
         if (isLoading || !currentUser) return ( <div className="p-6 text-center"> <Skeleton className="h-8 w-1/2 mx-auto mb-4" /> <Skeleton className="aspect-video w-full my-6 rounded-lg" /> <Skeleton className="h-4 w-full my-2" /> <Skeleton className="h-4 w-5/6 my-2" /> </div> );
         if (isCourseCompleted && showCertificateDialog && isMounted && hasShownInitialCertificate) return null;
-        if (isCourseCompleted && !currentContentItem && isMounted) return ( <div className="p-6 text-center flex flex-col items-center justify-center h-full"> <Award className="h-16 w-16 text-green-500 mb-4" /> <h2 className="text-2xl font-semibold mb-2">Course Completed!</h2> <p className="text-muted-foreground">You've successfully finished "{course?.title}". You can review any part of the course.</p> <Button onClick={() => {setShowCertificateDialog(true); setHasShownInitialCertificate(true);}} variant="default" className="mt-4">View Certificate</Button> <Button asChild variant="link" className="mt-2"><Link href="/courses/my-courses">Back to My Learning</Link></Button> </div> );
+        if (isCourseCompleted && !currentContentItem && isMounted && curriculumItems.length > 0) return ( <div className="p-6 text-center flex flex-col items-center justify-center h-full"> <Award className="h-16 w-16 text-green-500 mb-4" /> <h2 className="text-2xl font-semibold mb-2">Course Completed!</h2> <p className="text-muted-foreground">You've successfully finished "{course?.title}". You can review any part of the course.</p> <Button onClick={() => {setShowCertificateDialog(true); setHasShownInitialCertificate(true);}} variant="default" className="mt-4">View Certificate</Button> <Button asChild variant="link" className="mt-2"><Link href="/courses/my-courses">Back to My Learning</Link></Button> </div> );
         if (!currentContentItem && curriculumItems.length > 0 && isMounted) return ( <div className="p-6 text-muted-foreground text-center flex flex-col items-center justify-center h-full"> <MousePointerClick className="h-12 w-12 text-primary mb-4" /> <h2 className="text-xl font-semibold mb-2">Select an Item</h2> <p>Please choose an item from the sidebar to start learning.</p> </div> );
         if (!currentContentItem && curriculumItems.length === 0 && isMounted) return <div className="p-6 text-center">This course has no content yet.</div>;
         if (!isMounted || !currentContentItem) return ( <div className="p-6 text-center"> <Skeleton className="h-8 w-1/2 mx-auto mb-4" /> <Skeleton className="aspect-video w-full my-6 rounded-lg" /> <Skeleton className="h-4 w-full my-2" /> <Skeleton className="h-4 w-5/6 my-2" /> </div> );
 
         const { type, data } = currentContentItem;
         const itemData = data as Lesson | BrandLesson | Quiz | BrandQuiz;
-        const isCurrentItemCompleted = completedItemIds.includes(currentContentItem.id);
-        const isLastItemInCourse = currentIndex === curriculumItems.length - 1;
+        const isCurrentItemCompletedForDisplay = completedItemIds.includes(currentContentItem.id);
 
         if (type === 'lesson' || type === 'brandLesson') {
             const lesson = itemData as (Lesson | BrandLesson);
-            let buttonText = "Mark Complete & Next";
-            if (isCourseCompleted) buttonText = isLastItemInCourse ? "View Certificate" : "Next Item";
-            else { if (isCurrentItemCompleted) buttonText = isLastItemInCourse ? "Finish Course & View Certificate" : "Next Item";
-                   else buttonText = isLastItemInCourse ? "Mark Complete & Finish" : "Mark Complete & Next"; }
-            const isMarkButtonDisabled = (!isCourseCompleted && !isCurrentItemCompleted && !!lesson.videoUrl && !isVideoWatched);
-
             return (
                 <div className="p-4 md:p-6 lg:p-8 space-y-6">
                      {lesson.featuredImageUrl && ( <div className="relative aspect-video mb-6"> <Image src={lesson.featuredImageUrl} alt={`Featured image for ${lesson.title}`} fill style={{ objectFit: 'cover' }} className="rounded-lg shadow-md" priority data-ai-hint="lesson image"/> </div> )}
                     <h2 className="text-2xl md:text-3xl font-bold text-primary">{lesson.title}</h2>
                     {lesson.videoUrl && ( <div className="aspect-video bg-muted rounded-lg flex items-center justify-center text-muted-foreground mb-6 shadow overflow-hidden"> {lesson.videoUrl.includes('youtube.com') || lesson.videoUrl.includes('youtu.be') ? ( <iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${lesson.videoUrl.split('v=')[1]?.split('&')[0] || lesson.videoUrl.split('/').pop()}`} title="YouTube video player" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen></iframe> ) : lesson.videoUrl.includes('vimeo.com') ? ( <iframe src={`https://player.vimeo.com/video/${lesson.videoUrl.split('/').pop()}`} width="100%" height="100%" frameBorder="0" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen></iframe> ) : ( <video ref={videoRef} controls src={lesson.videoUrl} className="w-full h-full object-contain" preload="metadata"> Your browser does not support the video tag. </video> )} </div> )}
-                    {!!lesson.videoUrl && !isVideoWatched && !isCourseCompleted && !isCurrentItemCompleted && ( <div className="p-3 bg-yellow-100 border border-yellow-300 text-yellow-700 rounded-md text-sm flex items-center gap-2"> <VideoIcon className="h-5 w-5" /> Please watch the video to the end to enable completion. </div> )}
+                    {!!lesson.videoUrl && !isVideoWatched && !isCourseCompleted && !isCurrentItemCompletedForDisplay && ( <div className="p-3 bg-yellow-100 border border-yellow-300 text-yellow-700 rounded-md text-sm flex items-center gap-2"> <VideoIcon className="h-5 w-5" /> Please watch the video to the end to enable completion. </div> )}
                     <div className="prose prose-lg max-w-none text-foreground dark:prose-invert" dangerouslySetInnerHTML={{ __html: lesson.content || '' }} />
                      {lesson.exerciseFilesInfo && ( <Card className="mt-6 bg-secondary"><CardHeader><CardTitle className="text-lg flex items-center gap-2"><FileText className="h-5 w-5" /> Exercise Files</CardTitle></CardHeader> <CardContent><ul className="list-disc pl-5 space-y-1 text-sm">{lesson.exerciseFilesInfo.split('\n').map((file, index) => {const trimmedFile = file.trim(); if (!trimmedFile) return null; const isUrl = trimmedFile.startsWith('http://') || trimmedFile.startsWith('https://'); return (<li key={index}>{isUrl ? (<a href={trimmedFile} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{trimmedFile.split('/').pop() || trimmedFile}</a>) : (<span className="text-muted-foreground">{trimmedFile}</span>)}</li>);})}</ul></CardContent></Card>)}
-                    <div className="flex justify-between pt-6 border-t">
-                         <Button variant="outline" onClick={handlePrevious} disabled={currentIndex === 0}><ChevronLeft className="mr-2 h-4 w-4" /> Previous</Button>
-                         <Button onClick={buttonText.includes("Certificate") ? () => {setShowCertificateDialog(true); setHasShownInitialCertificate(true);} : handleMarkLessonComplete} disabled={isMarkButtonDisabled} className={cn((isCurrentItemCompleted || isCourseCompleted) && !buttonText.includes("Certificate") && !isLastItemInCourse ? "bg-secondary text-secondary-foreground hover:bg-secondary/80" : "bg-primary hover:bg-primary/90")} title={isMarkButtonDisabled ? "Watch video to enable" : ""}> {buttonText} {!(buttonText.includes("Certificate") || (isLastItemInCourse && (isCurrentItemCompleted || isCourseCompleted))) && <ChevronRight className="ml-2 h-4 w-4" />} </Button>
-                    </div>
                 </div> );
         }
         if (type === 'quiz' || type === 'brandQuiz') {
             const quiz = itemData as (Quiz | BrandQuiz);
-             return ( <div className="p-4 md:p-6 lg:p-8"> <QuizTaking quiz={quiz} onComplete={handleQuizComplete} isCompleted={isCurrentItemCompleted || isCourseCompleted} /> <div className="flex justify-between pt-6 border-t mt-8"> <Button variant="outline" onClick={handlePrevious} disabled={currentIndex === 0}><ChevronLeft className="mr-2 h-4 w-4" /> Previous</Button> <Button disabled={!isCurrentItemCompleted || (isLastItemInCourse && isCourseCompleted && !showCertificateDialog)} onClick={(isLastItemInCourse && (isCurrentItemCompleted || isCourseCompleted)) ? () => {setShowCertificateDialog(true); setHasShownInitialCertificate(true);} : advanceToNextItem} className={cn((isCourseCompleted && isLastItemInCourse) && "bg-green-600 hover:bg-green-700 text-white")}> {(isLastItemInCourse && (isCurrentItemCompleted || isCourseCompleted)) ? 'View Certificate' : 'Next Item'} {!(isLastItemInCourse && (isCurrentItemCompleted || isCourseCompleted)) && <ChevronRight className="ml-2 h-4 w-4" />} </Button> </div> </div> );
+             return ( <div className="p-4 md:p-6 lg:p-8"> <QuizTaking quiz={quiz} onComplete={handleQuizComplete} isCompleted={isCurrentItemCompletedForDisplay || isCourseCompleted} /> </div> );
         }
         return null;
     };
@@ -441,7 +517,7 @@ export default function LearnCoursePage() {
     if (!isMounted || isLoading || !currentUser) return ( <div className="flex h-screen bg-secondary"> <aside className="hidden md:flex md:flex-col w-72 lg:w-80 border-r bg-background p-4 space-y-4"><Skeleton className="h-5 w-3/4" /> <Skeleton className="h-6 w-full" /><div className="space-y-1"><div className="flex justify-between"><Skeleton className="h-3 w-1/4" /><Skeleton className="h-3 w-1/4" /></div><Skeleton className="h-2 w-full" /></div><Skeleton className="h-10 w-full" /> <Skeleton className="h-10 w-full" /> <Skeleton className="h-10 w-full" /> </aside> <main className="flex-1 flex flex-col overflow-hidden"><header className="flex items-center justify-between p-4 border-b bg-background md:justify-end"><Skeleton className="h-8 w-8 rounded md:hidden mr-4" /> <Skeleton className="h-6 w-1/3 md:hidden" /> <div className="flex items-center gap-4"><Skeleton className="h-6 w-24" /> </div></header><div className="flex-1 overflow-y-auto bg-background p-6 text-center"><Skeleton className="h-8 w-1/2 mx-auto mb-4" /><Skeleton className="aspect-video w-full my-6 rounded-lg" /><Skeleton className="h-4 w-full my-2" /><Skeleton className="h-4 w-full my-2" /><Skeleton className="h-4 w-5/6 my-2" /></div></main> </div>);
     if (!course) return <div className="flex h-screen items-center justify-center">Course data not found.</div>;
 
-    return ( <> <div className="flex h-screen bg-secondary"> <aside className="hidden md:flex md:flex-col w-72 lg:w-80 border-r bg-background overflow-y-auto">{sidebarContent}</aside> <main className="flex-1 flex flex-col overflow-hidden"> <header className="flex items-center justify-between p-4 border-b bg-background md:justify-end"> <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}> <SheetTrigger asChild><Button variant="outline" size="icon" className="md:hidden mr-4"><Menu className="h-5 w-5" /><span className="sr-only">Toggle Course Menu</span></Button></SheetTrigger> <SheetContent side="left" className="w-72 p-0 overflow-y-auto">{sidebarContent}</SheetContent> </Sheet> <h1 className="text-lg font-semibold truncate md:hidden">{course.title}</h1> <div className="flex items-center gap-4"><span className="text-sm font-medium">Welcome, {currentUser.name}!</span></div> </header> <div className="flex-1 overflow-y-auto bg-background">{renderContent()}</div> </main> </div> {isMounted && showCertificateDialog && hasShownInitialCertificate && course && currentUser && userProgressData && ( <Dialog open={showCertificateDialog} onOpenChange={setShowCertificateDialog}> <DialogHeader className="p-6 print-hide"> <DialogUITitle>Course Certificate</DialogUITitle> <DialogDescription> Congratulations on completing {course.title}! </DialogDescription> </DialogHeader> <DialogContent className="max-w-3xl p-0 overflow-hidden print-content"> <CourseCertificate courseName={course.title} userName={currentUser.name} completionDate={userProgressData.lastUpdated instanceof Timestamp ? userProgressData.lastUpdated.toDate() : new Date(userProgressData.lastUpdated || Date.now())} brandName={certificateBrandDetails?.name} brandLogoUrl={certificateBrandDetails?.logoUrl} /> </DialogContent> </Dialog> )} </> );
+    return ( <> <div className="flex h-screen bg-secondary"> <aside className="hidden md:flex md:flex-col w-72 lg:w-80 border-r bg-background overflow-y-auto">{sidebarContent}</aside> <main className="flex-1 flex flex-col overflow-hidden"> <header className="flex items-center justify-between p-4 border-b bg-background md:justify-end"> <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}> <SheetTrigger asChild><Button variant="outline" size="icon" className="md:hidden mr-4"><Menu className="h-5 w-5" /><span className="sr-only">Toggle Course Menu</span></Button></SheetTrigger> <SheetContent side="left" className="w-72 p-0 overflow-y-auto">{sidebarContent}</SheetContent> </Sheet> <h1 className="text-lg font-semibold truncate md:hidden">{course.title}</h1> <div className="flex items-center gap-4"><span className="text-sm font-medium">Welcome, {currentUser.name}!</span></div> </header> <div className="flex-1 overflow-y-auto bg-background relative"> {/* Ensure relative positioning for the button container */} {renderContent()} {/* Navigation Buttons Container */} <div className="sticky bottom-0 left-0 right-0 bg-background/80 backdrop-blur-sm border-t p-4 flex justify-between items-center z-10"> <Button variant="outline" onClick={handlePrevious} disabled={currentIndex === 0}> <ChevronLeft className="mr-2 h-4 w-4" /> Previous </Button> <Button onClick={handleMainActionClick} disabled={isButtonDisabled} className={cn(buttonVariant === 'default' ? "bg-primary hover:bg-primary/90" : "bg-secondary hover:bg-secondary/80 text-secondary-foreground")} title={buttonTitle} > {buttonText} {!(buttonText.includes("Certificate") || (currentIndex === curriculumItems.length -1 && (completedItemIds.includes(currentContentItem?.id || '') || isCourseCompleted))) && <ChevronRight className="ml-2 h-4 w-4" />} </Button> </div> </div> </main> </div> {isMounted && showCertificateDialog && hasShownInitialCertificate && course && currentUser && userProgressData && ( <Dialog open={showCertificateDialog} onOpenChange={setShowCertificateDialog}> <DialogHeader className="p-6 print-hide"> <DialogTitle>Course Certificate</DialogTitle> <DialogUIDescription> Congratulations on completing {course.title}! </DialogUIDescription> </DialogHeader> <DialogContent className="max-w-3xl p-0 overflow-hidden print-content"> <CourseCertificate courseName={course.title} userName={currentUser.name} completionDate={userProgressData.lastUpdated ? (userProgressData.lastUpdated instanceof Date ? userProgressData.lastUpdated : new Date(userProgressData.lastUpdated)) : new Date() } brandName={certificateBrandDetails?.name} brandLogoUrl={certificateBrandDetails?.logoUrl} /> </DialogContent> </Dialog> )} </> );
 }
 
     
