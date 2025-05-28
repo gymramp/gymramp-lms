@@ -51,8 +51,8 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
 
   // Reset selections when question changes
   useEffect(() => {
-    setSelectedRadioAnswer(undefined);
-    setSelectedCheckboxAnswers([]);
+    setSelectedRadioAnswer(undefined); // Reset radio answer for new question
+    setSelectedCheckboxAnswers([]); // Reset checkbox answers for new question
   }, [currentQuestionIndex]);
 
 
@@ -201,7 +201,7 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
   const progressValue = totalQuestions > 0 ? Math.round(((currentQuestionIndex + 1) / totalQuestions) * 100) : 0;
 
   const isCurrentQuestionAnswered = currentQuestion.type === 'multiple-select'
-    ? selectedCheckboxAnswers.length > 0 // Or based on your specific requirement for "answered"
+    ? selectedCheckboxAnswers.length > 0 
     : !!selectedRadioAnswer;
 
   return (
@@ -265,3 +265,4 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
     </Card>
   );
 }
+
