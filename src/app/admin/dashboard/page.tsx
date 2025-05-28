@@ -1,4 +1,4 @@
-
+// src/app/admin/dashboard/page.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -16,7 +16,8 @@ import type { User, Company } from '@/types/user';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
-import { Timestamp } from 'firebase/firestore';
+// Timestamp is not directly used for formatting here, relying on toDate().toISOString() then new Date()
+// import { Timestamp } from 'firebase/firestore';
 
 export default function SuperAdminDashboardPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -38,7 +39,7 @@ export default function SuperAdminDashboardPage() {
       const [usersData, coursesData, companiesData, salesData] = await Promise.all([
         getAllUsers(),
         getAllCourses(),
-        getAllCompanies(),
+        getAllCompanies(), // Super Admin sees all companies
         getSalesTotalLastNDays(30),
       ]);
 
@@ -48,20 +49,21 @@ export default function SuperAdminDashboardPage() {
       setTotalRecentSales(salesData);
 
       const sortedCompanies = companiesData
-        .filter(company => company.createdAt)
+        .filter(company => company.createdAt) // Ensure createdAt exists
         .sort((a, b) => {
-          const dateA = a.createdAt instanceof Timestamp ? a.createdAt.toDate() : new Date(a.createdAt || 0);
-          const dateB = b.createdAt instanceof Timestamp ? b.createdAt.toDate() : new Date(b.createdAt || 0);
-          return dateB.getTime() - dateA.getTime();
+          // Convert ISO strings back to Date objects for comparison
+          const dateA = new Date(a.createdAt as string).getTime();
+          const dateB = new Date(b.createdAt as string).getTime();
+          return dateB - dateA;
         });
       setRecentCompanies(sortedCompanies.slice(0, 3));
 
       const sortedUsers = usersData
-        .filter(user => user.createdAt)
+        .filter(user => user.createdAt) // Ensure createdAt exists
         .sort((a, b) => {
-          const dateA = a.createdAt instanceof Timestamp ? a.createdAt.toDate() : new Date(a.createdAt || 0);
-          const dateB = b.createdAt instanceof Timestamp ? b.createdAt.toDate() : new Date(b.createdAt || 0);
-          return dateB.getTime() - dateA.getTime();
+          const dateA = new Date(a.createdAt as string).getTime();
+          const dateB = new Date(b.createdAt as string).getTime();
+          return dateB - dateA;
         });
       setRecentUsers(sortedUsers.slice(0, 3));
 
@@ -103,7 +105,7 @@ export default function SuperAdminDashboardPage() {
 
   if (isAuthLoading || isLoading) {
     return (
-      <div className="container mx-auto py-12 md:py-16 lg:py-20">
+      <div className="container mx-auto">
         <div className="mb-8">
           <Skeleton className="h-10 w-1/2" />
           <Skeleton className="h-4 w-1/3 mt-2" />
@@ -132,7 +134,7 @@ export default function SuperAdminDashboardPage() {
 
   if (!currentUser) {
     return (
-        <div className="container mx-auto py-12 text-center">
+        <div className="container mx-auto text-center">
             <AlertTriangle className="h-12 w-12 mx-auto text-destructive mb-4" />
             <p className="text-xl font-semibold text-destructive">Access Denied</p>
             <p className="text-muted-foreground">Redirecting to login...</p>
@@ -140,14 +142,18 @@ export default function SuperAdminDashboardPage() {
     );
   }
 
-  const formatDate = (date: Timestamp | Date | undefined): string => {
-    if (!date) return 'N/A';
-    const jsDate = date instanceof Timestamp ? date.toDate() : date;
-    return format(jsDate, 'PPpp');
+  const formatDateForDisplay = (dateString: string | undefined | null): string => {
+    if (!dateString) return 'N/A';
+    try {
+      return format(new Date(dateString), 'PPpp'); // Example: May 15, 2024, 10:30:00 PM
+    } catch (error) {
+      console.error("Error formatting date:", dateString, error);
+      return "Invalid Date";
+    }
   };
 
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-primary">Super Admin Dashboard</h1>
         <p className="text-muted-foreground">Overview of the GYMRAMP platform.</p>
@@ -239,7 +245,7 @@ export default function SuperAdminDashboardPage() {
                                     <span className="font-medium text-primary">{company.name}</span>
                                     <span className="text-xs text-muted-foreground block">
                                         <CalendarDays className="inline mr-1 h-3 w-3"/>
-                                        Added: {formatDate(company.createdAt)}
+                                        Added: {formatDateForDisplay(company.createdAt)}
                                     </span>
                                      {company.saleAmount !== null && company.saleAmount !== undefined && (
                                         <span className="text-xs text-green-600 block">
@@ -263,7 +269,7 @@ export default function SuperAdminDashboardPage() {
                                     <span className="text-xs text-muted-foreground block">Role: {user.role}</span>
                                     <span className="text-xs text-muted-foreground block">
                                        <CalendarDays className="inline mr-1 h-3 w-3"/>
-                                       Added: {formatDate(user.createdAt)}
+                                       Added: {formatDateForDisplay(user.createdAt)}
                                     </span>
                                 </li>
                             ))}

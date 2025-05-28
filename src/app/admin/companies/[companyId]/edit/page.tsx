@@ -1,4 +1,4 @@
-
+// src/app/admin/companies/[companyId]/edit/page.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -15,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
-import { Label } from '@/components/ui/label'; // Added Label import
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import type { Company, CompanyFormData, User } from '@/types/user';
 import type { Program, Course } from '@/types/course';
@@ -140,14 +140,8 @@ export default function EditCompanyPage() {
       setCompany(companyData);
       let trialDate: Date | null = null;
       if (companyData.trialEndsAt) {
-          const trialEndsAtValue = companyData.trialEndsAt;
-          if (typeof trialEndsAtValue === 'string') {
-              trialDate = new Date(trialEndsAtValue);
-          } else if (trialEndsAtValue instanceof Date) {
-              trialDate = trialEndsAtValue;
-          } else if (trialEndsAtValue && typeof (trialEndsAtValue as any).toDate === 'function') {
-              trialDate = (trialEndsAtValue as any).toDate();
-          }
+        // Assuming trialEndsAt is stored as an ISO string after serialization
+        trialDate = new Date(companyData.trialEndsAt as string);
       }
       
       form.reset({
@@ -178,19 +172,19 @@ export default function EditCompanyPage() {
         setIsLoadingParentBrand(false);
       }
       
-      console.log('[EditBrand] companyData.assignedProgramIds from Firestore:', companyData.assignedProgramIds);
+      console.log('[EditBrand] Fetched companyData.assignedProgramIds:', companyData.assignedProgramIds);
       if (companyData.assignedProgramIds && companyData.assignedProgramIds.length > 0) {
         const [fetchedAllLibCoursesData, programsDetailsPromises] = await Promise.all([
-            getAllCourses(), // This fetches all courses, which might be more than needed but simpler for now
+            getAllCourses(),
             Promise.all(companyData.assignedProgramIds.map(id => getProgramById(id)))
         ]);
         setAllLibraryCourses(fetchedAllLibCoursesData);
         const details = programsDetailsPromises.filter(Boolean) as Program[];
-        setAssignedProgramsDetails(details);
         console.log('[EditBrand] Fetched assigned program details:', details);
+        setAssignedProgramsDetails(details);
       } else {
         setAssignedProgramsDetails([]);
-        setAllLibraryCourses([]); // Ensure this is cleared if no programs
+        setAllLibraryCourses([]);
         console.log('[EditBrand] No assigned programs found for brand:', companyId);
       }
 
@@ -233,7 +227,7 @@ export default function EditCompanyPage() {
       const uniqueFileName = `${companyId}-logo-${Date.now()}-${file.name}`;
       const storagePath = `${STORAGE_PATHS.COMPANY_LOGOS}/${uniqueFileName}`;
       
-      const downloadURL = await uploadImage(file, storagePath, setLogoUploadProgress); 
+      const downloadURL = await uploadImage(file, storagePath, setLogoUploadProgress);
       
       form.setValue('logoUrl', downloadURL, { shouldValidate: true });
       toast({ title: "Logo Uploaded", description: "Brand logo uploaded successfully." });
@@ -244,7 +238,6 @@ export default function EditCompanyPage() {
       setIsLogoUploading(false);
     }
   };
-
 
   const onSubmit = async (data: CompanyFormValues) => {
     if (!companyId || !company || !currentUser) return;
@@ -261,7 +254,7 @@ export default function EditCompanyPage() {
         logoUrl: currentLogoUrl?.trim() === '' ? null : currentLogoUrl,
         maxUsers: data.maxUsers ?? null,
         isTrial: data.isTrial,
-        trialEndsAt: data.isTrial && data.trialEndsAt ? (data.trialEndsAt instanceof Date ? Timestamp.fromDate(data.trialEndsAt) : (typeof data.trialEndsAt === 'string' ? Timestamp.fromDate(new Date(data.trialEndsAt)) : null)) : null,
+        trialEndsAt: data.isTrial && data.trialEndsAt ? Timestamp.fromDate(data.trialEndsAt) : null,
         canManageCourses: data.canManageCourses,
         whiteLabelEnabled: data.whiteLabelEnabled,
         primaryColor: data.whiteLabelEnabled && data.primaryColor?.trim() !== '' ? data.primaryColor : null,
@@ -269,13 +262,13 @@ export default function EditCompanyPage() {
         accentColor: data.whiteLabelEnabled && data.accentColor?.trim() !== '' ? data.accentColor : null,
         brandBackgroundColor: data.whiteLabelEnabled && data.brandBackgroundColor?.trim() !== '' ? data.brandBackgroundColor : null,
         brandForegroundColor: data.whiteLabelEnabled && data.brandForegroundColor?.trim() !== '' ? data.brandForegroundColor : null,
-        // assignedProgramIds is managed on a separate page, so not updated here
       };
 
       const updatedCompany = await updateCompany(companyId, metadataToUpdate);
       if (updatedCompany) {
         setCompany(updatedCompany); 
-        fetchCompanyData(currentUser); // Re-fetch all related data
+        // Re-fetch all data to ensure consistency, especially if assignedProgramIds were affected indirectly
+        fetchCompanyData(currentUser);
         toast({ title: "Brand Updated", description: `"${updatedCompany.name}" updated successfully.` });
       } else {
         throw new Error("Failed to update brand details.");
@@ -290,7 +283,7 @@ export default function EditCompanyPage() {
   
   if (!isMounted || isLoading || !currentUser ) {
     return (
-      <div className="container mx-auto py-12">
+      <div className="container mx-auto">
         <Skeleton className="h-8 w-1/4 mb-6" />
         <Skeleton className="h-10 w-1/2 mb-8" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -302,17 +295,13 @@ export default function EditCompanyPage() {
   }
 
   if (!company) {
-    return <div className="container mx-auto py-12 text-center">Brand not found.</div>;
+    return <div className="container mx-auto text-center">Brand not found.</div>;
   }
 
-  const userCanEditWL = currentUser?.role === 'Super Admin';
-  const userCanEditTrial = currentUser?.role === 'Super Admin';
-  const userCanEditCourseMgmt = currentUser?.role === 'Super Admin';
   const userCanEditBasicInfo = currentUser?.role === 'Super Admin' || (currentUser?.companyId === company.id && (currentUser?.role === 'Admin' || currentUser?.role === 'Owner')) || (company.parentBrandId === currentUser?.companyId && (currentUser?.role === 'Admin' || currentUser?.role === 'Owner'));
 
-
   return (
-    <div className="container mx-auto py-12 md:py-16 lg:py-20">
+    <div className="container mx-auto">
       <Button variant="outline" onClick={() => router.push('/admin/companies')} className="mb-6">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Brands
       </Button>
@@ -353,11 +342,11 @@ export default function EditCompanyPage() {
                 </CardContent>
               </Card>
 
-              {/* White-Label Settings Card - Placeholder */}
+              {/* White-Label Settings Card */}
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> White-Label Settings</CardTitle></CardHeader>
                 <CardContent>
-                   {userCanEditWL ? (
+                   {currentUser?.role === 'Super Admin' && isMounted && (
                       <>
                          <FormField
                            control={form.control}
@@ -374,8 +363,8 @@ export default function EditCompanyPage() {
                              </FormItem>
                            )}
                          />
-                         {isMounted && whiteLabelEnabledValue && (
-                           <div className="space-y-3 pt-3 pl-2 border-l-2 border-primary/20 ml-1">
+                         {whiteLabelEnabledValue && (
+                           <div className="space-y-4 pt-3 pl-2 border-l-2 border-primary/20 ml-1">
                              <FormField control={form.control} name="primaryColor" render={({ field }) => (<FormItem><FormLabel>Primary Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                              <FormField control={form.control} name="secondaryColor" render={({ field }) => (<FormItem><FormLabel>Secondary Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                              <FormField control={form.control} name="accentColor" render={({ field }) => (<FormItem><FormLabel>Accent Color (HEX)</FormLabel><FormControl><Input placeholder="#RRGGBB" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
@@ -384,7 +373,8 @@ export default function EditCompanyPage() {
                            </div>
                          )}
                       </>
-                   ) : (
+                   )}
+                   {currentUser?.role !== 'Super Admin' && (
                      <p className="text-sm text-muted-foreground italic">White-label settings can only be managed by a Super Admin.</p>
                    )}
                 </CardContent>
@@ -406,7 +396,7 @@ export default function EditCompanyPage() {
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                           <div className="space-y-0.5"><FormLabel>Is Trial Account?</FormLabel></div>
                           <FormControl>
-                            <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} disabled={!userCanEditTrial} /></div>
+                            <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} disabled={currentUser?.role !== 'Super Admin'} /></div>
                           </FormControl>
                         </FormItem>
                       )}
@@ -420,16 +410,14 @@ export default function EditCompanyPage() {
                         <FormItem>
                           <FormLabel className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Trial End Date</FormLabel>
                           <FormControl>
-                            <div> {/* Added div wrapper */}
-                                <DatePickerWithPresets date={field.value} setDate={field.onChange} disabled={!userCanEditTrial} />
-                            </div>
+                            <div><DatePickerWithPresets date={field.value} setDate={field.onChange} disabled={currentUser?.role !== 'Super Admin'} /></div>
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
                   )}
-                  {!userCanEditTrial && <p className="text-xs text-muted-foreground italic">Trial settings can only be managed by a Super Admin.</p>}
+                  {currentUser?.role !== 'Super Admin' && <p className="text-xs text-muted-foreground italic">Trial settings can only be managed by a Super Admin.</p>}
                 </CardContent>
               </Card>
 
@@ -448,16 +436,15 @@ export default function EditCompanyPage() {
                                 <FormDescription>Allow this brand's Admins/Owners to create and manage their own courses.</FormDescription>
                                 </div>
                                 <FormControl>
-                                  <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} disabled={!userCanEditCourseMgmt} /></div>
+                                  <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} disabled={currentUser?.role !== 'Super Admin'} /></div>
                                 </FormControl>
                             </FormItem>
                             )}
                         />
                     )}
-                    {!userCanEditCourseMgmt && <p className="text-xs text-muted-foreground italic mt-2">Course management ability can only be set by a Super Admin.</p>}
+                    {currentUser?.role !== 'Super Admin' && <p className="text-xs text-muted-foreground italic mt-2">Course management ability can only be set by a Super Admin.</p>}
                     </CardContent>
                 </Card>
-
 
               {/* Assigned Programs Card */}
                <Card>
