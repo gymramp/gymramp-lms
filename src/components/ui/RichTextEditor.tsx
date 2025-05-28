@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic'; // Added this import
 import 'react-quill/dist/quill.snow.css'; // Import Quill styles
 import { Loader2 } from 'lucide-react';
 
@@ -52,7 +53,6 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
 
   if (!isClient) {
     // Render a placeholder or loading state on the server and initial client render.
-    // This must be consistent between server and initial client.
     return (
         <div className="flex items-center justify-center h-32 border rounded-md bg-muted">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
