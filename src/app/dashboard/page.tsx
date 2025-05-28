@@ -21,7 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from '@/components/ui/input'; // Import Input for read-only display
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -82,19 +82,17 @@ export default function DashboardPage() {
   const [rowsPerPage, setRowsPerPage] = useState<number | 'all'>(DEFAULT_ROWS_PER_PAGE);
 
   const fetchInitialDashboardData = useCallback(async (user: User) => {
-    console.log("[Dashboard] Fetching initial dashboard data. User Role:", user.role, "User Brand ID:", user.companyId);
     setIsLoadingBrandDataForFilters(true);
+    setUserPrimaryBrand(null);
     try {
       const fetchedAccessibleBrands = await fetchAllAccessibleBrandsForUser(user);
       setViewableBrandsForFilter(fetchedAccessibleBrands);
-      console.log("[Dashboard] Accessible Brands for Filter:", fetchedAccessibleBrands.map(b => ({ id: b.id, name: b.name, parent: b.parentBrandId })));
 
       let primaryBrand: Company | null = null;
       if (user.companyId) {
         primaryBrand = fetchedAccessibleBrands.find(b => b.id === user.companyId) || await getCompanyById(user.companyId);
       }
       setUserPrimaryBrand(primaryBrand);
-      console.log("[Dashboard] User Primary Brand:", primaryBrand ? primaryBrand.name : 'None');
 
       let initialSelectedBrandId = '';
       let allVisibleSystemLocationsForUser: Location[] = [];
@@ -117,7 +115,6 @@ export default function DashboardPage() {
       setAllSystemLocations(allVisibleSystemLocationsForUser);
       setSelectedBrandIdForDashboard(initialSelectedBrandId);
       setSelectedLocationId('all');
-      console.log(`[Dashboard] Initial brand selected: ${initialSelectedBrandId}`);
 
     } catch (error) {
       console.error("[DashboardPage] Error fetching initial filter data:", error);
@@ -164,7 +161,6 @@ export default function DashboardPage() {
     }
     setIsLoadingEmployees(true); setIsLoadingCoursesForAssignment(true);
     setLastGeneratedPassword(null);
-    console.log(`[Dashboard] Fetching employees. User Role: ${currentUser.role}, Selected Brand ID: ${selectedBrandIdForDashboard}`);
 
     try {
       let usersToProcess: User[] = [];
@@ -179,7 +175,7 @@ export default function DashboardPage() {
           companyContextForCourseAssignment = viewableBrandsForFilter.find(b => b.id === selectedBrandIdForDashboard) || null;
         }
       } else if ((currentUser.role === 'Admin' || currentUser.role === 'Owner')) {
-        if (selectedBrandIdForDashboard === 'all') {
+        if (selectedBrandIdForDashboard === 'all' || !selectedBrandIdForDashboard) {
           const usersPromises = viewableBrandsForFilter.map(b => getUsersByCompanyId(b.id));
           usersToProcess = (await Promise.all(usersPromises)).flat().filter((user, index, self) => index === self.findIndex((u) => u.id === user.id));
           companyContextForCourseAssignment = userPrimaryBrand;
@@ -206,7 +202,6 @@ export default function DashboardPage() {
       const brandForCourseContext = companyContextForCourseAssignment || (selectedBrandIdForDashboard !== 'all' ? viewableBrandsForFilter.find(b => b.id === selectedBrandIdForDashboard) : null) || userPrimaryBrand;
 
       if (brandForCourseContext) {
-        console.log(`[Dashboard] Fetching assignable courses for brand context: ${brandForCourseContext.name} (ID: ${brandForCourseContext.id})`);
         const globalProgramCourses: Course[] = [];
         if (brandForCourseContext.assignedProgramIds && brandForCourseContext.assignedProgramIds.length > 0) {
           const allGlobalPrograms = await fetchAllGlobalPrograms();
@@ -225,7 +220,6 @@ export default function DashboardPage() {
           assignableCourses.push(...brandCourses);
         }
       } else if (currentUser.role === 'Super Admin' && (selectedBrandIdForDashboard === 'all' || !selectedBrandIdForDashboard)) {
-        console.log("[Dashboard] Super Admin 'All Brands' selected, fetching all library courses.");
         assignableCourses = (await getAllLibraryCourses()).filter(c => !c.isDeleted);
       }
       setAvailableCoursesForAssignment(assignableCourses.filter((course, index, self) => index === self.findIndex(c => c.id === course.id)));
@@ -251,22 +245,17 @@ export default function DashboardPage() {
       setLocationsForLocationFilter([]);
       return;
     }
-    console.log("[Dashboard] Location filter effect running. Selected Brand:", selectedBrandIdForDashboard);
     let currentBrandLocations: Location[] = [];
-    if (selectedBrandIdForDashboard === 'all') {
+    if (selectedBrandIdForDashboard === 'all' || !selectedBrandIdForDashboard) {
       currentBrandLocations = allSystemLocations;
     } else if (selectedBrandIdForDashboard) {
       currentBrandLocations = allSystemLocations.filter(loc => loc.companyId === selectedBrandIdForDashboard);
     }
     setLocationsForLocationFilter(currentBrandLocations);
-    // Do not reset selectedLocationId here explicitly unless brand actually changes.
-    // If the list of available locations changes and the current selectedLocationId is no longer valid,
-    // it might be better to reset it or handle it in the Select component's logic.
-    // For now, if selectedBrandIdForDashboard is the same, it will keep the selectedLocationId.
   }, [selectedBrandIdForDashboard, allSystemLocations, currentUser, isAuthLoading, isLoadingBrandDataForFilters]);
 
   useEffect(() => {
-      setSelectedLocationId('all'); // Reset location filter when brand changes
+      setSelectedLocationId('all');
   }, [selectedBrandIdForDashboard]);
 
 
@@ -275,29 +264,22 @@ export default function DashboardPage() {
       setFilteredEmployees([]);
       return;
     }
-    console.log(`[Dashboard Filter] Applying location filter. Role: ${currentUser.role}, Selected Brand: ${selectedBrandIdForDashboard}, Selected Location: ${selectedLocationId}`);
-    console.log(`[Dashboard Filter] Employees before location filter: ${employees.length}, Manager assigned locations: ${JSON.stringify(currentUser.assignedLocationIds)}`);
-
     let tempUsers = [...employees];
-
     if (selectedLocationId && selectedLocationId !== 'all') {
       tempUsers = tempUsers.filter(emp => (emp.assignedLocationIds || []).includes(selectedLocationId));
-      console.log(`[Dashboard Filter] After specific location filter '${selectedLocationId}': ${tempUsers.length}`);
     } else if (currentUser.role === 'Manager' && selectedBrandIdForDashboard === currentUser.companyId && selectedLocationId === 'all') {
       const managerAssignedLocationIds = currentUser.assignedLocationIds || [];
       if (managerAssignedLocationIds.length > 0) {
         tempUsers = tempUsers.filter(emp =>
-          emp.id === currentUser.id || // Always include the manager
+          emp.id === currentUser.id || 
           (emp.assignedLocationIds || []).some(locId => managerAssignedLocationIds.includes(locId))
         );
-      } else { // If manager has no locations assigned, they should only see themselves
+      } else { 
         tempUsers = tempUsers.filter(emp => emp.id === currentUser.id);
       }
-      console.log(`[Dashboard Filter] Manager 'All Locations' view. After filter: ${tempUsers.length}`);
     }
     setFilteredEmployees(tempUsers);
     setActiveCurrentPage(1); setInactiveCurrentPage(1);
-    console.log(`[Dashboard Filter] Final filteredEmployees count: ${tempUsers.length}`);
   }, [employees, selectedLocationId, currentUser, isLoadingEmployees, selectedBrandIdForDashboard]);
 
 
@@ -322,9 +304,7 @@ export default function DashboardPage() {
   const handleUserUpdated = () => { refreshDashboardData(); setIsEditUserDialogOpen(false); setUserToEdit(null); };
 
   const openAssignCourseDialog = (employee: User) => {
-    console.log(`[Dashboard openAssignCourseDialog] Attempting for ${currentUser?.email} on ${employee.email}`);
     if (!currentUser) return;
-
     let canAssign = false;
     if (currentUser.role === 'Super Admin') {
         canAssign = true;
@@ -332,18 +312,12 @@ export default function DashboardPage() {
         if (currentUser.role === 'Manager') {
             canAssign = (employee.role === 'Staff' || employee.role === 'Manager') && employee.companyId === currentUser.companyId;
         } else if (currentUser.role === 'Admin' || currentUser.role === 'Owner') {
-             // Admin/Owner can assign to users in their primary brand or any child brands they manage
-             // And the target user's role must be lower
             const targetUserIsAccessible = viewableBrandsForFilter.some(vb => vb.id === employee.companyId);
             if (targetUserIsAccessible && ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[employee.role]) {
                  canAssign = true;
             }
         }
     }
-    
-    console.log(`[Dashboard openAssignCourseDialog] CurrentUser: ${currentUser.role} (Brand: ${currentUser.companyId}), TargetUser: ${employee.role} (Brand: ${employee.companyId}). CanAssign: ${canAssign}`);
-
-
     if (!canAssign) {
       toast({ title: "Permission Denied", description: "You do not have permission to assign courses to this user.", variant: "destructive" }); return;
     }
@@ -399,10 +373,10 @@ export default function DashboardPage() {
   const pageIsLoading = isAuthLoading || isLoadingBrandDataForFilters;
 
   if (pageIsLoading || !currentUser) {
-    return ( <div className="flex-1 space-y-4 pt-6"> <Skeleton className="h-8 w-1/3 mb-4" /> <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"> {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)} </div> <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7"> <Skeleton className="col-span-4 h-64" /> <Skeleton className="col-span-4 lg:col-span-3 h-64" /> </div> </div> );
+    return ( <div className="flex-1 space-y-4"> <Skeleton className="h-8 w-1/3 mb-4" /> <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"> {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)} </div> <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7"> <Skeleton className="col-span-4 h-64" /> <Skeleton className="col-span-4 lg:col-span-3 h-64" /> </div> </div> );
   }
   if (!userPrimaryBrand && currentUser.role !== 'Super Admin') {
-    return <div className="flex-1 space-y-4 pt-6 text-center">Error: User not associated with a primary brand. Please contact support.</div>;
+    return <div className="flex-1 space-y-4 text-center">Error: User not associated with a primary brand. Please contact support.</div>;
   }
 
   return (
@@ -438,7 +412,7 @@ export default function DashboardPage() {
             {currentUser?.role === 'Manager' && userPrimaryBrand ? (
                 <Input 
                     id="brand-filter-dashboard-manager" 
-                    value={userPrimaryBrand.name} 
+                    value={isLoadingBrandDataForFilters ? 'Loading brand...' : userPrimaryBrand.name || 'Brand Not Found'}
                     readOnly 
                     disabled 
                     className="w-[220px] bg-background/50 h-10"
@@ -508,12 +482,12 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {userToAssignCourse && userPrimaryBrand && (
+      {userToAssignCourse && (
         <AssignCourseDialog
           isOpen={isAssignCourseDialogOpen}
           setIsOpen={setIsAssignCourseDialogOpen}
           employee={userToAssignCourse}
-          company={userPrimaryBrand} // Pass the manager's primary brand here
+          company={viewableBrandsForFilter.find(b => b.id === userToAssignCourse.companyId) || userPrimaryBrand}
           onAssignCourse={handleAssignCourse}
         />
       )}
@@ -541,5 +515,6 @@ export default function DashboardPage() {
     </div>
   );
 }
-
     
+      
+
