@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, BookOpen, Building, CreditCard, Loader2, AlertTriangle, Cog, List, CalendarDays, Percent, UserPlus, BarChartBig, TestTube2, Gift, DatabaseZap } from 'lucide-react';
+import { Users, BookOpen, Building, CreditCard, Loader2, AlertTriangle, Cog, List, CalendarDays, Percent, UserPlus, BarChartBig, TestTube2, Gift, DatabaseZap, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
@@ -47,7 +47,7 @@ export default function SuperAdminDashboardPage() {
       setTotalRecentSales(salesData);
 
       const sortedCompanies = companiesData
-        .filter(company => company.createdAt) // Ensure createdAt exists
+        .filter(company => company.createdAt) 
         .sort((a, b) => {
           const dateA = new Date(a.createdAt as string).getTime();
           const dateB = new Date(b.createdAt as string).getTime();
@@ -56,7 +56,7 @@ export default function SuperAdminDashboardPage() {
       setRecentCompanies(sortedCompanies.slice(0, 3));
 
       const sortedUsers = usersData
-        .filter(user => user.createdAt) // Ensure createdAt exists
+        .filter(user => user.createdAt) 
         .sort((a, b) => {
           const dateA = new Date(a.createdAt as string).getTime();
           const dateB = new Date(b.createdAt as string).getTime();
@@ -70,7 +70,7 @@ export default function SuperAdminDashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast, currentUser]); // Added currentUser to dependency array
+  }, [toast, currentUser]); 
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -80,7 +80,6 @@ export default function SuperAdminDashboardPage() {
           const userDetails = await getUserByEmail(firebaseUser.email);
           if (userDetails?.role === 'Super Admin') {
             setCurrentUser(userDetails);
-            // No need to call fetchData here, it will be called by the next useEffect
           } else {
             toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
             router.push('/');
@@ -99,7 +98,6 @@ export default function SuperAdminDashboardPage() {
     return () => unsubscribe();
   }, [router, toast]);
 
-  // Separate useEffect for fetchData based on currentUser
   useEffect(() => {
     if (currentUser && !isAuthLoading) {
       fetchData();
@@ -151,13 +149,12 @@ export default function SuperAdminDashboardPage() {
       return 'N/A';
     }
     try {
-      // Ensure the dateString is a valid ISO string or parseable by Date constructor
       const dateObj = new Date(dateString);
-      if (isNaN(dateObj.getTime())) { // Check if date is invalid
+      if (isNaN(dateObj.getTime())) { 
         console.error("Error formatting date: Invalid date string received", dateString);
         return "Invalid Date";
       }
-      return format(dateObj, 'PPpp'); // Example: May 15, 2024, 10:30:00 PM
+      return format(dateObj, 'PPpp'); 
     } catch (error) {
       console.error("Error formatting date:", dateString, error);
       return "Invalid Date";
