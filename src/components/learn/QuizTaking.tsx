@@ -33,11 +33,16 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
 
   useEffect(() => {
     if (isCompleted && totalQuestions > 0) {
-      setScore(100);
+      // If the quiz is already marked as completed (e.g., on page load for a finished course)
+      // We should simulate a passed state for display purposes if needed.
+      // However, the primary logic for handling this is in the parent LearnCoursePage.
+      // Here, we just ensure the UI reflects a submitted and (likely) passed state.
+      setScore(100); // Assume 100% if already marked completed by parent
       setPassed(true);
       setQuizSubmitted(true);
       setIncorrectQuestionNumbers([]);
     } else if (!isCompleted) {
+      // Reset state if quiz is not pre-completed (e.g., starting fresh or retrying)
       setCurrentQuestionIndex(0);
       setUserAnswers({});
       setSelectedRadioAnswer(undefined);
@@ -47,13 +52,13 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
       setPassed(false);
       setIncorrectQuestionNumbers([]);
     }
-  }, [isCompleted, quiz, totalQuestions]);
+  }, [isCompleted, quiz, totalQuestions]); // Rerun if isCompleted or quiz changes
 
-  // Reset selections when question changes
-  useEffect(() => {
-    setSelectedRadioAnswer(undefined); // Reset radio answer for new question
-    setSelectedCheckboxAnswers([]); // Reset checkbox answers for new question
-  }, [currentQuestionIndex]);
+  // This useEffect was removed as the reset logic is now in handleNextQuestion
+  // useEffect(() => {
+  //   setSelectedRadioAnswer(undefined);
+  //   setSelectedCheckboxAnswers([]);
+  // }, [currentQuestionIndex]);
 
 
   const handleRadioAnswerSelect = (value: string) => {
@@ -68,14 +73,14 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
     );
   };
 
-  const recordCurrentAnswer = () => {
-    if (!currentQuestion || quizSubmitted) return {};
+  const recordCurrentAnswer = (): Record<string, string | string[]> => {
+    if (!currentQuestion || quizSubmitted) return userAnswers; // Return existing if no current question or submitted
 
     let answerToStore: string | string[];
     if (currentQuestion.type === 'multiple-select') {
-      answerToStore = [...selectedCheckboxAnswers].sort(); // Store sorted for consistent comparison
+      answerToStore = [...selectedCheckboxAnswers].sort();
     } else {
-      answerToStore = selectedRadioAnswer || ""; // Store empty string if undefined
+      answerToStore = selectedRadioAnswer || "";
     }
 
     return {
@@ -88,7 +93,10 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
     const updatedAnswers = recordCurrentAnswer();
     setUserAnswers(updatedAnswers);
 
-    // Reset selections for the next question is handled by useEffect on currentQuestionIndex change
+    // Reset selections for the *next* question BEFORE index changes
+    setSelectedRadioAnswer(undefined);
+    setSelectedCheckboxAnswers([]);
+
     setCurrentQuestionIndex((prev) => prev + 1);
   };
 
@@ -118,7 +126,7 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
     });
 
     const calculatedScore = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 100;
-    const didPass = correctCount === totalQuestions; // Requires 100% for now
+    const didPass = correctCount === totalQuestions;
 
     setScore(calculatedScore);
     setPassed(didPass);
@@ -138,7 +146,13 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
   };
 
   const handleContinue = () => {
-    onComplete(quiz.id, score, passed);
+    // Only call onComplete if the quiz was actually submitted and passed in this session
+    // If it was pre-completed (isCompleted prop), parent handles "next"
+    if (quizSubmitted && passed) {
+        onComplete(quiz.id, score, passed);
+    } else if (isCompleted) { // If pre-completed, just signal to parent to move on
+        onComplete(quiz.id, 100, true);
+    }
   };
 
   if (totalQuestions === 0) {
@@ -170,7 +184,7 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
               <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
               <AlertTitle className="text-green-800 dark:text-green-300">Quiz Passed!</AlertTitle>
               <AlertDescription className="text-green-700 dark:text-green-400">
-                {score > 0 ? `Your score: ${score}%` : 'Completed (No score calculated for empty quiz)'}
+                {score > 0 ? `Your score: ${score}%` : 'Completed!'}
               </AlertDescription>
             </Alert>
           ) : (
@@ -187,7 +201,8 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
           {passed ? (
             <Button onClick={handleContinue}>Continue Course</Button>
           ) : (
-            <Button onClick={handleRetry} variant="outline" disabled={isCompleted}>Retry Quiz</Button>
+            // Only allow retry if the quiz wasn't pre-completed
+            !isCompleted && <Button onClick={handleRetry} variant="outline">Retry Quiz</Button>
           )}
         </CardFooter>
       </Card>
@@ -220,7 +235,7 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
         {currentQuestion.type === 'multiple-select' ? (
           <div className="space-y-3">
             {currentQuestion.options.map((option, index) => (
-              <div key={index} className="flex items-center space-x-3 rounded-md border border-input p-3 hover:bg-muted/50 transition-colors has-[:checked]:bg-primary/10 has-[:checked]:border-primary">
+              <div key={`${currentQuestion.id}-ms-option-${index}`} className="flex items-center space-x-3 rounded-md border border-input p-3 hover:bg-muted/50 transition-colors has-[:checked]:bg-primary/10 has-[:checked]:border-primary">
                 <Checkbox
                   id={`${currentQuestion.id}-option-${index}`}
                   checked={selectedCheckboxAnswers.includes(option)}
@@ -235,13 +250,14 @@ export function QuizTaking({ quiz, onComplete, isCompleted = false }: QuizTaking
           </div>
         ) : (
           <RadioGroup
+            key={currentQuestion.id} // Add key to force re-mount on question change
             onValueChange={handleRadioAnswerSelect}
             value={selectedRadioAnswer}
             className="space-y-3"
             disabled={quizSubmitted}
           >
             {currentQuestion.options.map((option, index) => (
-              <div key={index} className="flex items-center space-x-3 rounded-md border border-input p-3 hover:bg-muted/50 transition-colors has-[:checked]:bg-primary/10 has-[:checked]:border-primary">
+              <div key={`${currentQuestion.id}-mc-option-${index}`} className="flex items-center space-x-3 rounded-md border border-input p-3 hover:bg-muted/50 transition-colors has-[:checked]:bg-primary/10 has-[:checked]:border-primary">
                 <RadioGroupItem value={option} id={`${currentQuestion.id}-option-${index}`} disabled={quizSubmitted} />
                 <Label htmlFor={`${currentQuestion.id}-option-${index}`} className="font-normal flex-1 cursor-pointer">
                   {option}
