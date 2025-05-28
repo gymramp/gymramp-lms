@@ -16,8 +16,6 @@ import type { User, Company } from '@/types/user';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
-// Timestamp is not directly used for formatting here, relying on toDate().toISOString() then new Date()
-// import { Timestamp } from 'firebase/firestore';
 
 export default function SuperAdminDashboardPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -39,7 +37,7 @@ export default function SuperAdminDashboardPage() {
       const [usersData, coursesData, companiesData, salesData] = await Promise.all([
         getAllUsers(),
         getAllCourses(),
-        getAllCompanies(), // Super Admin sees all companies
+        getAllCompanies(currentUser), // Pass current user for role-based fetching
         getSalesTotalLastNDays(30),
       ]);
 
@@ -51,7 +49,6 @@ export default function SuperAdminDashboardPage() {
       const sortedCompanies = companiesData
         .filter(company => company.createdAt) // Ensure createdAt exists
         .sort((a, b) => {
-          // Convert ISO strings back to Date objects for comparison
           const dateA = new Date(a.createdAt as string).getTime();
           const dateB = new Date(b.createdAt as string).getTime();
           return dateB - dateA;
@@ -73,7 +70,7 @@ export default function SuperAdminDashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, currentUser]); // Added currentUser to dependency array
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -83,7 +80,7 @@ export default function SuperAdminDashboardPage() {
           const userDetails = await getUserByEmail(firebaseUser.email);
           if (userDetails?.role === 'Super Admin') {
             setCurrentUser(userDetails);
-            await fetchData();
+            // No need to call fetchData here, it will be called by the next useEffect
           } else {
             toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
             router.push('/');
@@ -100,7 +97,14 @@ export default function SuperAdminDashboardPage() {
       setIsAuthLoading(false);
     });
     return () => unsubscribe();
-  }, [router, toast, fetchData]);
+  }, [router, toast]);
+
+  // Separate useEffect for fetchData based on currentUser
+  useEffect(() => {
+    if (currentUser && !isAuthLoading) {
+      fetchData();
+    }
+  }, [currentUser, isAuthLoading, fetchData]);
 
 
   if (isAuthLoading || isLoading) {
@@ -143,9 +147,17 @@ export default function SuperAdminDashboardPage() {
   }
 
   const formatDateForDisplay = (dateString: string | undefined | null): string => {
-    if (!dateString) return 'N/A';
+    if (!dateString || typeof dateString !== 'string' || dateString.trim() === '') {
+      return 'N/A';
+    }
     try {
-      return format(new Date(dateString), 'PPpp'); // Example: May 15, 2024, 10:30:00 PM
+      // Ensure the dateString is a valid ISO string or parseable by Date constructor
+      const dateObj = new Date(dateString);
+      if (isNaN(dateObj.getTime())) { // Check if date is invalid
+        console.error("Error formatting date: Invalid date string received", dateString);
+        return "Invalid Date";
+      }
+      return format(dateObj, 'PPpp'); // Example: May 15, 2024, 10:30:00 PM
     } catch (error) {
       console.error("Error formatting date:", dateString, error);
       return "Invalid Date";
@@ -215,11 +227,17 @@ export default function SuperAdminDashboardPage() {
                 <Button variant="outline" onClick={() => router.push('/admin/users')} className="justify-start text-left h-auto whitespace-normal px-3 py-2">
                     <Users className="mr-2 h-4 w-4 flex-shrink-0" /> Manage Users
                 </Button>
+                 <Button variant="outline" onClick={() => router.push('/admin/programs')} className="justify-start text-left h-auto whitespace-normal px-3 py-2">
+                    <Layers className="mr-2 h-4 w-4 flex-shrink-0" /> Manage Programs
+                </Button>
                 <Button variant="outline" onClick={() => router.push('/admin/courses')} className="justify-start text-left h-auto whitespace-normal px-3 py-2">
-                    <BookOpen className="mr-2 h-4 w-4 flex-shrink-0" /> Manage Courses
+                    <BookOpen className="mr-2 h-4 w-4 flex-shrink-0" /> Manage Courses (Global Library)
                 </Button>
                 <Button variant="outline" onClick={() => router.push('/admin/checkout')} className="justify-start text-left h-auto whitespace-normal px-3 py-2">
-                    <CreditCard className="mr-2 h-4 w-4 flex-shrink-0" /> New Customer Checkout
+                    <CreditCard className="mr-2 h-4 w-4 flex-shrink-0" /> New Paid Checkout
+                </Button>
+                 <Button variant="outline" onClick={() => router.push('/admin/free-trial-checkout')} className="justify-start text-left h-auto whitespace-normal px-3 py-2">
+                    <Gift className="mr-2 h-4 w-4 flex-shrink-0" /> New Free Trial
                 </Button>
                 <Button variant="outline" onClick={() => router.push('/admin/settings')} className="justify-start text-left h-auto whitespace-normal px-3 py-2">
                     <Cog className="mr-2 h-4 w-4 flex-shrink-0" /> System Settings
