@@ -12,35 +12,33 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth"; // Import onAuthStateChanged
 import { auth } from "@/lib/firebase";
 import Link from "next/link";
 import Image from 'next/image';
 import { useState, useEffect, Suspense } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from 'next/navigation';
-import { getCompanyById, getCompanyBySubdomainSlug } from '@/lib/company-data';
 import { getUserByEmail } from '@/lib/user-data';
+import { getCompanyById, getCompanyBySubdomainSlug } from '@/lib/company-data';
 import { Loader2 } from "lucide-react";
 import { Timestamp } from "firebase/firestore";
-import type { Company } from '@/types/user';
+import type { Company, User } from '@/types/user'; // Import User type
 
-// Interface for conceptual brand props
 interface LoginPageProps {
   initialBrandName?: string | null;
   initialBrandLogoUrl?: string | null;
 }
 
-// Main component logic
 function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPageProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // For login button processing
+  const [isCheckingAuthAndRedirecting, setIsCheckingAuthAndRedirecting] = useState(true); // For initial auth check
   const [displayBrandName, setDisplayBrandName] = useState(initialBrandName || "Gymramp");
-  const [displayBrandLogoUrl, setDisplayBrandLogoUrl] = useState(initialBrandLogoUrl || "/images/gymramp-logo.png");
+  const [displayBrandLogoUrl, setDisplayBrandLogoUrl] = useState(initialBrandLogoUrl || "/images/newlogo.png"); // Updated default logo
   const { toast } = useToast();
   const router = useRouter();
-  const [isClientLoadingBrand, setIsClientLoadingBrand] = useState(true); // To show loader only on client
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -48,54 +46,109 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
   }, []);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && !initialBrandName && isMounted) {
+    if (!isMounted) return;
+
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser && firebaseUser.email) {
+        try {
+          const userDetails = await getUserByEmail(firebaseUser.email);
+          if (userDetails) {
+            if (userDetails.requiresPasswordChange === true) {
+              router.replace('/account/force-reset-password');
+              return; // Stop further processing, let the password reset page handle it
+            }
+            if (userDetails.isActive === false) {
+              await signOut(auth); // Sign out if deactivated
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem('isLoggedIn');
+                localStorage.removeItem('userEmail');
+              }
+              setIsCheckingAuthAndRedirecting(false); // Show login form
+              return;
+            }
+            if (userDetails.companyId) {
+              const companyDetails = await getCompanyById(userDetails.companyId);
+              if (companyDetails?.isTrial && companyDetails.trialEndsAt) {
+                const trialEndDate = new Date(companyDetails.trialEndsAt);
+                if (trialEndDate < new Date()) {
+                  await signOut(auth);
+                  if (typeof window !== 'undefined') {
+                    localStorage.removeItem('isLoggedIn');
+                    localStorage.removeItem('userEmail');
+                  }
+                  setIsCheckingAuthAndRedirecting(false); // Show login form
+                  return;
+                }
+              }
+            }
+
+            let redirectPath = '/courses/my-courses'; // Default for Staff or unknown
+            switch (userDetails.role) {
+              case 'Super Admin': redirectPath = '/admin/dashboard'; break;
+              case 'Admin':
+              case 'Owner':
+              case 'Manager': redirectPath = '/dashboard'; break;
+            }
+            router.replace(redirectPath);
+            // Don't set isCheckingAuthAndRedirecting to false here, to keep loader until redirect completes
+            return;
+          } else {
+            // User authenticated with Firebase, but no Firestore profile found
+            await signOut(auth); // Log them out
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('isLoggedIn');
+              localStorage.removeItem('userEmail');
+            }
+          }
+        } catch (error) {
+          console.error("Error during auth check/redirect:", error);
+          // If error, sign out and show login form
+          await signOut(auth).catch(e => console.error("Sign out error during auth check error:", e));
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('isLoggedIn');
+            localStorage.removeItem('userEmail');
+          }
+        }
+      }
+      // If no firebaseUser or error occurs, set loading to false to show login form
+      setIsCheckingAuthAndRedirecting(false);
+    });
+
+    return () => unsubscribe(); // Cleanup subscription on unmount
+  }, [isMounted, router]);
+
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && isMounted) {
       const hostnameParts = window.location.hostname.split('.');
       let potentialSlug: string | null = null;
 
       if (hostnameParts[0] === 'localhost' || hostnameParts.join('.').startsWith(process.env.NEXT_PUBLIC_APP_URL?.replace(/^https?:\/\//, '') || 'learn.gymramp.com')) {
-        // This handles localhost or the main app URL, no specific brand slug
         potentialSlug = null;
       } else if (hostnameParts.length > 1 && hostnameParts[0] !== 'www') {
-        // Assuming [slug].yourdomain.com or [slug].localhost
          potentialSlug = hostnameParts[0];
       }
 
-
       if (potentialSlug) {
-        setIsClientLoadingBrand(true);
-        console.log(`[Login Page] Detected potential slug: ${potentialSlug}, fetching brand...`);
+        setIsLoading(true); // Use main isLoading to show brand loading if needed
         getCompanyBySubdomainSlug(potentialSlug).then(company => {
           if (company) {
-            console.log(`[Login Page] Brand found by slug ${potentialSlug}: ${company.name}`);
             setDisplayBrandName(company.name);
-            if (company.logoUrl) {
-              setDisplayBrandLogoUrl(company.logoUrl);
-            } else {
-              setDisplayBrandLogoUrl("/images/gymramp-logo.png"); // Fallback if no logoUrl
-            }
+            setDisplayBrandLogoUrl(company.logoUrl || "/images/newlogo.png");
           } else {
-            console.log(`[Login Page] No brand found for slug ${potentialSlug}, using defaults.`);
-            setDisplayBrandName("Gymramp");
-            setDisplayBrandLogoUrl("/images/gymramp-logo.png");
+            setDisplayBrandName(initialBrandName || "Gymramp");
+            setDisplayBrandLogoUrl(initialBrandLogoUrl || "/images/newlogo.png");
           }
         }).catch(err => {
           console.error("[Login Page] Error fetching brand by subdomain:", err);
-          setDisplayBrandName("Gymramp");
-          setDisplayBrandLogoUrl("/images/gymramp-logo.png");
+          setDisplayBrandName(initialBrandName || "Gymramp");
+          setDisplayBrandLogoUrl(initialBrandLogoUrl || "/images/newlogo.png");
         })
-        .finally(() => setIsClientLoadingBrand(false));
+        .finally(() => setIsLoading(false));
       } else {
-        // No potential slug, or it's the main domain, use defaults
-        console.log("[Login Page] No specific brand slug detected, using defaults.");
         setDisplayBrandName(initialBrandName || "Gymramp");
-        setDisplayBrandLogoUrl(initialBrandLogoUrl || "/images/gymramp-logo.png");
-        setIsClientLoadingBrand(false);
+        setDisplayBrandLogoUrl(initialBrandLogoUrl || "/images/newlogo.png");
       }
-    } else if (isMounted) {
-        // If initialBrandName is provided (from server props, though currently null), or not client context
-        setDisplayBrandName(initialBrandName || "Gymramp");
-        setDisplayBrandLogoUrl(initialBrandLogoUrl || "/images/gymramp-logo.png");
-        setIsClientLoadingBrand(false);
     }
   }, [initialBrandName, initialBrandLogoUrl, isMounted]);
 
@@ -119,7 +172,7 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
                 variant: "default",
                 duration: 7000,
             });
-            router.push('/account/force-reset-password');
+            router.push('/account/force-reset-password'); // Use push here as user is actively logging in
             setIsLoading(false);
             return;
         }
@@ -138,13 +191,7 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
         if (userDetails && userDetails.companyId) {
             const companyDetails = await getCompanyById(userDetails.companyId);
             if (companyDetails?.isTrial && companyDetails.trialEndsAt) {
-                const trialEndDate = companyDetails.trialEndsAt instanceof Timestamp
-                    ? companyDetails.trialEndsAt.toDate()
-                    : companyDetails.trialEndsAt instanceof Date
-                        ? companyDetails.trialEndsAt
-                        : new Date(companyDetails.trialEndsAt || 0);
-
-
+                const trialEndDate = new Date(companyDetails.trialEndsAt);
                 if (trialEndDate < new Date()) {
                     await signOut(auth);
                     if (typeof window !== 'undefined') {
@@ -169,15 +216,13 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
           localStorage.setItem('userEmail', user.email);
         }
 
-        let redirectPath = '/';
+        let redirectPath = '/courses/my-courses'; // Default for Staff or unknown
         if (userDetails) {
             switch (userDetails.role) {
                 case 'Super Admin': redirectPath = '/admin/dashboard'; break;
                 case 'Admin':
                 case 'Owner':
                 case 'Manager': redirectPath = '/dashboard'; break;
-                case 'Staff': redirectPath = '/courses/my-courses'; break;
-                default: redirectPath = '/courses/my-courses';
             }
         } else {
              await signOut(auth);
@@ -190,7 +235,7 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
              return;
         }
 
-        router.push(redirectPath);
+        router.push(redirectPath); // Use push on explicit login
         toast({ title: "Login Successful", description: `Welcome!` });
 
       } catch (error: any) {
@@ -207,7 +252,7 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
       }
   };
 
-  if (isMounted && isClientLoadingBrand) {
+  if (isCheckingAuthAndRedirecting || !isMounted) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-theme(spacing.14)*2)] py-12 px-4 sm:px-6 lg:px-8">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -225,7 +270,7 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
             height={45}
             priority
             className="max-h-[45px] object-contain"
-            onError={(e) => { (e.target as HTMLImageElement).src = '/images/gymramp-logo.png'; }}
+            onError={(e) => { (e.target as HTMLImageElement).src = '/images/newlogo.png'; }}
         />
        </div>
       <Card className="w-full max-w-md shadow-lg">
