@@ -2,25 +2,20 @@
 import type { Metadata, Viewport } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import './globals.css';
-import { headers } from 'next/headers';
-import { getUserCompany } from '@/lib/user-data';
+// Removed: import { headers } from 'next/headers';
+// Removed: import { getUserCompany } from '@/lib/user-data';
+// Removed: import { hexToHslString } from '@/lib/utils';
 import { Footer } from '@/components/layout/Footer';
 import { Toaster } from "@/components/ui/toaster";
 import { cn } from '@/lib/utils';
 import { Navbar } from '@/components/layout/Navbar';
 import { Sidebar } from '@/components/layout/Sidebar';
-// Removed hexToHslString import as it's not directly used here anymore for dynamic style prop
 
-export async function generateMetadata(): Promise<Metadata> {
-  const host = headers().get('host');
-  console.log('[RootLayout generateMetadata] Host:', host);
-  const company = await getUserCompany(host); // Keep for initial title/metadata based on host
-  console.log('[RootLayout generateMetadata] Company for title:', company?.name);
-  return {
-    title: company?.name || 'Gymramp', // Updated App Name
-    description: company?.shortDescription || 'Sales training for gym employees',
-  };
-}
+// Reverted to static metadata
+export const metadata: Metadata = {
+  title: 'Gymramp',
+  description: 'Sales training for gym employees',
+};
 
 export const viewport: Viewport = {
   themeColor: [
@@ -34,9 +29,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Hostname-based theming is removed from RootLayout.
-  // Dynamic theming for logged-in users will be handled client-side in Navbar.
-  console.log('[RootLayout] Rendering with default theme. Dynamic theming based on logged-in user will occur client-side.');
+  console.log('[RootLayout] Rendering with default theme. White-labeling based on hostname/user has been removed.');
 
   const bodyClasses = "flex flex-col h-full font-sans antialiased";
 
@@ -44,11 +37,11 @@ export default async function RootLayout({
     <html lang="en" className={cn("h-full", GeistSans.variable)}>
       <body
         className={bodyClasses}
-        // No dynamic style prop here; theming handled client-side or by globals.css
+        // Removed dynamic style prop
       >
-        {/* Navbar no longer receives brandLogoUrl/brandName directly from RootLayout's server-side host detection */}
+        {/* Navbar no longer receives brandLogoUrl/brandName from RootLayout for white-labeling */}
         <Navbar />
-        <div className="flex flex-1 overflow-hidden"> {/* pt-14 removed as Navbar might not be fixed height if logo changes height */}
+        <div className="flex flex-1 overflow-hidden">
           <Sidebar />
           <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto bg-secondary/30">
             {children}
