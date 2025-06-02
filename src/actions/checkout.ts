@@ -65,6 +65,8 @@ export async function processCheckout(data: CheckoutFormData): Promise<
   let newCompanyId: string | undefined;
   let newAdminUserId: string | undefined;
   const tempPassword = generateRandomPassword();
+  console.log(`[processCheckout] Generated tempPassword for ${data.adminEmail}: "${tempPassword}" (Paid Checkout)`);
+
 
   try {
     if (!data.selectedProgramId) {
@@ -117,7 +119,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         localAuthInstance = getFirebaseAuthInstance(localAuthAppName);
         const userCredential = await createUserWithEmailAndPassword(localAuthInstance, data.adminEmail, tempPassword);
         authUserUid = userCredential.user.uid;
-        console.log(`[processCheckout] Admin user created in Firebase Auth with UID: ${authUserUid} for email ${data.adminEmail}`);
+        console.log(`[processCheckout] Admin user CREATED IN FIREBASE AUTH with UID: ${authUserUid} for email ${data.adminEmail} using the tempPassword logged above.`);
     } catch (authError: any) {
         console.error("[processCheckout] Failed to create admin user in Firebase Auth:", authError);
         if (newCompanyId) {
@@ -254,6 +256,7 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
   const localAuthAppName = `freeTrialAuthApp-${Date.now()}`;
   let localAuthInstance: Auth | undefined;
   const tempPassword = generateRandomPassword();
+  console.log(`[processFreeTrialCheckout] Generated tempPassword for ${data.adminEmail}: "${tempPassword}"`); // DEBUG LOG
   let newCompanyId: string | undefined;
 
   try {
@@ -311,7 +314,7 @@ export async function processFreeTrialCheckout(data: CheckoutFormData): Promise<
         localAuthInstance = getFirebaseAuthInstance(localAuthAppName);
         const userCredential = await createUserWithEmailAndPassword(localAuthInstance, data.adminEmail, tempPassword);
         authUserUid = userCredential.user.uid;
-        console.log(`[processFreeTrialCheckout] Trial Admin user created in Firebase Auth with UID: ${authUserUid} for email ${data.adminEmail}`);
+        console.log(`[processFreeTrialCheckout] Trial Admin user CREATED IN FIREBASE AUTH with UID: ${authUserUid} for email ${data.adminEmail} using the tempPassword logged above.`);
     } catch (authError: any) {
         console.error("[processFreeTrialCheckout] Failed to create trial admin user in Firebase Auth:", authError);
         if (newCompanyId) {
