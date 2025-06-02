@@ -205,6 +205,30 @@ export async function addCompany(
     console.log("[addCompany] Received companyData.assignedProgramIds:", JSON.stringify(companyData.assignedProgramIds, null, 2));
     return retryOperation(async () => {
         const companiesRef = collection(db, COMPANIES_COLLECTION);
+
+        let trialEndsAtForDocData: Timestamp | null = null;
+        if (Object.prototype.hasOwnProperty.call(companyData, 'trialEndsAt')) {
+            const trialDateValue = companyData.trialEndsAt;
+            if (trialDateValue === null) {
+                trialEndsAtForDocData = null;
+            } else if (trialDateValue && typeof (trialDateValue as any).toDate === 'function') { // Check for Firestore Timestamp-like
+                trialEndsAtForDocData = trialDateValue as Timestamp;
+            } else if (trialDateValue instanceof Date) {
+                trialEndsAtForDocData = Timestamp.fromDate(trialDateValue);
+            } else if (typeof trialDateValue === 'string') {
+                const parsed = new Date(trialDateValue);
+                if (!isNaN(parsed.valueOf())) {
+                    trialEndsAtForDocData = Timestamp.fromDate(parsed);
+                } else {
+                    console.warn(`[addCompany] Invalid date string for trialEndsAt: ${trialDateValue}. Setting to null.`);
+                }
+            } else if (trialDateValue === undefined) {
+                trialEndsAtForDocData = null;
+            } else {
+                console.warn(`[addCompany] Unexpected type for trialEndsAt: ${typeof trialDateValue}. Setting to null.`);
+            }
+        }
+
         const docData: Omit<Company, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt'> & { isDeleted: boolean; deletedAt: null | Timestamp; createdAt: Timestamp; updatedAt: Timestamp } = {
             name: companyData.name,
             subdomainSlug: companyData.subdomainSlug?.trim().toLowerCase() || null,
@@ -214,7 +238,7 @@ export async function addCompany(
             maxUsers: companyData.maxUsers ?? null,
             assignedProgramIds: companyData.assignedProgramIds || [],
             isTrial: companyData.isTrial || false,
-            trialEndsAt: companyData.trialEndsAt ? Timestamp.fromDate(new Date(companyData.trialEndsAt as string)) : null, // Cast to string
+            trialEndsAt: trialEndsAtForDocData,
             saleAmount: companyData.saleAmount ?? null,
             revenueSharePartners: companyData.revenueSharePartners || null,
             whiteLabelEnabled: companyData.whiteLabelEnabled || false,
@@ -265,9 +289,34 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
             dataToUpdate.assignedProgramIds = companyData.assignedProgramIds;
         }
         if (companyData.isTrial !== undefined) dataToUpdate.isTrial = companyData.isTrial;
-        if (companyData.trialEndsAt !== undefined) {
-            dataToUpdate.trialEndsAt = companyData.trialEndsAt ? Timestamp.fromDate(new Date(companyData.trialEndsAt as string)) : null; // Cast
+        
+        // Corrected trialEndsAt handling
+        if (Object.prototype.hasOwnProperty.call(companyData, 'trialEndsAt')) {
+            const trialDateValue = companyData.trialEndsAt;
+            if (trialDateValue === null) {
+                dataToUpdate.trialEndsAt = null;
+            } else if (trialDateValue && typeof (trialDateValue as any).toDate === 'function') { // Check for Firestore Timestamp-like
+                dataToUpdate.trialEndsAt = trialDateValue as Timestamp;
+            } else if (trialDateValue instanceof Date) {
+                dataToUpdate.trialEndsAt = Timestamp.fromDate(trialDateValue);
+            } else if (typeof trialDateValue === 'string') {
+                const parsed = new Date(trialDateValue);
+                if (!isNaN(parsed.valueOf())) { // Check if date string is valid
+                    dataToUpdate.trialEndsAt = Timestamp.fromDate(parsed);
+                } else {
+                    console.warn(`[updateCompany] Invalid date string for trialEndsAt: ${trialDateValue}. Setting to null.`);
+                    dataToUpdate.trialEndsAt = null;
+                }
+            } else if (trialDateValue === undefined) {
+                 // If it was explicitly passed as undefined in the partial update, set to null to clear it
+                 dataToUpdate.trialEndsAt = null;
+            } else {
+                // For any other unexpected type, log a warning and set to null
+                console.warn(`[updateCompany] Unexpected type for trialEndsAt: ${typeof trialDateValue}. Setting to null.`);
+                dataToUpdate.trialEndsAt = null;
+            }
         }
+
         if (companyData.saleAmount !== undefined) dataToUpdate.saleAmount = companyData.saleAmount ?? null;
         if (companyData.revenueSharePartners !== undefined) dataToUpdate.revenueSharePartners = companyData.revenueSharePartners || null;
         if (companyData.whiteLabelEnabled !== undefined) dataToUpdate.whiteLabelEnabled = companyData.whiteLabelEnabled;
@@ -279,7 +328,6 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
         if (companyData.canManageCourses !== undefined) dataToUpdate.canManageCourses = companyData.canManageCourses;
         if (companyData.stripeCustomerId !== undefined) dataToUpdate.stripeCustomerId = companyData.stripeCustomerId || null;
         if (companyData.stripeSubscriptionId !== undefined) dataToUpdate.stripeSubscriptionId = companyData.stripeSubscriptionId || null;
-        // parentBrandId and createdByUserId are typically not updated after creation via this general update.
 
         if (Object.keys(dataToUpdate).length > 1) {
             console.log(`[updateCompany] Data being written for brand ${companyId} (assignedProgramIds included):`, JSON.stringify(dataToUpdate.assignedProgramIds, null, 2));
@@ -533,3 +581,6 @@ function serializeLocationDocumentData(data: any): any {
     if (data.deletedAt instanceof Timestamp) serialized.deletedAt = data.deletedAt.toDate().toISOString();
     return serialized;
 }
+
+
+    
