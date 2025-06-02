@@ -43,9 +43,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useRouter } from 'next/navigation';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { EmployeeTable } from '@/components/dashboard/EmployeeTable';
-import { AssignCourseDialog } from '@/components/dashboard/AssignCourseDialog'; // Import AssignCourseDialog
-import type { Course, BrandCourse } from '@/types/course'; // Import Course and BrandCourse types
-import { FormControl } from '@/components/ui/form'; // Added FormControl import
+import { AssignCourseDialog } from '@/components/dashboard/AssignCourseDialog';
+import type { Course, BrandCourse } from '@/types/course';
 
 
 const ROLE_HIERARCHY: Record<UserRole, number> = {
@@ -163,7 +162,7 @@ export default function AdminUsersPage() {
       if (currentUser.role === 'Super Admin') {
         if (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter) {
           usersData = await fetchAllSystemUsers();
-          companyContextForCourseAssignment = null; // Global context for SA "All Brands"
+          companyContextForCourseAssignment = null; 
         } else {
           usersData = await getUsersByCompanyId(selectedBrandIdForFilter);
           companyContextForCourseAssignment = accessibleBrandsForFilter.find(b => b.id === selectedBrandIdForFilter) || null;
@@ -191,7 +190,6 @@ export default function AdminUsersPage() {
       });
       setUsers(await Promise.all(usersWithProgressPromises));
 
-      // Fetch assignable courses based on context
       let assignableCourses: (Course | BrandCourse)[] = [];
       if (companyContextForCourseAssignment && companyContextForCourseAssignment.id) {
         const globalProgramCourses: Course[] = [];
@@ -211,7 +209,7 @@ export default function AdminUsersPage() {
           const brandCourses = (await getBrandCoursesByBrandId(companyContextForCourseAssignment.id)).filter(bc => !bc.isDeleted);
           assignableCourses.push(...brandCourses);
         }
-      } else if (currentUser.role === 'Super Admin' && !companyContextForCourseAssignment) { // SA with "All Brands"
+      } else if (currentUser.role === 'Super Admin' && !companyContextForCourseAssignment) { 
         assignableCourses = (await getAllLibraryCourses()).filter(c => !c.isDeleted);
       }
       setAvailableCoursesForAssignment(assignableCourses.filter((course, index, self) => index === self.findIndex(c => c.id === course.id)));
@@ -313,9 +311,9 @@ export default function AdminUsersPage() {
 
     const companyForCourseAssignment =
       (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter) && currentUser.role === 'Super Admin'
-      ? null // Super Admin with "All Brands" uses global context
-      : accessibleBrandsForFilter.find(b => b.id === employee.companyId) || // Target user's actual brand if accessible
-        (currentUser.companyId ? accessibleBrandsForFilter.find(b => b.id === currentUser.companyId) : null); // Fallback to current user's primary brand
+      ? null 
+      : accessibleBrandsForFilter.find(b => b.id === employee.companyId) || 
+        (currentUser.companyId ? accessibleBrandsForFilter.find(b => b.id === currentUser.companyId) : null); 
 
     if (availableCoursesForAssignment.length === 0) {
       let toastDescription = `No courses available for assignment for ${companyForCourseAssignment?.name || 'the current context'}.`;
@@ -335,7 +333,7 @@ export default function AdminUsersPage() {
     if (!userToAssignCourse) return;
     const updatedUser = await toggleUserCourseAssignments(userToAssignCourse.id, [courseId], action);
     if (updatedUser) {
-      fetchUsersForCurrentFilters(); // Refresh user list to show updated assigned courses count
+      fetchUsersForCurrentFilters(); 
       const courseDetails = availableCoursesForAssignment.find(c => c.id === courseId);
       toast({ title: action === 'assign' ? "Course Assigned" : "Course Unassigned", description: `${action === 'assign' ? `"${courseDetails?.title || 'Course'}" assigned to` : `Course removed from`} ${userToAssignCourse.name}.` });
     } else { toast({ title: "Error Assigning Course", variant: "destructive" }); }
@@ -397,13 +395,9 @@ export default function AdminUsersPage() {
                   onValueChange={(value) => setSelectedBrandIdForFilter(value === 'placeholder-brand' ? '' : value)}
                   disabled={isLoadingFilters || (currentUser?.role === 'Super Admin' && accessibleBrandsForFilter.length === 0)}
                 >
-                  <FormControl>
-                    <div> 
-                      <SelectTrigger id="brand-filter-users" className="w-[220px] bg-background h-10">
-                        <SelectValue placeholder="Select Brand" />
-                      </SelectTrigger>
-                    </div>
-                  </FormControl>
+                  <SelectTrigger id="brand-filter-users" className="w-[220px] bg-background h-10">
+                    <SelectValue placeholder="Select Brand" />
+                  </SelectTrigger>
                   <SelectContent> <SelectItem value="placeholder-brand" disabled>Select a brand...</SelectItem> 
                     {(currentUser?.role === 'Super Admin' || ((currentUser?.role === 'Admin' || currentUser?.role === 'Owner') && accessibleBrandsForFilter.length > 1)) && <SelectItem value="all">All Accessible Brands</SelectItem>}
                     {accessibleBrandsForFilter.map(brand => ( <SelectItem key={brand.id} value={brand.id}>{brand.name} {brand.parentBrandId ? "(Child)" : ""}</SelectItem> ))}
@@ -477,9 +471,9 @@ export default function AdminUsersPage() {
             employee={userToAssignCourse}
             company={
                 (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter) && currentUser?.role === 'Super Admin'
-                ? null // Global context for SA
-                : accessibleBrandsForFilter.find(b => b.id === userToAssignCourse.companyId) || // Target user's actual brand if accessible
-                  (currentUser?.companyId ? accessibleBrandsForFilter.find(b => b.id === currentUser.companyId) : null) // Fallback to current user's primary brand
+                ? null 
+                : accessibleBrandsForFilter.find(b => b.id === userToAssignCourse.companyId) || 
+                  (currentUser?.companyId ? accessibleBrandsForFilter.find(b => b.id === currentUser.companyId) : null) 
             }
             onAssignCourse={handleAssignCourse}
           />
@@ -487,4 +481,3 @@ export default function AdminUsersPage() {
     </div>
   );
 }
-
