@@ -1,3 +1,4 @@
+
 // src/components/dashboard/EmployeeTable.tsx
 'use client';
 
@@ -23,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import type { User, UserRole, Location } from '@/types/user';
+import type { User, UserRole, Location, Company } from '@/types/user'; // Added Company
 import type { Course, BrandCourse } from '@/types/course';
 import { cn } from '@/lib/utils';
 import { getCourseById as fetchGlobalCourseById } from '@/lib/firestore-data';
@@ -49,9 +50,10 @@ interface EmployeeTableProps {
   onEditUser: (user: User) => void;
   currentUser: User | null;
   locations: Location[];
+  companies: Company[]; // Added companies prop
 }
 
-export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCourse, onEditUser, currentUser, locations = [] }: EmployeeTableProps) {
+export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCourse, onEditUser, currentUser, locations = [], companies = [] }: EmployeeTableProps) {
     const { toast } = useToast();
     const [assignedCourseTitles, setAssignedCourseTitles] = useState<Record<string, string>>({});
     const [isLoadingTitles, setIsLoadingTitles] = useState(false);
@@ -102,59 +104,43 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
     const canPerformGeneralAction = (targetUser: User): boolean => {
         if (!currentUser) return false;
         if (currentUser.id === targetUser.id && !['Super Admin', 'Admin', 'Owner'].includes(currentUser.role)) {
-             console.log(`[EmployeeTable canPerformGeneralAction] Denied: Cannot perform action on self if not SA/Admin/Owner. CU: ${currentUser.role}`);
              return false;
         }
         if (currentUser.role === 'Super Admin') {
-             console.log(`[EmployeeTable canPerformGeneralAction] Super Admin: true (unless self for toggle).`);
-             return currentUser.id !== targetUser.id; // SA cannot toggle own status via this table's specific button. Can edit self.
+             return currentUser.id !== targetUser.id;
         }
         
-        if (!currentUser.companyId) {
-            console.log(`[EmployeeTable canPerformGeneralAction] Denied: Current user ${currentUser.role} has no companyId.`);
-            return false; 
-        }
+        if (!currentUser.companyId) return false; 
 
-        if (targetUser.companyId !== currentUser.companyId) {
-             console.log(`[EmployeeTable canPerformGeneralAction] Denied: Target user ${targetUser.email} in different company (${targetUser.companyId} vs ${currentUser.companyId}).`);
-            return false;
-        }
+        const isTargetUserInAccessibleBrand = companies.some(c => c.id === targetUser.companyId);
+        if (!isTargetUserInAccessibleBrand) return false;
+
 
         if (currentUser.role === 'Manager') {
-            const canManage = (targetUser.role === 'Staff' || targetUser.role === 'Manager');
-            console.log(`[EmployeeTable canPerformGeneralAction] Manager check: target Staff/Manager (${targetUser.role}) AND same company: ${canManage}`);
-            return canManage; // Manager can edit self or other managers/staff in their brand
+            return (targetUser.role === 'Staff' || targetUser.role === 'Manager');
         }
         
-        const hierarchyCheck = ROLE_HIERARCHY_TABLE[currentUser.role] > ROLE_HIERARCHY_TABLE[targetUser.role];
-        console.log(`[EmployeeTable canPerformGeneralAction] Admin/Owner check: same company AND hierarchy valid (${ROLE_HIERARCHY_TABLE[currentUser.role]} > ${ROLE_HIERARCHY_TABLE[targetUser.role]}): ${hierarchyCheck}`);
-        return hierarchyCheck;
+        return ROLE_HIERARCHY_TABLE[currentUser.role] > ROLE_HIERARCHY_TABLE[targetUser.role];
     };
      
     const canAssignCoursesToTarget = (cu: User | null, tu: User): boolean => {
         if (!cu) return false;
-        console.log(`[EmployeeTable canAssignCoursesToTarget] Permission check for ${cu.email} assigning to ${tu.email}`);
-        console.log(`[EmployeeTable canAssignCoursesToTarget] CU Role: ${cu.role}, CU Brand: ${cu.companyId} | TU Role: ${tu.role}, TU Brand: ${tu.companyId}`);
+        
+        if (cu.id === tu.id) { // Check for self-assignment
+            return (cu.role === 'Super Admin' || cu.role === 'Admin' || cu.role === 'Owner');
+        }
 
         if (cu.role === 'Super Admin') return true;
         if (!cu.companyId) return false; 
-        // Admin/Owner can assign to users in their primary brand or any child brands.
-        // For simplicity here, we assume DashboardPage passes `employees` that are already filtered to be within CU's brand scope (primary or child).
-        // So, we primarily check role hierarchy.
-        if (tu.companyId !== cu.companyId) {
-            // This check might be too strict if DashboardPage sends users from child brands.
-            // Assuming for now that if an Admin/Owner sees a user in this table, they should be able to manage their courses if hierarchy allows.
-            // A more robust check would involve verifying tu.companyId is accessible by cu (their own or child).
-            // For now, let's rely on DashboardPage's filtering of `employees`.
-            console.warn(`[EmployeeTable canAssignCoursesToTarget] Target user company ${tu.companyId} might not be directly ${cu.companyId}. Relying on parent page's employee list scope.`);
-        }
 
+        const isTargetUserInAccessibleBrand = companies.some(c => c.id === tu.companyId);
+        if (!isTargetUserInAccessibleBrand) return false;
 
         if (cu.role === 'Manager') {
-            return (tu.role === 'Staff' || tu.role === 'Manager') && tu.companyId === cu.companyId;
+            return (tu.role === 'Staff' || tu.role === 'Manager');
         }
         if (cu.role === 'Admin' || cu.role === 'Owner') {
-            return ROLE_HIERARCHY_TABLE[cu.role] > ROLE_HIERARCHY_TABLE[tu.role] && tu.companyId === cu.companyId; // Ensure same company for direct Admin/Owner action
+            return ROLE_HIERARCHY_TABLE[cu.role] > ROLE_HIERARCHY_TABLE[tu.role];
         }
         return false;
     };
