@@ -71,7 +71,8 @@ export async function sendNewUserWelcomeEmail(to: string, name: string, temporar
   const appName = process.env.NEXT_PUBLIC_APP_NAME || 'GYMRAMP';
   const subject = `Welcome to ${appName}!`;
   const loginUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
-  const appLogoUrlEmail = process.env.NEXT_PUBLIC_APP_LOGO_URL_EMAIL; // Optional: URL for email logo
+  const appLogoUrlEmail = process.env.NEXT_PUBLIC_APP_LOGO_URL_EMAIL;
+  const defaultLogoFallback = `${loginUrl}/images/newlogo.png`; // Fallback to your site's default logo
 
   // Inspired by Google AI Studio email
   const html = `
@@ -88,6 +89,9 @@ export async function sendNewUserWelcomeEmail(to: string, name: string, temporar
             .header-app-name { font-size: 20px; font-weight: bold; color: #E8EAED; text-decoration: none; }
             .header-logo { max-height: 30px; width: auto; margin-bottom: 10px; }
             .content { padding: 30px; text-align: center; }
+            .circular-logo-container { text-align: center; padding-top: 10px; margin-bottom: 25px; }
+            .circular-logo-wrapper { display: inline-block; background-color: #FFFFFF; border-radius: 50%; padding: 5px; width: 70px; height: 70px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+            .circular-logo-img { width: 100%; height: 100%; border-radius: 50%; object-fit: contain; }
             .welcome-text { font-size: 28px; font-weight: bold; color: #FFFFFF; margin-top: 0; margin-bottom: 10px; }
             .sub-heading { font-size: 18px; color: #bdc1c6; margin-bottom: 30px; }
             .greeting { font-size: 16px; color: #E8EAED; text-align: left; margin-bottom: 15px; }
@@ -114,7 +118,12 @@ export async function sendNewUserWelcomeEmail(to: string, name: string, temporar
                         <div class="header" style="padding: 20px 30px; text-align: left; border-bottom: 1px solid #3c4043;">
                             ${appLogoUrlEmail ? `<img src="${appLogoUrlEmail}" alt="${appName} Logo" class="header-logo" style="max-height: 30px; width: auto; margin-bottom: 10px;" />` : `<a href="${loginUrl}" class="header-app-name" style="font-size: 20px; font-weight: bold; color: #E8EAED; text-decoration: none;">${appName}</a>`}
                         </div>
-                        <div class="content" style="padding: 40px 30px; text-align: center;">
+                        <div class="content" style="padding: 30px 30px; text-align: center;">
+                            <div class="circular-logo-container" style="text-align: center; padding-top: 10px; margin-bottom: 25px;">
+                                <div class="circular-logo-wrapper" style="display: inline-block; background-color: #FFFFFF; border-radius: 50%; padding: 5px; width: 70px; height: 70px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
+                                    <img src="${appLogoUrlEmail || defaultLogoFallback}" alt="${appName} Logo" class="circular-logo-img" style="width: 100%; height: 100%; border-radius: 50%; object-fit: contain;">
+                                </div>
+                            </div>
                             <h1 class="welcome-text" style="font-size: 28px; font-weight: bold; color: #FFFFFF; margin-top: 0; margin-bottom: 10px;">Welcome to ${appName}, ${name}!</h1>
                             <p class="sub-heading" style="font-size: 18px; color: #bdc1c6; margin-bottom: 30px;">Your training journey starts now.</p>
                             
