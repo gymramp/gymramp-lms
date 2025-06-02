@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth"; // Import onAuthStateChanged
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import Link from "next/link";
 import Image from 'next/image';
@@ -20,12 +20,12 @@ import { useState, useEffect, Suspense } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from 'next/navigation';
 import { getUserByEmail } from '@/lib/user-data';
-import { getCompanyById, getCompanyBySubdomainSlug } from '@/lib/company-data';
+import { getCompanyById } from '@/lib/company-data';
 import { Loader2 } from "lucide-react";
-import { Timestamp } from "firebase/firestore";
-import type { Company, User } from '@/types/user'; // Import User type
+import type { User } from '@/types/user';
 
 interface LoginPageProps {
+  // Props are not actually used since white-labeling was removed, but kept for structure
   initialBrandName?: string | null;
   initialBrandLogoUrl?: string | null;
 }
@@ -33,10 +33,10 @@ interface LoginPageProps {
 function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPageProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false); // For login button processing
-  const [isCheckingAuthAndRedirecting, setIsCheckingAuthAndRedirecting] = useState(true); // For initial auth check
-  const [displayBrandName, setDisplayBrandName] = useState(initialBrandName || "Gymramp");
-  const [displayBrandLogoUrl, setDisplayBrandLogoUrl] = useState(initialBrandLogoUrl || "/images/newlogo.png"); // Updated default logo
+  const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingAuthAndRedirecting, setIsCheckingAuthAndRedirecting] = useState(true);
+  const [displayBrandName, setDisplayBrandName] = useState("Gymramp");
+  const [displayBrandLogoUrl, setDisplayBrandLogoUrl] = useState("/images/newlogo.png");
   const { toast } = useToast();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
@@ -48,6 +48,10 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
   useEffect(() => {
     if (!isMounted) return;
 
+    // Static branding since white-labeling is removed
+    setDisplayBrandName("Gymramp");
+    setDisplayBrandLogoUrl("/images/newlogo.png");
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
         try {
@@ -55,34 +59,37 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
           if (userDetails) {
             if (userDetails.requiresPasswordChange === true) {
               router.replace('/account/force-reset-password');
-              return; // Stop further processing, let the password reset page handle it
+              return;
             }
             if (userDetails.isActive === false) {
-              await signOut(auth); // Sign out if deactivated
+              await signOut(auth);
               if (typeof window !== 'undefined') {
                 localStorage.removeItem('isLoggedIn');
                 localStorage.removeItem('userEmail');
               }
-              setIsCheckingAuthAndRedirecting(false); // Show login form
+              setIsCheckingAuthAndRedirecting(false);
               return;
             }
             if (userDetails.companyId) {
               const companyDetails = await getCompanyById(userDetails.companyId);
               if (companyDetails?.isTrial && companyDetails.trialEndsAt) {
-                const trialEndDate = new Date(companyDetails.trialEndsAt);
+                // Ensure trialEndsAt is a Date object before comparison
+                const trialEndDate = companyDetails.trialEndsAt instanceof Date
+                  ? companyDetails.trialEndsAt
+                  : new Date(companyDetails.trialEndsAt as string); // Assuming it's an ISO string
                 if (trialEndDate < new Date()) {
                   await signOut(auth);
                   if (typeof window !== 'undefined') {
                     localStorage.removeItem('isLoggedIn');
                     localStorage.removeItem('userEmail');
                   }
-                  setIsCheckingAuthAndRedirecting(false); // Show login form
+                  setIsCheckingAuthAndRedirecting(false);
                   return;
                 }
               }
             }
 
-            let redirectPath = '/courses/my-courses'; // Default for Staff or unknown
+            let redirectPath = '/courses/my-courses';
             switch (userDetails.role) {
               case 'Super Admin': redirectPath = '/admin/dashboard'; break;
               case 'Admin':
@@ -90,11 +97,9 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
               case 'Manager': redirectPath = '/dashboard'; break;
             }
             router.replace(redirectPath);
-            // Don't set isCheckingAuthAndRedirecting to false here, to keep loader until redirect completes
             return;
           } else {
-            // User authenticated with Firebase, but no Firestore profile found
-            await signOut(auth); // Log them out
+            await signOut(auth);
             if (typeof window !== 'undefined') {
               localStorage.removeItem('isLoggedIn');
               localStorage.removeItem('userEmail');
@@ -102,7 +107,6 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
           }
         } catch (error) {
           console.error("Error during auth check/redirect:", error);
-          // If error, sign out and show login form
           await signOut(auth).catch(e => console.error("Sign out error during auth check error:", e));
           if (typeof window !== 'undefined') {
             localStorage.removeItem('isLoggedIn');
@@ -110,47 +114,11 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
           }
         }
       }
-      // If no firebaseUser or error occurs, set loading to false to show login form
       setIsCheckingAuthAndRedirecting(false);
     });
 
-    return () => unsubscribe(); // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, [isMounted, router]);
-
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && isMounted) {
-      const hostnameParts = window.location.hostname.split('.');
-      let potentialSlug: string | null = null;
-
-      if (hostnameParts[0] === 'localhost' || hostnameParts.join('.').startsWith(process.env.NEXT_PUBLIC_APP_URL?.replace(/^https?:\/\//, '') || 'learn.gymramp.com')) {
-        potentialSlug = null;
-      } else if (hostnameParts.length > 1 && hostnameParts[0] !== 'www') {
-         potentialSlug = hostnameParts[0];
-      }
-
-      if (potentialSlug) {
-        setIsLoading(true); // Use main isLoading to show brand loading if needed
-        getCompanyBySubdomainSlug(potentialSlug).then(company => {
-          if (company) {
-            setDisplayBrandName(company.name);
-            setDisplayBrandLogoUrl(company.logoUrl || "/images/newlogo.png");
-          } else {
-            setDisplayBrandName(initialBrandName || "Gymramp");
-            setDisplayBrandLogoUrl(initialBrandLogoUrl || "/images/newlogo.png");
-          }
-        }).catch(err => {
-          console.error("[Login Page] Error fetching brand by subdomain:", err);
-          setDisplayBrandName(initialBrandName || "Gymramp");
-          setDisplayBrandLogoUrl(initialBrandLogoUrl || "/images/newlogo.png");
-        })
-        .finally(() => setIsLoading(false));
-      } else {
-        setDisplayBrandName(initialBrandName || "Gymramp");
-        setDisplayBrandLogoUrl(initialBrandLogoUrl || "/images/newlogo.png");
-      }
-    }
-  }, [initialBrandName, initialBrandLogoUrl, isMounted]);
 
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -172,7 +140,7 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
                 variant: "default",
                 duration: 7000,
             });
-            router.push('/account/force-reset-password'); // Use push here as user is actively logging in
+            router.push('/account/force-reset-password');
             setIsLoading(false);
             return;
         }
@@ -191,7 +159,9 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
         if (userDetails && userDetails.companyId) {
             const companyDetails = await getCompanyById(userDetails.companyId);
             if (companyDetails?.isTrial && companyDetails.trialEndsAt) {
-                const trialEndDate = new Date(companyDetails.trialEndsAt);
+                const trialEndDate = companyDetails.trialEndsAt instanceof Date
+                    ? companyDetails.trialEndsAt
+                    : new Date(companyDetails.trialEndsAt as string); // Assuming ISO string
                 if (trialEndDate < new Date()) {
                     await signOut(auth);
                     if (typeof window !== 'undefined') {
@@ -216,7 +186,7 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
           localStorage.setItem('userEmail', user.email);
         }
 
-        let redirectPath = '/courses/my-courses'; // Default for Staff or unknown
+        let redirectPath = '/courses/my-courses';
         if (userDetails) {
             switch (userDetails.role) {
                 case 'Super Admin': redirectPath = '/admin/dashboard'; break;
@@ -235,16 +205,19 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
              return;
         }
 
-        router.push(redirectPath); // Use push on explicit login
+        router.push(redirectPath);
         toast({ title: "Login Successful", description: `Welcome!` });
 
       } catch (error: any) {
-          console.error("Login failed:", error);
+          console.error("Login failed details:", { code: error.code, message: error.message, fullError: error }); // Enhanced logging
           let errorMessage = "There was a problem logging in.";
-          if(error.code === "auth/invalid-credential" || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password'){
+          if (error.code === "auth/invalid-credential" || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
              errorMessage = "Invalid email or password.";
+             console.warn(`Firebase Auth Error: ${error.code} - Suggests incorrect email/password or user not found in Firebase Auth.`);
           } else if (error.code === 'auth/invalid-email') {
              errorMessage = "Please enter a valid email address.";
+          } else {
+            console.error("An unexpected Firebase error occurred during login:", error);
           }
           toast({ title: "Login Failed", description: errorMessage, variant: "destructive" });
       } finally {
@@ -309,3 +282,4 @@ export default function LoginPage() {
     </Suspense>
   );
 }
+    
