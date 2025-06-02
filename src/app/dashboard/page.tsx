@@ -54,9 +54,6 @@ export default function DashboardPage() {
   const [allSystemLocations, setAllSystemLocations] = useState<Location[]>([]); 
   const [locationsForLocationFilter, setLocationsForLocationFilter] = useState<Location[]>([]); 
 
-  const [selectedBrandIdForDashboard, setSelectedBrandIdForDashboard] = useState<string>(''); 
-  const [selectedLocationId, setSelectedLocationId] = useState<string>('all'); 
-
   const [employees, setEmployees] = useState<EmployeeWithOverallProgress[]>([]); 
   const [filteredEmployees, setFilteredEmployees] = useState<EmployeeWithOverallProgress[]>([]); 
   const [availableCoursesForAssignment, setAvailableCoursesForAssignment] = useState<(Course | BrandCourse)[]>([]);
@@ -375,6 +372,39 @@ export default function DashboardPage() {
     setIsAssignCourseDialogOpen(false); setUserToAssignCourse(null);
   };
 
+  const handleToggleUserStatus = async (userId: string, userName: string, currentIsActive: boolean) => {
+    if (!currentUser || currentUser.id === userId) {
+        toast({ title: "Action Denied", description: "You cannot change your own status.", variant: "destructive"}); return;
+    }
+    const targetUser = employees.find(u => u.id === userId);
+    if (!targetUser) {
+         toast({ title: "Error", description: "User not found.", variant: "destructive"}); return;
+    }
+    // Permission check (similar to onEditUser but specific for status toggle)
+    let canToggle = false;
+    if (currentUser.role === 'Super Admin') {
+        canToggle = true;
+    } else if ((currentUser.role === 'Admin' || currentUser.role === 'Owner') && currentUser.companyId && viewableBrandsForFilter.some(b => b.id === targetUser.companyId)) {
+        canToggle = ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[targetUser.role];
+    } else if (currentUser.role === 'Manager' && currentUser.companyId === targetUser.companyId) {
+        canToggle = (targetUser.role === 'Staff' || targetUser.role === 'Manager');
+    }
+
+    if (!canToggle) {
+        toast({ title: "Permission Denied", description: "You cannot modify this user's status.", variant: "destructive" });
+        return;
+    }
+
+    const updatedUser = await toggleUserDataStatus(userId);
+    if (updatedUser) {
+      fetchEmployeesAndAssignableCourses(); // Refresh data
+      toast({ title: currentIsActive ? "User Deactivated" : "User Reactivated", description: `${userName}'s status updated.`, variant: currentIsActive ? "destructive" : "default" });
+    } else {
+        toast({ title: "Error", description: `Failed to update status for ${userName}.`, variant: "destructive" });
+    }
+  };
+
+
   const activeEmployees = useMemo(() => filteredEmployees.filter(emp => emp.isActive), [filteredEmployees]);
   const inactiveEmployees = useMemo(() => filteredEmployees.filter(emp => !emp.isActive), [filteredEmployees]);
   const currentRowsPerPage = rowsPerPage === 'all' ? Infinity : rowsPerPage;
@@ -550,3 +580,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
