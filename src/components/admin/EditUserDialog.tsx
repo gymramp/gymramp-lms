@@ -1,3 +1,4 @@
+
 // src/components/admin/EditUserDialog.tsx
 'use client';
 
@@ -49,7 +50,7 @@ const ALL_POSSIBLE_ROLES_TO_ASSIGN: UserRole[] = ['Super Admin', 'Admin', 'Owner
 const editUserFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   companyId: z.string().nullable(),
-  assignedLocationIds: z.array(z.string()).default([]), // Location assignment is optional
+  assignedLocationIds: z.array(z.string()).default([]), 
   role: z.string().min(1) as z.ZodType<UserRole>,
   newTemporaryPassword: z.string().optional().refine(val => !val || val.length === 0 || val.length >= 6, {
     message: "New password must be at least 6 characters if provided.",
@@ -71,8 +72,8 @@ interface EditUserDialogProps {
   user: User;
   onUserUpdated: (user: User) => void;
   currentUser: User;
-  companies: Company[]; // All companies current user can see/assign to
-  locations: Location[]; // All locations relevant to the companies the current user can see
+  companies: Company[]; 
+  locations: Location[]; 
 }
 
 export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, currentUser, companies = [], locations = [] }: EditUserDialogProps) {
@@ -108,7 +109,6 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
       if (isOpen && selectedCompanyIdInDialog) {
         setIsLoadingLocationsForDialog(true);
         try {
-          // Filter from the 'locations' prop passed to the dialog
           const brandLocations = locations.filter(loc => loc.companyId === selectedCompanyIdInDialog);
            if (currentUser?.role === 'Manager' && currentUser.companyId === selectedCompanyIdInDialog && currentUser.assignedLocationIds) {
             setLocationsForSelectedBrandInDialog(brandLocations.filter(loc => currentUser.assignedLocationIds!.includes(loc.id)));
@@ -116,11 +116,9 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
             setLocationsForSelectedBrandInDialog(brandLocations);
            }
           
-          // Only reset assignedLocationIds if the company *actually* changed from the user's initial company
           if (selectedCompanyIdInDialog !== initialCompanyIdForUser) {
              form.setValue('assignedLocationIds', [], { shouldValidate: true });
           }
-          // If company is same, form.reset from user prop already set the initial assignedLocationIds
 
         } catch (error) {
             toast({ title: "Error", description: "Could not load locations for selected brand.", variant: "destructive" });
@@ -129,24 +127,24 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
         } finally {
             setIsLoadingLocationsForDialog(false);
         }
-      } else if (isOpen && !selectedCompanyIdInDialog) { // No brand selected (e.g. for Super Admin user)
+      } else if (isOpen && !selectedCompanyIdInDialog) { 
         setLocationsForSelectedBrandInDialog([]);
-        if (initialCompanyIdForUser !== null) { // If user initially had a brand, clear locations
+        if (initialCompanyIdForUser !== null) { 
            form.setValue('assignedLocationIds', []);
         }
       }
     };
     if (isOpen) fetchLocationsForBrand();
-  }, [selectedCompanyIdInDialog, isOpen, form, currentUser, initialCompanyIdForUser, locations, toast]); // Added locations dependency
+  }, [selectedCompanyIdInDialog, isOpen, form, currentUser, initialCompanyIdForUser, locations, toast]); 
 
 
   const canEditRole = currentUser && user && currentUser.id !== user.id && !isTargetUserSuperAdmin &&
     (currentUser.role === 'Super Admin' ||
      (currentUser.companyId &&
-      (companies.some(c => c.id === user.companyId)) && // Target user's brand is accessible
+      (companies.some(c => c.id === user.companyId)) && 
       (
-        (currentUser.role === 'Manager' && (user.role === 'Staff' || user.role === 'Manager')) || // Manager can edit Staff or Manager
-        (ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[user.role]) // Or can edit roles strictly lower
+        (currentUser.role === 'Manager' && (user.role === 'Staff' || user.role === 'Manager')) || 
+        (ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[user.role]) 
       )
      )
     );
@@ -163,7 +161,7 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
         if (isTargetUserSuperAdmin) {
             toast({ title: "Permission Denied", description: "Super Admin role cannot be changed.", variant: "destructive" }); return;
         }
-        if (!canEditRole) { // Double check permission here
+        if (!canEditRole) { 
             toast({ title: "Permission Denied", description: "You do not have permission to change this user's role to the selected role.", variant: "destructive" }); return;
         }
          if (currentUser.role !== 'Super Admin') {
@@ -193,7 +191,6 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
         let passwordMessage = "";
         if (canSetPassword && data.newTemporaryPassword && data.newTemporaryPassword.length >= 6) {
             updateData.requiresPasswordChange = true;
-            // This is still a placeholder for actual password update via Admin SDK
             console.warn(`ADMIN SDK NEEDED: Simulating password update for ${user.email} to ${data.newTemporaryPassword}`);
             toast({ title: "Password Update (Simulated)", description: `Password for ${user.email} would be set to '${data.newTemporaryPassword}' via Admin SDK. User will be prompted to change it. Communicate this password to the user.`, variant: "default", duration: 15000 });
             passwordMessage = ` New temporary password noted.`;
@@ -212,11 +209,10 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
   let assignableRolesForDropdown: UserRole[] = [];
   if (canEditRole && currentUser) {
     if (currentUser.role === 'Super Admin' && !isTargetUserSuperAdmin) {
-        assignableRolesForDropdown = ALL_POSSIBLE_ROLES_TO_ASSIGN.filter(r => r !== 'Super Admin'); // SA can assign any non-SA role
+        assignableRolesForDropdown = ALL_POSSIBLE_ROLES_TO_ASSIGN.filter(r => r !== 'Super Admin');
     } else if (currentUser.role === 'Manager' && (user.role === 'Staff' || user.role === 'Manager')) {
-        assignableRolesForDropdown = ['Staff', 'Manager']; // Manager can set to Staff or Manager
+        assignableRolesForDropdown = ['Staff', 'Manager'];
     } else if ((currentUser.role === 'Admin' || currentUser.role === 'Owner')) {
-        // Admin/Owner can assign roles strictly lower than their own, excluding Super Admin
         assignableRolesForDropdown = ALL_POSSIBLE_ROLES_TO_ASSIGN.filter(r => ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[r] && r !== 'Super Admin');
     }
   }
@@ -236,14 +232,11 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
                 {user.role !== 'Super Admin' && !field.value && currentUser?.role === 'Super Admin' && ( <div className="text-sm text-muted-foreground p-2 border rounded-md flex items-center gap-2 h-10"> <AlertCircle className="h-4 w-4 text-yellow-500" /> Assign a brand. </div> )}
                 <Select onValueChange={(value) => field.onChange(value === 'no-company' || value === 'placeholder-company' ? null : value)} value={field.value || 'placeholder-company'} disabled={isCompanySelectDisabled || isLoadingLocationsForDialog}>
                   <FormControl>
-                    <div> {/* Wrapper for SelectTrigger */}
-                      <SelectTrigger><SelectValue placeholder={user.role === 'Super Admin' ? "No Brand (Super Admin)" : "Select a brand"} /></SelectTrigger>
-                    </div>
+                    <SelectTrigger><SelectValue placeholder={user.role === 'Super Admin' ? "No Brand (Super Admin)" : "Select a brand"} /></SelectTrigger>
                   </FormControl>
                   <SelectContent> 
                     <SelectItem value="placeholder-company" disabled>Select a brand...</SelectItem>
                     {currentUser?.role === 'Super Admin' && <SelectItem value="no-company">No Brand Assigned</SelectItem>}
-                    {/* 'companies' prop contains brands accessible to the current admin */}
                     {companies.map((c) => ( <SelectItem key={c.id} value={c.id}>{c.name} {c.parentBrandId ? "(Child)" : ""}</SelectItem> ))}
                   </SelectContent>
                 </Select>
@@ -255,7 +248,7 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
             <FormField control={form.control} name="assignedLocationIds" render={() => (
               <FormItem> <FormLabel>Assigned Locations (Optional)</FormLabel>
                 <FormControl>
-                  <div> {/* Wrapper for ScrollArea */}
+                  <div> 
                     <ScrollArea className="h-40 w-full rounded-md border p-4">
                         {isLoadingLocationsForDialog ? ( <div className="flex items-center justify-center h-full"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
                         ) :selectedCompanyIdInDialog && locationsForSelectedBrandInDialog.length > 0 ? ( <div className="space-y-2"> {locationsForSelectedBrandInDialog.map((loc) => ( <FormField key={loc.id} control={form.control} name="assignedLocationIds" render={({ field: cbField }) => ( <FormItem className="flex flex-row items-start space-x-3 space-y-0"> <FormControl><Checkbox checked={cbField.value?.includes(loc.id)} onCheckedChange={c => { const current = cbField.value || []; const newVals = c ? [...current, loc.id] : current.filter(v => v !== loc.id); cbField.onChange(newVals); }} id={`edit-loc-${loc.id}`} /></FormControl> <FormLabel htmlFor={`edit-loc-${loc.id}`} className="font-normal">{loc.name}</FormLabel> </FormItem> )}/> ))} </div>
@@ -269,16 +262,11 @@ export function EditUserDialog({ isOpen, setIsOpen, user, onUserUpdated, current
               <FormItem> <FormLabel>User Role</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value} disabled={isRoleSelectDisabled}>
                   <FormControl>
-                    <div> {/* Wrapper for SelectTrigger */}
-                      <SelectTrigger><SelectValue placeholder="Select a user role" /></SelectTrigger>
-                    </div>
+                    <SelectTrigger><SelectValue placeholder="Select a user role" /></SelectTrigger>
                   </FormControl>
                   <SelectContent> 
-                    {/* Option for current role (might be disabled if not assignable) */}
                     <SelectItem value={user.role} disabled={!assignableRolesForDropdown.includes(user.role) && user.role !== field.value && user.role !== 'Super Admin'}>{user.role} {user.role === 'Super Admin' ? '(Cannot Change)' : (canEditRole ? '' : '(Permission Denied)')}</SelectItem>
-                    {/* Other assignable roles */}
                     {assignableRolesForDropdown.filter(r => r !== user.role).map(r => ( <SelectItem key={r} value={r}>{r}</SelectItem> ))}
-                    {/* Other non-assignable roles (excluding current and Super Admin if target is not SA) */}
                     {ALL_POSSIBLE_ROLES_TO_ASSIGN.filter(r => r !== user.role && !assignableRolesForDropdown.includes(r) && r !== 'Super Admin').map(r => ( <SelectItem key={r} value={r} disabled>{r} (Permission Denied)</SelectItem> ))}
                   </SelectContent>
                 </Select>

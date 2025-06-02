@@ -43,7 +43,6 @@ import { createUserAndSendWelcomeEmail } from '@/actions/userManagement';
 const ROLE_HIERARCHY: Record<UserRole, number> = {
   'Super Admin': 5, 'Admin': 4, 'Owner': 3, 'Manager': 2, 'Staff': 1,
 };
-// Roles that non-Super Admins can potentially assign (Super Admin can assign Super Admin too, handled by assignableRoles)
 const ASSIGNABLE_ROLES_BY_ADMINS: UserRole[] = ['Admin', 'Owner', 'Manager', 'Staff'];
 
 
@@ -132,7 +131,6 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
     startTransition(async () => {
       if (!currentUser) { toast({ title: "Error", description: "Current user not found.", variant: "destructive" }); return; }
 
-      // Permission checks
       if (currentUser.role !== 'Super Admin') {
         if (ROLE_HIERARCHY[currentUser.role] < ROLE_HIERARCHY[data.role]) {
           toast({ title: "Permission Denied", description: "You cannot create a user with a role higher than your own.", variant: "destructive"});
@@ -143,7 +141,7 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
             toast({ title: "Permission Denied", description: "Managers can only create Staff or other Manager users.", variant: "destructive"});
             return;
           }
-        } else { // Admin or Owner
+        } else { 
           if (ROLE_HIERARCHY[currentUser.role] === ROLE_HIERARCHY[data.role]) {
             toast({ title: "Permission Denied", description: "You cannot create a user with a role equal to your own.", variant: "destructive"});
             return;
@@ -152,11 +150,6 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
       }
       
       if (!data.companyId) { form.setError("companyId", { type: "manual", message: "Brand selection is required." }); return; }
-      // Location check is not strictly needed if not required by schema, but good for UX
-      // if (!data.assignedLocationIds || data.assignedLocationIds.length === 0) {
-      //   form.setError("assignedLocationIds", { type: "manual", message: "User must be assigned to at least one location." });
-      //   return;
-      // }
       
       const userDataToSend = {
         name: data.name,
@@ -180,9 +173,8 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
 
   const assignableRoles = ASSIGNABLE_ROLES_BY_ADMINS.filter(role => {
     if (!currentUser) return false;
-    if (currentUser.role === 'Super Admin') return true; // Super Admin can assign any of these roles
+    if (currentUser.role === 'Super Admin') return true;
     if (currentUser.role === 'Manager') return role === 'Staff' || role === 'Manager';
-    // For Admin/Owner, they can assign roles strictly lower than their own
     return ROLE_HIERARCHY[currentUser.role] > ROLE_HIERARCHY[role];
   });
   
@@ -224,9 +216,7 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
                   disabled={isBrandSelectDisabled() || isLoadingBrandData}
                 >
                   <FormControl>
-                    <div> 
-                      <SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger>
-                    </div>
+                    <SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger>
                   </FormControl>
                   <SelectContent> <SelectItem value="placeholder-company" disabled>Select a brand...</SelectItem> 
                     {companies.map((c) => ( <SelectItem key={c.id} value={c.id}>{c.name} {c.parentBrandId ? "(Child)" : ""}</SelectItem> ))} 
@@ -252,9 +242,7 @@ export function AddUserDialog({ onUserAdded, isOpen, setIsOpen, companies, locat
               <FormItem> <FormLabel>User Role</FormLabel>
                 <Select onValueChange={(value) => field.onChange(value === 'placeholder-role' ? '' : value)} value={field.value || 'placeholder-role'} defaultValue={field.value} disabled={assignableRoles.length === 0}>
                   <FormControl>
-                     <div> 
-                        <SelectTrigger><SelectValue placeholder="Select a user role" /></SelectTrigger>
-                     </div>
+                    <SelectTrigger><SelectValue placeholder="Select a user role" /></SelectTrigger>
                   </FormControl>
                   <SelectContent> <SelectItem value="placeholder-role" disabled>Select a role...</SelectItem>
                     {assignableRoles.map((r) => ( <SelectItem key={r} value={r}>{r}</SelectItem> ))}
