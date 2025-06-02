@@ -7,7 +7,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { HelpCircle, BookOpen, Users, Building, ShoppingCart, Cog, DatabaseZap, LayoutDashboard, BarChartBig, Percent, UserPlus, Gift, TestTube2, MapPin, Settings as SettingsIcon, Award, Layers } from "lucide-react";
+import { HelpCircle, BookOpen, Users, Building, ShoppingCart, Cog, DatabaseZap, LayoutDashboard, BarChartBig, Percent, UserPlus, Gift, TestTube2, MapPin, Settings as SettingsIcon, Award, Layers, Package } from "lucide-react"; // Added Package here
 import { useToast } from "@/hooks/use-toast";
 import type { User, UserRole } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
@@ -335,5 +335,3 @@ export default function SiteHelpPage() {
         </div>
     );
 }
-
-    
