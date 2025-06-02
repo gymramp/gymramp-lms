@@ -45,6 +45,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { EmployeeTable } from '@/components/dashboard/EmployeeTable';
 import { AssignCourseDialog } from '@/components/dashboard/AssignCourseDialog'; // Import AssignCourseDialog
 import type { Course, BrandCourse } from '@/types/course'; // Import Course and BrandCourse types
+import { FormControl } from '@/components/ui/form'; // Added FormControl import
 
 
 const ROLE_HIERARCHY: Record<UserRole, number> = {
@@ -313,7 +314,7 @@ export default function AdminUsersPage() {
     const companyForCourseAssignment =
       (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter) && currentUser.role === 'Super Admin'
       ? null // Super Admin with "All Brands" uses global context
-      : accessibleBrandsForFilter.find(b => b.id === employee.companyId) || // Target user's actual brand
+      : accessibleBrandsForFilter.find(b => b.id === employee.companyId) || // Target user's actual brand if accessible
         (currentUser.companyId ? accessibleBrandsForFilter.find(b => b.id === currentUser.companyId) : null); // Fallback to current user's primary brand
 
     if (availableCoursesForAssignment.length === 0) {
@@ -486,3 +487,4 @@ export default function AdminUsersPage() {
     </div>
   );
 }
+
