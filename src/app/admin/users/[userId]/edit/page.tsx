@@ -18,23 +18,23 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import type { User, UserRole, Company, Location, UserFormData, UserCourseProgressData } from '@/types/user';
-import type { Course, BrandCourse, Program } from '@/types/course';
-import { getUserById, updateUser, toggleUserCourseAssignments, getUserByEmail } from '@/lib/user-data';
-import { getAllCompanies, getLocationsByCompanyId, getAllLocations } from '@/lib/company-data';
-import { getAllCourses as getAllGlobalCourses, getCourseById as fetchGlobalCourseById, getAllPrograms as fetchAllGlobalPrograms } from '@/lib/firestore-data';
-import { getBrandCoursesByBrandId } from '@/lib/brand-content-data';
+import type { Course, BrandCourse, Program, Quiz, BrandQuiz } from '@/types/course';
+import { getUserById, updateUser, toggleUserCourseAssignments, getUserByEmail as fetchUserByEmail } from '@/lib/user-data';
+import { getAllCompanies as fetchAllCompaniesForSA, getLocationsByCompanyId, getAllLocations, getCompanyById as fetchCompanyDataById } from '@/lib/company-data'; // Renamed specific import
+import { getAllCourses as getAllGlobalCourses, getCourseById as fetchGlobalCourseById, getAllPrograms as fetchAllGlobalPrograms, getAllQuizzes, getQuizById as fetchGlobalQuizById } from '@/lib/firestore-data';
+import { getBrandCoursesByBrandId, getBrandQuizzesByBrandId, getBrandQuizById } from '@/lib/brand-content-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ArrowLeft, User as UserIcon, Building, MapPin, BookOpen, BarChart3, Save, Loader2, AlertCircle, KeyRound, Clock, ListChecks } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from '@/components/ui/badge'; // Added Badge import
+import { Badge } from '@/components/ui/badge';
 
 const ROLE_HIERARCHY: Record<UserRole, number> = {
   'Super Admin': 5, 'Admin': 4, 'Owner': 3, 'Manager': 2, 'Staff': 1,
 };
 const ALL_POSSIBLE_ROLES_TO_ASSIGN: UserRole[] = ['Super Admin', 'Admin', 'Owner', 'Manager', 'Staff'];
-const NO_BRAND_VALUE = "__NO_BRAND__"; // Constant for "No Brand" select item
+const NO_BRAND_VALUE = "__NO_BRAND__";
 
 const editUserFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
@@ -59,10 +59,11 @@ export default function AdminEditUserPage() {
 
   const [currentUserSession, setCurrentUserSession] = useState<User | null>(null);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
-  const [allCompanies, setAllCompanies] = useState<Company[]>([]);
-  const [allLocations, setAllLocations] = useState<Location[]>([]);
+  const [allCompaniesForSA, setAllCompaniesForSA] = useState<Company[]>([]);
+  const [allSystemLocations, setAllSystemLocations] = useState<Location[]>([]);
   const [locationsForSelectedBrand, setLocationsForSelectedBrand] = useState<Location[]>([]);
   const [assignableCourses, setAssignableCourses] = useState<(Course | BrandCourse)[]>([]);
+  const [allQuizzesMap, setAllQuizzesMap] = useState<Map<string, Quiz | BrandQuiz>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingLocationsForDialog, setIsLoadingLocationsForDialog] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -78,7 +79,7 @@ export default function AdminEditUserPage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser?.email) {
-        const sessionUser = await getUserByEmail(firebaseUser.email);
+        const sessionUser = await fetchUserByEmail(firebaseUser.email);
         setCurrentUserSession(sessionUser);
         if (sessionUser?.role !== 'Super Admin') {
           toast({ title: "Access Denied", variant: "destructive" });
@@ -98,10 +99,11 @@ export default function AdminEditUserPage() {
     }
     setIsLoading(true);
     try {
-      const [user, companies, locationsData] = await Promise.all([
+      const [user, companiesData, locationsData, globalQuizzesData] = await Promise.all([
         getUserById(userId),
-        getAllCompanies(currentUserSession),
+        fetchAllCompaniesForSA(currentUserSession),
         getAllLocations(),
+        getAllQuizzes(),
       ]);
 
       if (!user) {
@@ -110,8 +112,8 @@ export default function AdminEditUserPage() {
         return;
       }
       setUserToEdit(user);
-      setAllCompanies(companies);
-      setAllLocations(locationsData);
+      setAllCompaniesForSA(companiesData);
+      setAllSystemLocations(locationsData);
 
       form.reset({
         name: user.name || '',
@@ -120,8 +122,47 @@ export default function AdminEditUserPage() {
         assignedLocationIds: user.assignedLocationIds || [],
         newTemporaryPassword: '',
       });
+      
+      const quizzesMap = new Map<string, Quiz | BrandQuiz>();
+      globalQuizzesData.forEach(q => quizzesMap.set(q.id, q));
+
+      // For Super Admin, fetch all brand-specific quizzes from all companies
+      for (const company of companiesData) {
+          if (company.id) {
+              const brandQuizzes = await getBrandQuizzesByBrandId(company.id);
+              brandQuizzes.forEach(bq => {
+                  if (!quizzesMap.has(bq.id)) {
+                      quizzesMap.set(bq.id, bq);
+                  }
+              });
+          }
+      }
+      setAllQuizzesMap(quizzesMap);
+
+      let courses: (Course | BrandCourse)[] = [];
+      const brandForContext = user.companyId ? await fetchCompanyDataById(user.companyId) : null;
+
+      if (brandForContext) {
+        if (brandForContext.assignedProgramIds?.length) {
+          const allProgs = await fetchAllGlobalPrograms();
+          const relevantProgs = allProgs.filter(p => brandForContext!.assignedProgramIds!.includes(p.id));
+          const courseIdSet = new Set<string>();
+          relevantProgs.forEach(p => (p.courseIds || []).forEach(cid => courseIdSet.add(cid)));
+          if (courseIdSet.size > 0) {
+            const globalCoursePromises = Array.from(courseIdSet).map(cid => fetchGlobalCourseById(cid));
+            courses.push(...(await Promise.all(globalCoursePromises)).filter(Boolean) as Course[]);
+          }
+        }
+        if (brandForContext.canManageCourses) {
+          courses.push(...await getBrandCoursesByBrandId(brandForContext.id));
+        }
+      } else if (user.role === 'Super Admin') {
+        courses.push(...await getAllGlobalCourses());
+      }
+      setAssignableCourses(courses.filter((c, i, self) => i === self.findIndex(o => o.id === c.id) && !c.isDeleted));
 
     } catch (error) {
+      console.error("Error fetching data for admin edit user page:", error);
       toast({ title: "Error loading data", variant: "destructive" });
     } finally {
       setIsLoading(false);
@@ -135,37 +176,9 @@ export default function AdminEditUserPage() {
   }, [currentUserSession, fetchData]);
 
   useEffect(() => {
-    const fetchAssignable = async () => {
-        if (!userToEdit) { setAssignableCourses([]); return; }
-        let courses: (Course | BrandCourse)[] = [];
-        if (userToEdit.companyId) {
-            const targetCompany = allCompanies.find(c => c.id === userToEdit.companyId);
-            if (targetCompany?.assignedProgramIds?.length) {
-                const allProgs = await fetchAllGlobalPrograms();
-                const relevantProgs = allProgs.filter(p => targetCompany.assignedProgramIds!.includes(p.id));
-                const courseIdSet = new Set<string>();
-                relevantProgs.forEach(p => (p.courseIds || []).forEach(cid => courseIdSet.add(cid)));
-                if (courseIdSet.size > 0) {
-                    const globalCoursePromises = Array.from(courseIdSet).map(cid => fetchGlobalCourseById(cid));
-                    courses.push(...(await Promise.all(globalCoursePromises)).filter(Boolean) as Course[]);
-                }
-            }
-            if (targetCompany?.canManageCourses) {
-                courses.push(...await getBrandCoursesByBrandId(targetCompany.id));
-            }
-        } else if (userToEdit.role === 'Super Admin' || !userToEdit.companyId) {
-            courses.push(...await getAllGlobalCourses());
-        }
-        setAssignableCourses(courses.filter((c, i, self) => i === self.findIndex(o => o.id === c.id) && !c.isDeleted));
-    };
-    if (userToEdit && allCompanies.length > 0) fetchAssignable();
-  }, [userToEdit, allCompanies]);
-
-
-  useEffect(() => {
     if (watchedCompanyId) {
       setIsLoadingLocationsForDialog(true);
-      setLocationsForSelectedBrand(allLocations.filter(loc => loc.companyId === watchedCompanyId));
+      setLocationsForSelectedBrand(allSystemLocations.filter(loc => loc.companyId === watchedCompanyId));
       if (userToEdit && watchedCompanyId !== userToEdit.companyId) {
         form.setValue('assignedLocationIds', []);
       }
@@ -174,7 +187,7 @@ export default function AdminEditUserPage() {
       setLocationsForSelectedBrand([]);
       form.setValue('assignedLocationIds', []);
     }
-  }, [watchedCompanyId, allLocations, userToEdit, form]);
+  }, [watchedCompanyId, allSystemLocations, userToEdit, form]);
 
   const onSubmit = async (data: EditUserFormValues) => {
     if (!userToEdit || !currentUserSession || currentUserSession.role !== 'Super Admin') {
@@ -192,8 +205,6 @@ export default function AdminEditUserPage() {
       let passwordMessage = "";
       if (data.newTemporaryPassword && data.newTemporaryPassword.length >= 6) {
         updatePayload.requiresPasswordChange = true;
-        // TODO: Add actual password update via Firebase Admin SDK in a Cloud Function or secured server endpoint
-        // For now, we'll just log and toast a message.
         console.warn(`ADMIN SDK NEEDED: Simulating password update for ${userToEdit.email} to ${data.newTemporaryPassword}`);
         toast({ title: "Password Update (Simulated)", description: `Password for ${userToEdit.email} would be set to '${data.newTemporaryPassword}' via Admin SDK. User will be prompted to change it. Communicate this password to the user.`, variant: "default", duration: 15000 });
         passwordMessage = ` New temporary password noted.`;
@@ -203,7 +214,7 @@ export default function AdminEditUserPage() {
       if (updatedUser) {
         toast({ title: "User Updated", description: `${updatedUser.name}'s details have been updated.${passwordMessage}` });
         setUserToEdit(updatedUser);
-        fetchData(); // Re-fetch data to ensure UI is consistent, including courseProgress if it were displayed
+        fetchData();
       } else {
         throw new Error("Failed to update user.");
       }
@@ -221,7 +232,7 @@ export default function AdminEditUserPage() {
     try {
       const updatedUser = await toggleUserCourseAssignments(userToEdit.id, [courseId], action);
       if (updatedUser) {
-        setUserToEdit(updatedUser); // Update local state
+        setUserToEdit(updatedUser);
         toast({ title: `Course ${action === 'assign' ? 'Assigned' : 'Unassigned'}`, description: `Course successfully ${action}ed.` });
       }
     } catch (error) {
@@ -240,7 +251,7 @@ export default function AdminEditUserPage() {
   if (isLoading || !userToEdit || !currentUserSession) {
     return <div className="container mx-auto p-6"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
-
+  
   const canChangeRole = currentUserSession.id !== userToEdit.id && userToEdit.role !== 'Super Admin';
   const canSetPassword = currentUserSession.id !== userToEdit.id && userToEdit.role !== 'Super Admin';
 
@@ -290,7 +301,7 @@ export default function AdminEditUserPage() {
                         <FormControl><SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger></FormControl>
                         <SelectContent>
                           <SelectItem value={NO_BRAND_VALUE}>No Brand (Only for Super Admin)</SelectItem>
-                          {allCompanies.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                          {allCompaniesForSA.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
                       {userToEdit.role === 'Super Admin' && <p className="text-xs text-muted-foreground">Super Admins are not assigned to a specific brand.</p>}
@@ -362,17 +373,17 @@ export default function AdminEditUserPage() {
                           <p className="text-xs text-muted-foreground flex items-center gap-1">
                             <Clock className="h-3 w-3" /> Time Spent: {formatTimeSpent(courseProgress?.timeSpentSeconds)}
                           </p>
-                          {courseInfo?.curriculum?.filter(c => c.startsWith('quiz-') || c.startsWith('brandQuiz-')).map(quizCurriculumId => {
-                            const actualQuizId = quizCurriculumId.split('-').slice(1).join('-');
-                            const attempts = courseProgress?.quizAttempts?.[actualQuizId] || 0;
-                            return (
-                              <p key={quizCurriculumId} className="text-xs text-muted-foreground pl-4 flex items-center gap-1">
-                                <ListChecks className="h-3 w-3" /> Quiz "{quizCurriculumId}": {attempts} attempt(s)
-                              </p>
-                            );
+                          {Object.entries(courseProgress?.quizAttempts || {}).map(([quizId, attempts]) => { // quizId is short ID
+                             const quizInfo = allQuizzesMap.get(quizId);
+                             return (
+                               <p key={quizId} className="text-xs text-muted-foreground pl-4 flex items-center gap-1">
+                                 <ListChecks className="h-3 w-3" />
+                                 {quizInfo?.title || `[Quiz: ${quizId}]`}: {attempts} attempt(s)
+                               </p>
+                             );
                           })}
-                          {(!courseInfo?.curriculum?.some(c => c.startsWith('quiz-') || c.startsWith('brandQuiz-'))) && (
-                            <p className="text-xs text-muted-foreground pl-4 italic">No quizzes in this course.</p>
+                          {(!courseInfo?.curriculum?.some(c => c.startsWith('quiz-') || c.startsWith('brandQuiz-')) && Object.keys(courseProgress?.quizAttempts || {}).length === 0) && (
+                            <p className="text-xs text-muted-foreground pl-4 italic">No quizzes recorded for this course.</p>
                           )}
                         </div>
                       );
@@ -396,3 +407,4 @@ export default function AdminEditUserPage() {
     </div>
   );
 }
+

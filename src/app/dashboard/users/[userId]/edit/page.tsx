@@ -18,11 +18,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import type { User, UserRole, Company, Location, UserFormData, UserCourseProgressData } from '@/types/user';
-import type { Course, BrandCourse, Program } from '@/types/course';
-import { getUserById, updateUser, toggleUserCourseAssignments, getUserByEmail } from '@/lib/user-data';
+import type { Course, BrandCourse, Program, Quiz, BrandQuiz } from '@/types/course';
+import { getUserById, updateUser, toggleUserCourseAssignments, getUserByEmail as fetchUserByEmail } from '@/lib/user-data';
 import { getCompanyById, getLocationsByCompanyId, getAllCompanies as fetchAllAccessibleBrandsForUser, getAllLocations } from '@/lib/company-data';
-import { getAllCourses as getAllGlobalCourses, getCourseById as fetchGlobalCourseById, getAllPrograms as fetchAllGlobalPrograms } from '@/lib/firestore-data';
-import { getBrandCoursesByBrandId } from '@/lib/brand-content-data';
+import { getAllCourses as getAllGlobalCourses, getCourseById as fetchGlobalCourseById, getAllPrograms as fetchAllGlobalPrograms, getAllQuizzes, getQuizById as fetchGlobalQuizById } from '@/lib/firestore-data';
+import { getBrandCoursesByBrandId, getBrandQuizzesByBrandId, getBrandQuizById } from '@/lib/brand-content-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -37,7 +37,6 @@ const ROLE_HIERARCHY: Record<UserRole, number> = {
 const editUserFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
   role: z.string().min(1) as z.ZodType<UserRole>,
-  // companyId is typically not editable by these roles directly for other users, will be pre-filled
   assignedLocationIds: z.array(z.string()).default([]),
 });
 
@@ -46,15 +45,16 @@ type EditUserFormValues = z.infer<typeof editUserFormSchema>;
 export default function DashboardEditUserPage() {
   const params = useParams();
   const router = useRouter();
-  const userId = params.userId as string; // This is the ID of the user being edited
+  const userId = params.userId as string;
   const { toast } = useToast();
 
   const [currentUserSession, setCurrentUserSession] = useState<User | null>(null);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
-  const [userPrimaryBrand, setUserPrimaryBrand] = useState<Company | null>(null); // Brand of currentUserSession or userToEdit
-  const [accessibleChildBrands, setAccessibleChildBrands] = useState<Company[]>([]); // Child brands currentUserSession can manage
+  const [userPrimaryBrand, setUserPrimaryBrand] = useState<Company | null>(null);
+  const [accessibleChildBrands, setAccessibleChildBrands] = useState<Company[]>([]);
   const [locationsForSelectedBrand, setLocationsForSelectedBrand] = useState<Location[]>([]);
   const [assignableCourses, setAssignableCourses] = useState<(Course | BrandCourse)[]>([]);
+  const [allQuizzesMap, setAllQuizzesMap] = useState<Map<string, Quiz | BrandQuiz>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -68,7 +68,7 @@ export default function DashboardEditUserPage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser?.email) {
-        const sessionUser = await getUserByEmail(firebaseUser.email);
+        const sessionUser = await fetchUserByEmail(firebaseUser.email);
         setCurrentUserSession(sessionUser);
         if (!sessionUser || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(sessionUser.role)) {
           toast({ title: "Access Denied", variant: "destructive" });
@@ -95,22 +95,20 @@ export default function DashboardEditUserPage() {
       if (currentUserSession.role === 'Super Admin') {
           canEdit = true;
       } else if (currentUserSession.id === targetUser.id) {
-          canEdit = true; // Users can always edit their own name if they can reach this page
-      } else if (currentUserSession.companyId === targetUser.companyId) { // Same company
+          canEdit = true;
+      } else if (currentUserSession.companyId === targetUser.companyId) {
           if (currentUserSession.role === 'Admin' || currentUserSession.role === 'Owner') {
               canEdit = ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[targetUser.role];
           } else if (currentUserSession.role === 'Manager') {
-              // Manager can edit Staff or other Managers within the same locations they are assigned to
               const managerLocations = currentUserSession.assignedLocationIds || [];
               const targetUserLocations = targetUser.assignedLocationIds || [];
               const hasSharedLocation = managerLocations.some(locId => targetUserLocations.includes(locId));
-              canEdit = (targetUser.role === 'Staff' || targetUser.role === 'Manager') && (managerLocations.length === 0 || hasSharedLocation);
+              canEdit = (targetUser.role === 'Staff' || targetUser.role === 'Manager') && (managerLocations.length === 0 || targetUserLocations.length === 0 || hasSharedLocation);
           }
       } else if ((currentUserSession.role === 'Admin' || currentUserSession.role === 'Owner') && currentUserSession.companyId) {
-          // Admin/Owner managing a child brand user
           const allAccessibleBrands = await fetchAllAccessibleBrandsForUser(currentUserSession);
           const childBrands = allAccessibleBrands.filter(b => b.parentBrandId === currentUserSession.companyId);
-          if (childBrands.some(cb => cb.id === targetUser.companyId)) { // Is user in a child brand?
+          if (childBrands.some(cb => cb.id === targetUser.companyId)) {
             canEdit = ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[targetUser.role];
           }
           setAccessibleChildBrands(childBrands);
@@ -127,8 +125,6 @@ export default function DashboardEditUserPage() {
       if (targetUser.companyId) {
         brandForContext = await getCompanyById(targetUser.companyId);
       } else if (currentUserSession.companyId && (currentUserSession.role === 'Admin' || currentUserSession.role === 'Owner')) {
-        // If userToEdit has no company (e.g., if they were a Super Admin being viewed by another SA)
-        // and current session is Admin/Owner, use current session's company for context (though unlikely path)
         brandForContext = await getCompanyById(currentUserSession.companyId);
       }
       setUserPrimaryBrand(brandForContext);
@@ -136,10 +132,9 @@ export default function DashboardEditUserPage() {
 
       if (brandForContext) {
         const brandLocations = await getLocationsByCompanyId(brandForContext.id);
-        // If current user is a Manager, only show locations they are assigned to for selection for the target user
         if (currentUserSession.role === 'Manager' && currentUserSession.companyId === brandForContext.id && currentUserSession.assignedLocationIds) {
             setLocationsForSelectedBrand(brandLocations.filter(loc => currentUserSession.assignedLocationIds!.includes(loc.id)));
-        } else { // Admins/Owners see all locations of the brand
+        } else {
             setLocationsForSelectedBrand(brandLocations);
         }
       } else {
@@ -153,9 +148,8 @@ export default function DashboardEditUserPage() {
         assignedLocationIds: targetUser.assignedLocationIds || [],
       });
 
-      // Fetch assignable courses based on the brand of the user being edited
       let courses: (Course | BrandCourse)[] = [];
-      if (brandForContext) { // Use brandForContext which is the brand of the user being edited
+      if (brandForContext) {
         if (brandForContext.assignedProgramIds?.length) {
           const allProgs = await fetchAllGlobalPrograms();
           const relevantProgs = allProgs.filter(p => brandForContext!.assignedProgramIds!.includes(p.id));
@@ -166,18 +160,29 @@ export default function DashboardEditUserPage() {
             courses.push(...(await Promise.all(globalCoursePromises)).filter(Boolean) as Course[]);
           }
         }
-        // If the brand can manage its own courses, add them
         if (brandForContext.canManageCourses) {
           courses.push(...await getBrandCoursesByBrandId(brandForContext.id));
         }
       } else if (targetUser.role === 'Super Admin' && currentUserSession.role === 'Super Admin') {
-        // If a Super Admin is editing another Super Admin, show all global courses
         courses.push(...await getAllGlobalCourses());
       }
-      // Ensure unique courses and filter out deleted ones
       setAssignableCourses(courses.filter((c, i, self) => i === self.findIndex(o => o.id === c.id) && !c.isDeleted));
 
+      const quizzesMap = new Map<string, Quiz | BrandQuiz>();
+      const globalQuizzes = await getAllQuizzes();
+      globalQuizzes.forEach(q => quizzesMap.set(q.id, q));
+
+      if (brandForContext?.id && brandForContext.canManageCourses) {
+        const brandQuizzes = await getBrandQuizzesByBrandId(brandForContext.id);
+        brandQuizzes.forEach(bq => {
+            if (!quizzesMap.has(bq.id)) quizzesMap.set(bq.id, bq);
+        });
+      }
+      setAllQuizzesMap(quizzesMap);
+
+
     } catch (error) {
+      console.error("Error fetching data for dashboard edit user page:", error);
       toast({ title: "Error loading data", variant: "destructive" });
     } finally {
       setIsLoading(false);
@@ -200,12 +205,10 @@ export default function DashboardEditUserPage() {
         assignedLocationIds: data.assignedLocationIds || [],
       };
 
-      // Role change permission check
-      if (data.role !== userToEdit.role) { // Only check if role is actually being changed
+      if (data.role !== userToEdit.role) {
         if (currentUserSession.id === userToEdit.id && data.role !== currentUserSession.role) {
              toast({ title: "Action Denied", description: "You cannot change your own role.", variant: "destructive"}); setIsSaving(false); return;
         }
-        // Allow Super Admin to change any non-Super Admin role
         if (currentUserSession.role !== 'Super Admin') {
             if (ROLE_HIERARCHY[currentUserSession.role] <= ROLE_HIERARCHY[data.role]) {
               toast({ title: "Permission Denied", description: "Cannot assign a role equal to or higher than your own.", variant: "destructive" });
@@ -220,12 +223,11 @@ export default function DashboardEditUserPage() {
         }
       }
 
-
       const updatedUser = await updateUser(userToEdit.id, updatePayload);
       if (updatedUser) {
         toast({ title: "User Updated", description: `${updatedUser.name}'s details have been updated.` });
-        setUserToEdit(updatedUser); // Update local state
-        fetchData(); // Re-fetch data for consistency
+        setUserToEdit(updatedUser);
+        fetchData();
       } else {
         throw new Error("Failed to update user.");
       }
@@ -243,7 +245,7 @@ export default function DashboardEditUserPage() {
     try {
       const updatedUser = await toggleUserCourseAssignments(userToEdit.id, [courseId], action);
       if (updatedUser) {
-        setUserToEdit(updatedUser); // Update local state to reflect change
+        setUserToEdit(updatedUser);
         toast({ title: `Course ${action === 'assign' ? 'Assigned' : 'Unassigned'}`, description: `Course successfully ${action}ed.` });
       }
     } catch (error) {
@@ -263,11 +265,10 @@ export default function DashboardEditUserPage() {
     return <div className="container mx-auto p-6"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
-  // Determine if the current session user can change the role of the user being edited
   const canChangeRole = currentUserSession.id !== userToEdit.id &&
-                       (currentUserSession.role === 'Super Admin' ? userToEdit.role !== 'Super Admin' : // SA can change anyone but another SA
+                       (currentUserSession.role === 'Super Admin' ? userToEdit.role !== 'Super Admin' :
                         (currentUserSession.role === 'Admin' || currentUserSession.role === 'Owner') ? ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[userToEdit.role] :
-                        (currentUserSession.role === 'Manager') ? (userToEdit.role === 'Staff' || userToEdit.role === 'Manager') && ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[userToEdit.role] :
+                        (currentUserSession.role === 'Manager') ? (userToEdit.role === 'Staff' || userToEdit.role === 'Manager') && ROLE_HIERARCHY[currentUserSession.role] >= ROLE_HIERARCHY[userToEdit.role] && (userToEdit.role === 'Manager' ? currentUserSession.id !== userToEdit.id : true) :
                         false);
 
   let assignableRolesForDropdown: UserRole[] = [];
@@ -275,8 +276,8 @@ export default function DashboardEditUserPage() {
       if (currentUserSession.role === 'Super Admin'){
           assignableRolesForDropdown = (['Admin', 'Owner', 'Manager', 'Staff'] as UserRole[]);
       } else if (currentUserSession.role === 'Manager') {
-          assignableRolesForDropdown = ['Staff', 'Manager'].filter(r => ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[r as UserRole]);
-      } else { // Admin or Owner
+          assignableRolesForDropdown = ['Staff', 'Manager'].filter(r => ROLE_HIERARCHY[currentUserSession.role] >= ROLE_HIERARCHY[r as UserRole]);
+      } else {
           assignableRolesForDropdown = (['Admin', 'Owner', 'Manager', 'Staff'] as UserRole[]).filter(r => ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[r as UserRole]);
       }
   }
@@ -388,17 +389,17 @@ export default function DashboardEditUserPage() {
                           <p className="text-xs text-muted-foreground flex items-center gap-1">
                             <Clock className="h-3 w-3" /> Time Spent: {formatTimeSpent(courseProgress?.timeSpentSeconds)}
                           </p>
-                          {courseInfo?.curriculum?.filter(c => c.startsWith('quiz-') || c.startsWith('brandQuiz-')).map(quizCurriculumId => {
-                            const actualQuizId = quizCurriculumId.split('-').slice(1).join('-');
-                            const attempts = courseProgress?.quizAttempts?.[actualQuizId] || 0;
-                            return (
-                              <p key={quizCurriculumId} className="text-xs text-muted-foreground pl-4 flex items-center gap-1">
-                                <ListChecks className="h-3 w-3" /> Quiz "{quizCurriculumId.substring(quizCurriculumId.indexOf('-') + 1)}": {attempts} attempt(s)
-                              </p>
-                            );
+                           {Object.entries(courseProgress?.quizAttempts || {}).map(([quizId, attempts]) => { // quizId is short ID
+                             const quizInfo = allQuizzesMap.get(quizId);
+                             return (
+                               <p key={quizId} className="text-xs text-muted-foreground pl-4 flex items-center gap-1">
+                                 <ListChecks className="h-3 w-3" />
+                                 {quizInfo?.title || `[Quiz: ${quizId}]`}: {attempts} attempt(s)
+                               </p>
+                             );
                           })}
-                          {(!courseInfo?.curriculum?.some(c => c.startsWith('quiz-') || c.startsWith('brandQuiz-'))) && (
-                            <p className="text-xs text-muted-foreground pl-4 italic">No quizzes in this course.</p>
+                          {(!courseInfo?.curriculum?.some(c => c.startsWith('quiz-') || c.startsWith('brandQuiz-')) && Object.keys(courseProgress?.quizAttempts || {}).length === 0) && (
+                            <p className="text-xs text-muted-foreground pl-4 italic">No quizzes recorded for this course.</p>
                           )}
                         </div>
                       );
@@ -422,3 +423,4 @@ export default function DashboardEditUserPage() {
     </div>
   );
 }
+
