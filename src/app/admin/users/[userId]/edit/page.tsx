@@ -1,4 +1,3 @@
-
 // src/app/admin/users/[userId]/edit/page.tsx
 'use client';
 
@@ -19,7 +18,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { useToast } from '@/hooks/use-toast';
 import type { User, UserRole, Company, Location, UserFormData } from '@/types/user';
 import type { Course, BrandCourse, Program } from '@/types/course';
-import { getUserById, updateUser, toggleUserCourseAssignments } from '@/lib/user-data';
+import { getUserById, updateUser, toggleUserCourseAssignments, getUserByEmail } from '@/lib/user-data'; // Added getUserByEmail
 import { getAllCompanies, getLocationsByCompanyId, getAllLocations } from '@/lib/company-data';
 import { getAllCourses as getAllGlobalCourses, getCourseById as fetchGlobalCourseById, getAllPrograms as fetchAllGlobalPrograms } from '@/lib/firestore-data';
 import { getBrandCoursesByBrandId } from '@/lib/brand-content-data';
@@ -62,6 +61,7 @@ export default function AdminEditUserPage() {
   const [locationsForSelectedBrand, setLocationsForSelectedBrand] = useState<Location[]>([]);
   const [assignableCourses, setAssignableCourses] = useState<(Course | BrandCourse)[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingLocationsForDialog, setIsLoadingLocationsForDialog] = useState(false); // Added state
   const [isSaving, setIsSaving] = useState(false);
 
   const form = useForm<EditUserFormValues>({
@@ -161,10 +161,12 @@ export default function AdminEditUserPage() {
 
   useEffect(() => {
     if (watchedCompanyId) {
+      setIsLoadingLocationsForDialog(true);
       setLocationsForSelectedBrand(allLocations.filter(loc => loc.companyId === watchedCompanyId));
       if (userToEdit && watchedCompanyId !== userToEdit.companyId) {
         form.setValue('assignedLocationIds', []);
       }
+      setIsLoadingLocationsForDialog(false);
     } else {
       setLocationsForSelectedBrand([]);
       form.setValue('assignedLocationIds', []);
