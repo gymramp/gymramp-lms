@@ -43,11 +43,14 @@ export default async function RootLayout({
         <Navbar />
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
-          <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto bg-secondary/30">
-            {children}
+          <main className="flex-1 overflow-y-auto bg-secondary/30 flex flex-col"> {/* Added flex flex-col, removed padding */}
+            <div className="flex-grow p-4 md:p-6 lg:p-8"> {/* New wrapper for children with padding */}
+              {children}
+            </div>
+            <Footer /> {/* Moved Footer here */}
           </main>
         </div>
-        <Footer />
+        {/* Footer removed from being a direct child of body */}
         <Toaster />
       </body>
     </html>
