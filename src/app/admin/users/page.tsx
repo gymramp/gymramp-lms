@@ -375,7 +375,7 @@ export default function AdminUsersPage() {
          </div>
         </div>
 
-        {lastGeneratedPasswordForNewUser && ( <Alert variant="success" className="mb-6 border-green-300 bg-green-50 dark:bg-green-900/30"> <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400" /> <AlertTitle className="text-green-800 dark:text-green-300">New User Added!</AlertTitle> <AlertDescription className="text-green-700 dark:text-green-400"> A welcome email with a temporary password has been sent. The temporary password is: <strong className="font-bold">{lastGeneratedPasswordForNewUser}</strong><br/> They will be required to change this password on their first login. <Button variant="ghost" size="sm" onClick={() => setLastGeneratedPasswordForNewUser(null)} className="ml-4 text-green-700 hover:text-green-800">Dismiss</Button> </AlertDescription> </Alert> )}
+        {lastGeneratedPasswordForNewUser && ( <Alert variant="success" className="mb-6 border-green-300 bg-green-50 dark:bg-green-900/30"> <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400" /> <AlertTitle className="text-green-800 dark:text-green-300">New User Added!</AlertTitle> <AlertDescription className="text-green-700 dark:text-green-400"> The temporary password for the new user is: <strong className="font-bold">{lastGeneratedPasswordForNewUser}</strong><br/> A welcome email has been sent. They will be required to change this password on their first login. <Button variant="ghost" size="sm" onClick={() => setLastGeneratedPasswordForNewUser(null)} className="ml-4 text-green-700 hover:text-green-800">Dismiss</Button> </AlertDescription> </Alert> )}
 
        <div className="flex flex-wrap items-end gap-4 mb-6 p-4 bg-secondary rounded-lg shadow-sm">
          <h2 className="text-lg font-semibold mr-4 self-center text-foreground">Filters:</h2>
@@ -390,7 +390,7 @@ export default function AdminUsersPage() {
                     className="w-[220px] bg-background/50 h-10"
                 />
              ) : (
-                <Select 
+                <Select
                   value={selectedBrandIdForFilter || 'placeholder-brand'}
                   onValueChange={(value) => setSelectedBrandIdForFilter(value === 'placeholder-brand' ? '' : value)}
                   disabled={isLoadingFilters || (currentUser?.role === 'Super Admin' && accessibleBrandsForFilter.length === 0)}
@@ -398,7 +398,7 @@ export default function AdminUsersPage() {
                   <SelectTrigger id="brand-filter-users" className="w-[220px] bg-background h-10">
                     <SelectValue placeholder="Select Brand" />
                   </SelectTrigger>
-                  <SelectContent> <SelectItem value="placeholder-brand" disabled>Select a brand...</SelectItem> 
+                  <SelectContent> <SelectItem value="placeholder-company" disabled>Select a brand...</SelectItem>
                     {(currentUser?.role === 'Super Admin' || ((currentUser?.role === 'Admin' || currentUser?.role === 'Owner') && accessibleBrandsForFilter.length > 1)) && <SelectItem value="all">All Accessible Brands</SelectItem>}
                     {accessibleBrandsForFilter.map(brand => ( <SelectItem key={brand.id} value={brand.id}>{brand.name} {brand.parentBrandId ? "(Child)" : ""}</SelectItem> ))}
                     {accessibleBrandsForFilter.length === 0 && currentUser?.role === 'Super Admin' && (
