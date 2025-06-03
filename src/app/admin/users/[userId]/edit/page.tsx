@@ -1,3 +1,4 @@
+
 // src/app/admin/users/[userId]/edit/page.tsx
 'use client';
 
@@ -18,7 +19,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { useToast } from '@/hooks/use-toast';
 import type { User, UserRole, Company, Location, UserFormData } from '@/types/user';
 import type { Course, BrandCourse, Program } from '@/types/course';
-import { getUserById, updateUser, toggleUserCourseAssignments, getUserByEmail } from '@/lib/user-data'; // Added getUserByEmail
+import { getUserById, updateUser, toggleUserCourseAssignments, getUserByEmail } from '@/lib/user-data';
 import { getAllCompanies, getLocationsByCompanyId, getAllLocations } from '@/lib/company-data';
 import { getAllCourses as getAllGlobalCourses, getCourseById as fetchGlobalCourseById, getAllPrograms as fetchAllGlobalPrograms } from '@/lib/firestore-data';
 import { getBrandCoursesByBrandId } from '@/lib/brand-content-data';
@@ -32,6 +33,7 @@ const ROLE_HIERARCHY: Record<UserRole, number> = {
   'Super Admin': 5, 'Admin': 4, 'Owner': 3, 'Manager': 2, 'Staff': 1,
 };
 const ALL_POSSIBLE_ROLES_TO_ASSIGN: UserRole[] = ['Super Admin', 'Admin', 'Owner', 'Manager', 'Staff'];
+const NO_BRAND_VALUE = "__NO_BRAND__"; // Constant for "No Brand" select item
 
 const editUserFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
@@ -61,7 +63,7 @@ export default function AdminEditUserPage() {
   const [locationsForSelectedBrand, setLocationsForSelectedBrand] = useState<Location[]>([]);
   const [assignableCourses, setAssignableCourses] = useState<(Course | BrandCourse)[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingLocationsForDialog, setIsLoadingLocationsForDialog] = useState(false); // Added state
+  const [isLoadingLocationsForDialog, setIsLoadingLocationsForDialog] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const form = useForm<EditUserFormValues>({
@@ -131,7 +133,7 @@ export default function AdminEditUserPage() {
     }
   }, [currentUserSession, fetchData]);
 
-  useEffect(() => { // Fetch assignable courses based on userToEdit's company
+  useEffect(() => {
     const fetchAssignable = async () => {
         if (!userToEdit) { setAssignableCourses([]); return; }
         let courses: (Course | BrandCourse)[] = [];
@@ -150,12 +152,12 @@ export default function AdminEditUserPage() {
             if (targetCompany?.canManageCourses) {
                 courses.push(...await getBrandCoursesByBrandId(targetCompany.id));
             }
-        } else if (userToEdit.role === 'Super Admin' || !userToEdit.companyId) { // SA or user not in company yet
+        } else if (userToEdit.role === 'Super Admin' || !userToEdit.companyId) {
             courses.push(...await getAllGlobalCourses());
         }
         setAssignableCourses(courses.filter((c, i, self) => i === self.findIndex(o => o.id === c.id) && !c.isDeleted));
     };
-    if (userToEdit) fetchAssignable();
+    if (userToEdit && allCompanies.length > 0) fetchAssignable();
   }, [userToEdit, allCompanies]);
 
 
@@ -189,17 +191,15 @@ export default function AdminEditUserPage() {
       let passwordMessage = "";
       if (data.newTemporaryPassword && data.newTemporaryPassword.length >= 6) {
         updatePayload.requiresPasswordChange = true;
-        // Actual password change requires Firebase Admin SDK server-side. This will just set the flag.
         toast({ title: "Password Update Set", description: `User ${userToEdit.name} will be prompted to change password on next login. New temporary password: ${data.newTemporaryPassword} (Communicate this manually if email fails or for immediate use).`, variant: "default", duration: 10000 });
         passwordMessage = ` Password reset flag set.`;
-        // Consider calling a server action here that uses Admin SDK to reset password if implementing full password reset
       }
 
       const updatedUser = await updateUser(userToEdit.id, updatePayload);
       if (updatedUser) {
         toast({ title: "User Updated", description: `${updatedUser.name}'s details have been updated.${passwordMessage}` });
-        setUserToEdit(updatedUser); // Update local state
-        fetchData(); // Re-fetch to ensure everything is fresh
+        setUserToEdit(updatedUser);
+        fetchData();
       } else {
         throw new Error("Failed to update user.");
       }
@@ -217,7 +217,7 @@ export default function AdminEditUserPage() {
     try {
       const updatedUser = await toggleUserCourseAssignments(userToEdit.id, [courseId], action);
       if (updatedUser) {
-        setUserToEdit(updatedUser); // Update local state
+        setUserToEdit(updatedUser);
         toast({ title: `Course ${action === 'assign' ? 'Assigned' : 'Unassigned'}`, description: `Course successfully ${action}ed.` });
       }
     } catch (error) {
@@ -270,10 +270,14 @@ export default function AdminEditUserPage() {
                   )} />
                   <FormField control={form.control} name="companyId" render={({ field }) => (
                     <FormItem><FormLabel>Brand</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || ''} disabled={userToEdit.role === 'Super Admin'}>
+                      <Select
+                        onValueChange={(value) => field.onChange(value === NO_BRAND_VALUE ? null : value)}
+                        value={field.value === null ? NO_BRAND_VALUE : field.value || ''}
+                        disabled={userToEdit.role === 'Super Admin'}
+                      >
                         <FormControl><SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger></FormControl>
                         <SelectContent>
-                          <SelectItem value="">No Brand (Only for Super Admin)</SelectItem>
+                          <SelectItem value={NO_BRAND_VALUE}>No Brand (Only for Super Admin)</SelectItem>
                           {allCompanies.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
@@ -351,3 +355,4 @@ export default function AdminEditUserPage() {
     </div>
   );
 }
+
