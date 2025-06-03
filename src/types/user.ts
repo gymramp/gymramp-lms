@@ -35,6 +35,8 @@ export interface UserCourseProgressData {
     completedItems: string[]; // Array of completed lesson/quiz IDs (prefixed)
     lastUpdated?: Timestamp | Date | null; // Firestore Timestamp of last progress update
     videoProgress?: Record<string, number>; // Added for video progress tracking
+    timeSpentSeconds?: number; // Cumulative seconds spent on this course
+    quizAttempts?: Record<string, number>; // Maps quiz ID (the part after 'quiz-') to attempt count
 }
 
 
@@ -68,10 +70,11 @@ export interface Company { // Conceptually "Brand"
   // New fields for Brand Hierarchy
   parentBrandId?: string | null; // ID of the parent brand, if this is a child brand
   createdByUserId?: string | null; // ID of the user (likely Admin/Owner of parent) who created this brand
+  userCount?: number; // Denormalized for UI display
 }
 
 // Type for the form data when adding/editing a company (now Brand)
-export type CompanyFormData = Omit<Company, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt'> & {
+export type CompanyFormData = Omit<Company, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'userCount'> & {
   revenueSharePartners?: RevenueSharePartner[];
   // parentBrandId and createdByUserId will be handled implicitly or passed directly in addCompany
 };

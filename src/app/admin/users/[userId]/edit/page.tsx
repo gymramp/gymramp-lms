@@ -17,7 +17,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import type { User, UserRole, Company, Location, UserFormData } from '@/types/user';
+import type { User, UserRole, Company, Location, UserFormData, UserCourseProgressData } from '@/types/user';
 import type { Course, BrandCourse, Program } from '@/types/course';
 import { getUserById, updateUser, toggleUserCourseAssignments, getUserByEmail } from '@/lib/user-data';
 import { getAllCompanies, getLocationsByCompanyId, getAllLocations } from '@/lib/company-data';
@@ -26,7 +26,7 @@ import { getBrandCoursesByBrandId } from '@/lib/brand-content-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { ArrowLeft, User as UserIcon, Building, MapPin, BookOpen, BarChart3, Save, Loader2, AlertCircle, KeyRound } from 'lucide-react';
+import { ArrowLeft, User as UserIcon, Building, MapPin, BookOpen, BarChart3, Save, Loader2, AlertCircle, KeyRound, Clock, ListChecks } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from '@/components/ui/badge'; // Added Badge import
 
@@ -192,15 +192,18 @@ export default function AdminEditUserPage() {
       let passwordMessage = "";
       if (data.newTemporaryPassword && data.newTemporaryPassword.length >= 6) {
         updatePayload.requiresPasswordChange = true;
-        toast({ title: "Password Update Set", description: `User ${userToEdit.name} will be prompted to change password on next login. New temporary password: ${data.newTemporaryPassword} (Communicate this manually if email fails or for immediate use).`, variant: "default", duration: 10000 });
-        passwordMessage = ` Password reset flag set.`;
+        // TODO: Add actual password update via Firebase Admin SDK in a Cloud Function or secured server endpoint
+        // For now, we'll just log and toast a message.
+        console.warn(`ADMIN SDK NEEDED: Simulating password update for ${userToEdit.email} to ${data.newTemporaryPassword}`);
+        toast({ title: "Password Update (Simulated)", description: `Password for ${userToEdit.email} would be set to '${data.newTemporaryPassword}' via Admin SDK. User will be prompted to change it. Communicate this password to the user.`, variant: "default", duration: 15000 });
+        passwordMessage = ` New temporary password noted.`;
       }
 
       const updatedUser = await updateUser(userToEdit.id, updatePayload);
       if (updatedUser) {
         toast({ title: "User Updated", description: `${updatedUser.name}'s details have been updated.${passwordMessage}` });
         setUserToEdit(updatedUser);
-        fetchData();
+        fetchData(); // Re-fetch data to ensure UI is consistent, including courseProgress if it were displayed
       } else {
         throw new Error("Failed to update user.");
       }
@@ -218,12 +221,20 @@ export default function AdminEditUserPage() {
     try {
       const updatedUser = await toggleUserCourseAssignments(userToEdit.id, [courseId], action);
       if (updatedUser) {
-        setUserToEdit(updatedUser);
+        setUserToEdit(updatedUser); // Update local state
         toast({ title: `Course ${action === 'assign' ? 'Assigned' : 'Unassigned'}`, description: `Course successfully ${action}ed.` });
       }
     } catch (error) {
       toast({ title: "Error", description: "Failed to update course assignment.", variant: "destructive" });
     }
+  };
+
+  const formatTimeSpent = (seconds?: number): string => {
+    if (seconds === undefined || seconds === null || seconds < 0) return 'N/A';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return `${h}h ${m}m ${s}s`;
   };
 
   if (isLoading || !userToEdit || !currentUserSession) {
@@ -338,17 +349,46 @@ export default function AdminEditUserPage() {
 
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" /> User Statistics</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <Alert variant="default" className="bg-blue-50 border-blue-200">
+            <CardContent className="space-y-4">
+              {userToEdit.assignedCourseIds && userToEdit.assignedCourseIds.length > 0 ? (
+                <ScrollArea className="h-64">
+                  <div className="space-y-3">
+                    {userToEdit.assignedCourseIds.map(courseId => {
+                      const courseProgress = userToEdit.courseProgress?.[courseId];
+                      const courseInfo = assignableCourses.find(c => c.id === courseId);
+                      return (
+                        <div key={courseId} className="p-3 border rounded-md">
+                          <h4 className="text-sm font-semibold">{courseInfo?.title || `Course ID: ${courseId}`}</h4>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Clock className="h-3 w-3" /> Time Spent: {formatTimeSpent(courseProgress?.timeSpentSeconds)}
+                          </p>
+                          {courseInfo?.curriculum?.filter(c => c.startsWith('quiz-') || c.startsWith('brandQuiz-')).map(quizCurriculumId => {
+                            const actualQuizId = quizCurriculumId.split('-').slice(1).join('-');
+                            const attempts = courseProgress?.quizAttempts?.[actualQuizId] || 0;
+                            return (
+                              <p key={quizCurriculumId} className="text-xs text-muted-foreground pl-4 flex items-center gap-1">
+                                <ListChecks className="h-3 w-3" /> Quiz "{quizCurriculumId}": {attempts} attempt(s)
+                              </p>
+                            );
+                          })}
+                          {(!courseInfo?.curriculum?.some(c => c.startsWith('quiz-') || c.startsWith('brandQuiz-'))) && (
+                            <p className="text-xs text-muted-foreground pl-4 italic">No quizzes in this course.</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">No courses assigned to this user to show statistics for.</p>
+              )}
+               <Alert variant="default" className="bg-blue-50 border-blue-200 mt-4">
                 <AlertCircle className="h-4 w-4 text-blue-600" />
-                <AlertTitle className="text-blue-700">Coming Soon!</AlertTitle>
+                <AlertTitle className="text-blue-700 text-sm">Note on Statistics</AlertTitle>
                 <AlertDescription className="text-blue-600 text-xs">
-                  Detailed statistics like time spent per course and quiz attempts are planned for a future update. Backend implementation for data tracking is required.
+                  Time spent tracking and quiz attempt counts are now being recorded. Data will populate as users interact with content.
                 </AlertDescription>
               </Alert>
-              <div className="text-sm"><strong>Overall Progress:</strong> {userToEdit.courseProgress?.[Object.keys(userToEdit.courseProgress)[0]]?.progress || 0}% (Placeholder)</div>
-              <div className="text-sm"><strong>Time Spent (Total):</strong> N/A (Requires backend tracking)</div>
-              <div className="text-sm"><strong>Quizzes Attempted (Total):</strong> N/A (Requires backend tracking)</div>
             </CardContent>
           </Card>
         </div>
@@ -356,4 +396,3 @@ export default function AdminEditUserPage() {
     </div>
   );
 }
-

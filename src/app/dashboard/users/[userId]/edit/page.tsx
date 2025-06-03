@@ -1,3 +1,4 @@
+
 // src/app/dashboard/users/[userId]/edit/page.tsx
 'use client';
 
@@ -16,7 +17,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import type { User, UserRole, Company, Location, UserFormData } from '@/types/user';
+import type { User, UserRole, Company, Location, UserFormData, UserCourseProgressData } from '@/types/user';
 import type { Course, BrandCourse, Program } from '@/types/course';
 import { getUserById, updateUser, toggleUserCourseAssignments, getUserByEmail } from '@/lib/user-data';
 import { getCompanyById, getLocationsByCompanyId, getAllCompanies as fetchAllAccessibleBrandsForUser, getAllLocations } from '@/lib/company-data';
@@ -25,8 +26,9 @@ import { getBrandCoursesByBrandId } from '@/lib/brand-content-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { ArrowLeft, User as UserIcon, Building, MapPin, BookOpen, BarChart3, Save, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, User as UserIcon, Building, MapPin, BookOpen, BarChart3, Save, Loader2, AlertCircle, Clock, ListChecks } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from '@/components/ui/badge';
 
 const ROLE_HIERARCHY: Record<UserRole, number> = {
   'Super Admin': 5, 'Admin': 4, 'Owner': 3, 'Manager': 2, 'Staff': 1,
@@ -61,8 +63,7 @@ export default function DashboardEditUserPage() {
     defaultValues: { name: '', role: 'Staff', assignedLocationIds: [] },
   });
 
-  // Only used for displaying locations; actual company assignment is complex and depends on editor's role
-  const watchedCompanyIdForLocationFilter = userToEdit?.companyId; // Use userToEdit's companyId for location filtering
+  const watchedCompanyIdForLocationFilter = userToEdit?.companyId;
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -94,17 +95,22 @@ export default function DashboardEditUserPage() {
       if (currentUserSession.role === 'Super Admin') {
           canEdit = true;
       } else if (currentUserSession.id === targetUser.id) {
-          canEdit = true;
-      } else if (currentUserSession.companyId === targetUser.companyId) {
+          canEdit = true; // Users can always edit their own name if they can reach this page
+      } else if (currentUserSession.companyId === targetUser.companyId) { // Same company
           if (currentUserSession.role === 'Admin' || currentUserSession.role === 'Owner') {
               canEdit = ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[targetUser.role];
           } else if (currentUserSession.role === 'Manager') {
-              canEdit = (targetUser.role === 'Staff' || targetUser.role === 'Manager');
+              // Manager can edit Staff or other Managers within the same locations they are assigned to
+              const managerLocations = currentUserSession.assignedLocationIds || [];
+              const targetUserLocations = targetUser.assignedLocationIds || [];
+              const hasSharedLocation = managerLocations.some(locId => targetUserLocations.includes(locId));
+              canEdit = (targetUser.role === 'Staff' || targetUser.role === 'Manager') && (managerLocations.length === 0 || hasSharedLocation);
           }
       } else if ((currentUserSession.role === 'Admin' || currentUserSession.role === 'Owner') && currentUserSession.companyId) {
+          // Admin/Owner managing a child brand user
           const allAccessibleBrands = await fetchAllAccessibleBrandsForUser(currentUserSession);
           const childBrands = allAccessibleBrands.filter(b => b.parentBrandId === currentUserSession.companyId);
-          if (childBrands.some(cb => cb.id === targetUser.companyId)) {
+          if (childBrands.some(cb => cb.id === targetUser.companyId)) { // Is user in a child brand?
             canEdit = ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[targetUser.role];
           }
           setAccessibleChildBrands(childBrands);
@@ -121,6 +127,8 @@ export default function DashboardEditUserPage() {
       if (targetUser.companyId) {
         brandForContext = await getCompanyById(targetUser.companyId);
       } else if (currentUserSession.companyId && (currentUserSession.role === 'Admin' || currentUserSession.role === 'Owner')) {
+        // If userToEdit has no company (e.g., if they were a Super Admin being viewed by another SA)
+        // and current session is Admin/Owner, use current session's company for context (though unlikely path)
         brandForContext = await getCompanyById(currentUserSession.companyId);
       }
       setUserPrimaryBrand(brandForContext);
@@ -128,15 +136,16 @@ export default function DashboardEditUserPage() {
 
       if (brandForContext) {
         const brandLocations = await getLocationsByCompanyId(brandForContext.id);
+        // If current user is a Manager, only show locations they are assigned to for selection for the target user
         if (currentUserSession.role === 'Manager' && currentUserSession.companyId === brandForContext.id && currentUserSession.assignedLocationIds) {
             setLocationsForSelectedBrand(brandLocations.filter(loc => currentUserSession.assignedLocationIds!.includes(loc.id)));
-        } else {
+        } else { // Admins/Owners see all locations of the brand
             setLocationsForSelectedBrand(brandLocations);
         }
       } else {
         setLocationsForSelectedBrand([]);
       }
-      
+
 
       form.reset({
         name: targetUser.name || '',
@@ -144,8 +153,9 @@ export default function DashboardEditUserPage() {
         assignedLocationIds: targetUser.assignedLocationIds || [],
       });
 
+      // Fetch assignable courses based on the brand of the user being edited
       let courses: (Course | BrandCourse)[] = [];
-      if (brandForContext) {
+      if (brandForContext) { // Use brandForContext which is the brand of the user being edited
         if (brandForContext.assignedProgramIds?.length) {
           const allProgs = await fetchAllGlobalPrograms();
           const relevantProgs = allProgs.filter(p => brandForContext!.assignedProgramIds!.includes(p.id));
@@ -156,10 +166,15 @@ export default function DashboardEditUserPage() {
             courses.push(...(await Promise.all(globalCoursePromises)).filter(Boolean) as Course[]);
           }
         }
+        // If the brand can manage its own courses, add them
         if (brandForContext.canManageCourses) {
           courses.push(...await getBrandCoursesByBrandId(brandForContext.id));
         }
+      } else if (targetUser.role === 'Super Admin' && currentUserSession.role === 'Super Admin') {
+        // If a Super Admin is editing another Super Admin, show all global courses
+        courses.push(...await getAllGlobalCourses());
       }
+      // Ensure unique courses and filter out deleted ones
       setAssignableCourses(courses.filter((c, i, self) => i === self.findIndex(o => o.id === c.id) && !c.isDeleted));
 
     } catch (error) {
@@ -185,17 +200,23 @@ export default function DashboardEditUserPage() {
         assignedLocationIds: data.assignedLocationIds || [],
       };
 
-      if (data.role !== userToEdit.role) {
+      // Role change permission check
+      if (data.role !== userToEdit.role) { // Only check if role is actually being changed
         if (currentUserSession.id === userToEdit.id && data.role !== currentUserSession.role) {
              toast({ title: "Action Denied", description: "You cannot change your own role.", variant: "destructive"}); setIsSaving(false); return;
         }
-        if (currentUserSession.role !== 'Super Admin' && ROLE_HIERARCHY[currentUserSession.role] <= ROLE_HIERARCHY[data.role]) {
-          toast({ title: "Permission Denied", description: "Cannot assign a role equal to or higher than your own.", variant: "destructive" });
-          setIsSaving(false); return;
-        }
-        if (currentUserSession.role === 'Manager' && !(data.role === 'Staff' || data.role === 'Manager')) {
-            toast({ title: "Permission Denied", description: "Managers can only assign 'Staff' or 'Manager' roles.", variant: "destructive"});
-            setIsSaving(false); return;
+        // Allow Super Admin to change any non-Super Admin role
+        if (currentUserSession.role !== 'Super Admin') {
+            if (ROLE_HIERARCHY[currentUserSession.role] <= ROLE_HIERARCHY[data.role]) {
+              toast({ title: "Permission Denied", description: "Cannot assign a role equal to or higher than your own.", variant: "destructive" });
+              setIsSaving(false); return;
+            }
+            if (currentUserSession.role === 'Manager' && !(data.role === 'Staff' || data.role === 'Manager')) {
+                toast({ title: "Permission Denied", description: "Managers can only assign 'Staff' or 'Manager' roles.", variant: "destructive"});
+                setIsSaving(false); return;
+            }
+        } else if (userToEdit.role === 'Super Admin' && data.role !== 'Super Admin') {
+             toast({ title: "Action Denied", description: "Super Admin role cannot be demoted.", variant: "destructive" }); setIsSaving(false); return;
         }
       }
 
@@ -203,8 +224,8 @@ export default function DashboardEditUserPage() {
       const updatedUser = await updateUser(userToEdit.id, updatePayload);
       if (updatedUser) {
         toast({ title: "User Updated", description: `${updatedUser.name}'s details have been updated.` });
-        setUserToEdit(updatedUser); 
-        fetchData();
+        setUserToEdit(updatedUser); // Update local state
+        fetchData(); // Re-fetch data for consistency
       } else {
         throw new Error("Failed to update user.");
       }
@@ -222,7 +243,7 @@ export default function DashboardEditUserPage() {
     try {
       const updatedUser = await toggleUserCourseAssignments(userToEdit.id, [courseId], action);
       if (updatedUser) {
-        setUserToEdit(updatedUser);
+        setUserToEdit(updatedUser); // Update local state to reflect change
         toast({ title: `Course ${action === 'assign' ? 'Assigned' : 'Unassigned'}`, description: `Course successfully ${action}ed.` });
       }
     } catch (error) {
@@ -230,21 +251,32 @@ export default function DashboardEditUserPage() {
     }
   };
 
+  const formatTimeSpent = (seconds?: number): string => {
+    if (seconds === undefined || seconds === null || seconds < 0) return 'N/A';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return `${h}h ${m}m ${s}s`;
+  };
+
   if (isLoading || !userToEdit || !currentUserSession) {
     return <div className="container mx-auto p-6"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
+  // Determine if the current session user can change the role of the user being edited
   const canChangeRole = currentUserSession.id !== userToEdit.id &&
-                       (currentUserSession.role === 'Super Admin' || currentUserSession.role === 'Admin' || currentUserSession.role === 'Owner' || currentUserSession.role === 'Manager') &&
-                       (currentUserSession.role === 'Super Admin' ? userToEdit.role !== 'Super Admin' : ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[userToEdit.role]);
-  
+                       (currentUserSession.role === 'Super Admin' ? userToEdit.role !== 'Super Admin' : // SA can change anyone but another SA
+                        (currentUserSession.role === 'Admin' || currentUserSession.role === 'Owner') ? ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[userToEdit.role] :
+                        (currentUserSession.role === 'Manager') ? (userToEdit.role === 'Staff' || userToEdit.role === 'Manager') && ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[userToEdit.role] :
+                        false);
+
   let assignableRolesForDropdown: UserRole[] = [];
   if (canChangeRole) {
       if (currentUserSession.role === 'Super Admin'){
           assignableRolesForDropdown = (['Admin', 'Owner', 'Manager', 'Staff'] as UserRole[]);
       } else if (currentUserSession.role === 'Manager') {
           assignableRolesForDropdown = ['Staff', 'Manager'].filter(r => ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[r as UserRole]);
-      } else { 
+      } else { // Admin or Owner
           assignableRolesForDropdown = (['Admin', 'Owner', 'Manager', 'Staff'] as UserRole[]).filter(r => ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[r as UserRole]);
       }
   }
@@ -272,14 +304,15 @@ export default function DashboardEditUserPage() {
                   <FormItem><FormLabel>Current Brand</FormLabel><Input value={userPrimaryBrand?.name || 'N/A'} disabled className="opacity-70" /></FormItem>
                   <FormField control={form.control} name="role" render={({ field }) => (
                     <FormItem><FormLabel>Role</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value} disabled={!canChangeRole}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={!canChangeRole || userToEdit.role === 'Super Admin'}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger></FormControl>
                         <SelectContent>
-                          <SelectItem value={userToEdit.role} disabled={assignableRolesForDropdown.length > 0 && !assignableRolesForDropdown.includes(userToEdit.role)}>{userToEdit.role} {canChangeRole ? "" : "(Cannot Change)"}</SelectItem>
+                          <SelectItem value={userToEdit.role} disabled={assignableRolesForDropdown.length > 0 && !assignableRolesForDropdown.includes(userToEdit.role) && userToEdit.role !== 'Super Admin'}>{userToEdit.role} {canChangeRole ? "" : "(Cannot Change)"}</SelectItem>
                           {assignableRolesForDropdown.filter(r => r !== userToEdit.role).map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      {!canChangeRole && <p className="text-xs text-muted-foreground">Your role does not permit changing this user's role.</p>}
+                      {(!canChangeRole && userToEdit.role !== 'Super Admin') && <p className="text-xs text-muted-foreground">Your role does not permit changing this user's role.</p>}
+                       {userToEdit.role === 'Super Admin' && <p className="text-xs text-muted-foreground">Super Admin role cannot be changed by others.</p>}
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -293,7 +326,7 @@ export default function DashboardEditUserPage() {
                               <Checkbox checked={field.value?.includes(loc.id)} onCheckedChange={c => field.onChange(c ? [...(field.value || []), loc.id] : (field.value || []).filter(v => v !== loc.id))} />
                             </FormControl><FormLabel className="font-normal">{loc.name}</FormLabel></FormItem>
                           )}/>))
-                         : <p className="text-sm text-muted-foreground italic">No locations available for this brand or your access level.</p>
+                         : <p className="text-sm text-muted-foreground italic">{userToEdit.companyId ? 'No locations for this brand or your access.' : 'User not assigned to a brand.'}</p>
                         }
                       </ScrollArea><FormMessage />
                     </FormItem>
@@ -323,6 +356,14 @@ export default function DashboardEditUserPage() {
                           id={`course-${course.id}`}
                           checked={userToEdit.assignedCourseIds?.includes(course.id) || false}
                           onCheckedChange={() => handleToggleCourseAssignment(course.id)}
+                          disabled={
+                            currentUserSession.role === 'Manager' && !(currentUserSession.assignedLocationIds || []).some(locId => (userToEdit.assignedLocationIds || []).includes(locId)) && userToEdit.id !== currentUserSession.id
+                          }
+                          title={
+                            currentUserSession.role === 'Manager' && !(currentUserSession.assignedLocationIds || []).some(locId => (userToEdit.assignedLocationIds || []).includes(locId)) && userToEdit.id !== currentUserSession.id
+                              ? "Managers can only assign courses to users in their own locations."
+                              : ""
+                          }
                         />
                       </div>
                     ))}
@@ -334,17 +375,46 @@ export default function DashboardEditUserPage() {
 
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" /> User Statistics</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <Alert variant="default" className="bg-blue-50 border-blue-200">
+            <CardContent className="space-y-4">
+              {userToEdit.assignedCourseIds && userToEdit.assignedCourseIds.length > 0 ? (
+                <ScrollArea className="h-64">
+                  <div className="space-y-3">
+                    {userToEdit.assignedCourseIds.map(courseId => {
+                      const courseProgress = userToEdit.courseProgress?.[courseId];
+                      const courseInfo = assignableCourses.find(c => c.id === courseId);
+                      return (
+                        <div key={courseId} className="p-3 border rounded-md">
+                          <h4 className="text-sm font-semibold">{courseInfo?.title || `Course ID: ${courseId}`}</h4>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Clock className="h-3 w-3" /> Time Spent: {formatTimeSpent(courseProgress?.timeSpentSeconds)}
+                          </p>
+                          {courseInfo?.curriculum?.filter(c => c.startsWith('quiz-') || c.startsWith('brandQuiz-')).map(quizCurriculumId => {
+                            const actualQuizId = quizCurriculumId.split('-').slice(1).join('-');
+                            const attempts = courseProgress?.quizAttempts?.[actualQuizId] || 0;
+                            return (
+                              <p key={quizCurriculumId} className="text-xs text-muted-foreground pl-4 flex items-center gap-1">
+                                <ListChecks className="h-3 w-3" /> Quiz "{quizCurriculumId.substring(quizCurriculumId.indexOf('-') + 1)}": {attempts} attempt(s)
+                              </p>
+                            );
+                          })}
+                          {(!courseInfo?.curriculum?.some(c => c.startsWith('quiz-') || c.startsWith('brandQuiz-'))) && (
+                            <p className="text-xs text-muted-foreground pl-4 italic">No quizzes in this course.</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">No courses assigned to this user to show statistics for.</p>
+              )}
+               <Alert variant="default" className="bg-blue-50 border-blue-200 mt-4">
                 <AlertCircle className="h-4 w-4 text-blue-600" />
-                <AlertTitle className="text-blue-700">Coming Soon!</AlertTitle>
+                <AlertTitle className="text-blue-700 text-sm">Note on Statistics</AlertTitle>
                 <AlertDescription className="text-blue-600 text-xs">
-                  Detailed statistics like time spent per course and quiz attempts are planned. Backend data tracking needed.
+                  Time spent tracking and quiz attempt counts are now being recorded. Data will populate as users interact with content.
                 </AlertDescription>
               </Alert>
-              <div className="text-sm"><strong>Overall Progress:</strong> {userToEdit.courseProgress?.[Object.keys(userToEdit.courseProgress)[0]]?.progress || 0}% (Placeholder)</div>
-              <div className="text-sm"><strong>Time Spent (Total):</strong> N/A</div>
-              <div className="text-sm"><strong>Quizzes Attempted (Total):</strong> N/A</div>
             </CardContent>
           </Card>
         </div>
