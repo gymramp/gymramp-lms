@@ -3,6 +3,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   Table,
   TableBody,
@@ -14,17 +15,9 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Archive, Undo, Edit, BookCopy, MapPin, Loader2, ShieldCheck } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Edit, Archive, Undo, BookCopy, MapPin, Loader2, ShieldCheck } from "lucide-react"; // Changed MoreHorizontal to Edit
 import { useToast } from "@/hooks/use-toast";
-import type { User, UserRole, Location, Company } from '@/types/user'; // Added Company
+import type { User, UserRole, Location, Company } from '@/types/user';
 import type { Course, BrandCourse } from '@/types/course';
 import { cn } from '@/lib/utils';
 import { getCourseById as fetchGlobalCourseById } from '@/lib/firestore-data';
@@ -46,14 +39,14 @@ type EmployeeWithOverallProgress = User & {
 interface EmployeeTableProps {
   employees: EmployeeWithOverallProgress[];
   onToggleEmployeeStatus: (userId: string, userName: string, currentStatus: boolean) => void;
-  onAssignCourse: (user: User) => void;
-  onEditUser: (user: User) => void;
+  // onAssignCourse and onEditUser are removed as this functionality moves to a new page
   currentUser: User | null;
   locations: Location[];
-  companies: Company[]; // Added companies prop
+  companies: Company[];
+  baseEditPath: "/admin/users" | "/dashboard/users"; // New prop for dynamic edit link
 }
 
-export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCourse, onEditUser, currentUser, locations = [], companies = [] }: EmployeeTableProps) {
+export function EmployeeTable({ employees, onToggleEmployeeStatus, currentUser, locations = [], companies = [], baseEditPath }: EmployeeTableProps) {
     const { toast } = useToast();
     const [assignedCourseTitles, setAssignedCourseTitles] = useState<Record<string, string>>({});
     const [isLoadingTitles, setIsLoadingTitles] = useState(false);
@@ -115,7 +108,6 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
         const isTargetUserInAccessibleBrand = companies.some(c => c.id === targetUser.companyId);
         if (!isTargetUserInAccessibleBrand) return false;
 
-
         if (currentUser.role === 'Manager') {
             return (targetUser.role === 'Staff' || targetUser.role === 'Manager');
         }
@@ -126,7 +118,7 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
     const canAssignCoursesToTarget = (cu: User | null, tu: User): boolean => {
         if (!cu) return false;
         
-        if (cu.id === tu.id) { // Check for self-assignment
+        if (cu.id === tu.id) {
             return (cu.role === 'Super Admin' || cu.role === 'Admin' || cu.role === 'Owner');
         }
 
@@ -157,25 +149,20 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
         onToggleEmployeeStatus(employee.id, employee.name, employee.isActive);
     };
 
-    const handleAssignClick = (employee: User) => {
-         if (!canAssignCoursesToTarget(currentUser, employee)) {
-             toast({ title: "Permission Denied", description: "You do not have permission to assign courses to this user.", variant: "destructive" });
-             return;
-         }
-         onAssignCourse(employee);
-    }
+    const canEditTargetUser = (targetUser: User): boolean => {
+        if (!currentUser) return false;
+        if (currentUser.id === targetUser.id) return true; // Can always edit self
+        if (currentUser.role === 'Super Admin') return true;
+        
+        const isTargetInManagedScope = companies.some(c => c.id === targetUser.companyId);
+        if (!isTargetInManagedScope) return false;
 
-    const handleEditClick = (employee: User) => {
-        if (!currentUser || (currentUser.id !== employee.id && !canPerformGeneralAction(employee))) {
-             toast({
-                title: "Permission Denied",
-                description: `You do not have permission to edit ${employee.name}.`,
-                 variant: "destructive",
-             });
-             return;
+        if (currentUser.role === 'Manager') {
+            return (targetUser.role === 'Staff' || targetUser.role === 'Manager');
         }
-        onEditUser(employee);
+        return ROLE_HIERARCHY_TABLE[currentUser.role] > ROLE_HIERARCHY_TABLE[targetUser.role];
     };
+
 
     if (!currentUser) {
          return <div className="text-center text-muted-foreground py-8">Loading user data...</div>;
@@ -198,7 +185,7 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
           <TableHead className="text-center">Progress (Overall)</TableHead>
            <TableHead>Locations</TableHead>
           <TableHead className="text-center">Active</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
+          <TableHead className="text-center">Edit</TableHead> {/* Changed Header */}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -293,50 +280,19 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, onAssignCours
                     {employee.isActive ? "Active" : "Inactive"}
                  </Badge>
             </TableCell>
-            <TableCell className="text-right">
-               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="h-8 w-8 p-0">
-                    <span>
-                      <span className="sr-only">Open menu for {employee.name}</span>
-                      <MoreHorizontal className="h-4 w-4" />
-                    </span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Actions for {employee.name}</DropdownMenuLabel>
-                   <DropdownMenuItem
-                        onClick={() => handleAssignClick(employee)}
-                        disabled={!canAssignCoursesToTarget(currentUser, employee) || !employee.isActive}
-                    >
-                       <BookCopy className="mr-2 h-4 w-4" />
-                       <span>Manage Assigned Courses</span>
-                  </DropdownMenuItem>
-                   <DropdownMenuItem
-                        onClick={() => handleEditClick(employee)}
-                        disabled={currentUser?.id !== employee.id && !canPerformGeneralAction(employee)}
-                    >
-                       <Edit className="mr-2 h-4 w-4" />
-                       <span>Edit Details</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                   <DropdownMenuItem
-                      onClick={() => handleToggleClick(employee)}
-                      className={cn(
-                          employee.isActive
-                          ? "text-destructive focus:text-destructive focus:bg-destructive/10"
-                          : "text-green-600 focus:text-green-600 focus:bg-green-500/10"
-                      )}
-                      disabled={currentUser?.id === employee.id || !canPerformGeneralAction(employee)}
-                    >
-                     {employee.isActive ? (
-                        <> <Archive className="mr-2 h-4 w-4" /> <span>Deactivate</span> </>
-                     ) : (
-                        <> <Undo className="mr-2 h-4 w-4" /> <span>Reactivate</span> </>
-                     )}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+            <TableCell className="text-center"> {/* Changed from text-right */}
+              <Button
+                asChild
+                variant="ghost"
+                size="icon"
+                disabled={!canEditTargetUser(employee)}
+                title={canEditTargetUser(employee) ? `Edit ${employee.name}` : "You do not have permission to edit this user."}
+              >
+                <Link href={`${baseEditPath}/${employee.id}/edit`}>
+                  <Edit className="h-4 w-4" />
+                  <span className="sr-only">Edit {employee.name}</span>
+                </Link>
+              </Button>
             </TableCell>
           </TableRow>
           );
