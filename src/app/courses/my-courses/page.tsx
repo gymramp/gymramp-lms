@@ -179,8 +179,7 @@ export default function MyCoursesPage() {
                       alt={course.title}
                       fill
                       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                      style={{ objectFit: 'cover' }}
-                      className="bg-muted"
+                      className="bg-muted object-cover object-top"
                       data-ai-hint="course cover"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
