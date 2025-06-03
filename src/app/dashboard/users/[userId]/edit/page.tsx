@@ -1,4 +1,3 @@
-
 // src/app/dashboard/users/[userId]/edit/page.tsx
 'use client';
 
@@ -63,14 +62,14 @@ export default function DashboardEditUserPage() {
   });
 
   // Only used for displaying locations; actual company assignment is complex and depends on editor's role
-  const watchedCompanyIdForLocationFilter = form.watch('companyId' as any); // User's actual companyId
+  const watchedCompanyIdForLocationFilter = userToEdit?.companyId; // Use userToEdit's companyId for location filtering
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser?.email) {
         const sessionUser = await getUserByEmail(firebaseUser.email);
         setCurrentUserSession(sessionUser);
-        if (!sessionUser || !['Admin', 'Owner', 'Manager'].includes(sessionUser.role)) {
+        if (!sessionUser || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(sessionUser.role)) {
           toast({ title: "Access Denied", variant: "destructive" });
           router.push(sessionUser?.role === 'Staff' ? '/courses/my-courses' : '/');
         }
@@ -91,24 +90,24 @@ export default function DashboardEditUserPage() {
         router.push('/dashboard'); return;
       }
 
-      // Permission Check: Can currentUserSession edit targetUser?
       let canEdit = false;
-      if (currentUserSession.id === targetUser.id) canEdit = true; // Can edit self
-      else if (currentUserSession.companyId === targetUser.companyId) { // Must be in the same primary brand
+      if (currentUserSession.role === 'Super Admin') {
+          canEdit = true;
+      } else if (currentUserSession.id === targetUser.id) {
+          canEdit = true;
+      } else if (currentUserSession.companyId === targetUser.companyId) {
           if (currentUserSession.role === 'Admin' || currentUserSession.role === 'Owner') {
               canEdit = ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[targetUser.role];
           } else if (currentUserSession.role === 'Manager') {
               canEdit = (targetUser.role === 'Staff' || targetUser.role === 'Manager');
           }
-      }
-      // Also check if targetUser is in a child brand managed by Admin/Owner
-      if (!canEdit && (currentUserSession.role === 'Admin' || currentUserSession.role === 'Owner') && currentUserSession.companyId) {
+      } else if ((currentUserSession.role === 'Admin' || currentUserSession.role === 'Owner') && currentUserSession.companyId) {
           const allAccessibleBrands = await fetchAllAccessibleBrandsForUser(currentUserSession);
           const childBrands = allAccessibleBrands.filter(b => b.parentBrandId === currentUserSession.companyId);
           if (childBrands.some(cb => cb.id === targetUser.companyId)) {
             canEdit = ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[targetUser.role];
           }
-          setAccessibleChildBrands(childBrands); // Store for company selector if editing such a user
+          setAccessibleChildBrands(childBrands);
       }
 
 
@@ -122,7 +121,6 @@ export default function DashboardEditUserPage() {
       if (targetUser.companyId) {
         brandForContext = await getCompanyById(targetUser.companyId);
       } else if (currentUserSession.companyId && (currentUserSession.role === 'Admin' || currentUserSession.role === 'Owner')) {
-        // If target user has no company, but editor is Admin/Owner, use editor's company as context for new user
         brandForContext = await getCompanyById(currentUserSession.companyId);
       }
       setUserPrimaryBrand(brandForContext);
@@ -146,7 +144,6 @@ export default function DashboardEditUserPage() {
         assignedLocationIds: targetUser.assignedLocationIds || [],
       });
 
-      // Fetch assignable courses based on targetUser's brand context
       let courses: (Course | BrandCourse)[] = [];
       if (brandForContext) {
         if (brandForContext.assignedProgramIds?.length) {
@@ -186,16 +183,13 @@ export default function DashboardEditUserPage() {
         name: data.name,
         role: data.role,
         assignedLocationIds: data.assignedLocationIds || [],
-        // CompanyId is not directly editable by these roles for *other* users; it's determined by target user.
-        // For new users, it's set during creation. If changing existing, SA role needed.
       };
 
-      // Role change permission check
       if (data.role !== userToEdit.role) {
         if (currentUserSession.id === userToEdit.id && data.role !== currentUserSession.role) {
              toast({ title: "Action Denied", description: "You cannot change your own role.", variant: "destructive"}); setIsSaving(false); return;
         }
-        if (ROLE_HIERARCHY[currentUserSession.role] <= ROLE_HIERARCHY[data.role]) {
+        if (currentUserSession.role !== 'Super Admin' && ROLE_HIERARCHY[currentUserSession.role] <= ROLE_HIERARCHY[data.role]) {
           toast({ title: "Permission Denied", description: "Cannot assign a role equal to or higher than your own.", variant: "destructive" });
           setIsSaving(false); return;
         }
@@ -209,7 +203,7 @@ export default function DashboardEditUserPage() {
       const updatedUser = await updateUser(userToEdit.id, updatePayload);
       if (updatedUser) {
         toast({ title: "User Updated", description: `${updatedUser.name}'s details have been updated.` });
-        setUserToEdit(updatedUser); // Update local state
+        setUserToEdit(updatedUser); 
         fetchData();
       } else {
         throw new Error("Failed to update user.");
@@ -241,15 +235,17 @@ export default function DashboardEditUserPage() {
   }
 
   const canChangeRole = currentUserSession.id !== userToEdit.id &&
-                       (currentUserSession.role === 'Admin' || currentUserSession.role === 'Owner' || currentUserSession.role === 'Manager') &&
-                       ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[userToEdit.role];
+                       (currentUserSession.role === 'Super Admin' || currentUserSession.role === 'Admin' || currentUserSession.role === 'Owner' || currentUserSession.role === 'Manager') &&
+                       (currentUserSession.role === 'Super Admin' ? userToEdit.role !== 'Super Admin' : ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[userToEdit.role]);
   
   let assignableRolesForDropdown: UserRole[] = [];
   if (canChangeRole) {
-      if (currentUserSession.role === 'Manager') {
-          assignableRolesForDropdown = ['Staff', 'Manager'].filter(r => ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[r]);
-      } else { // Admin or Owner
-          assignableRolesForDropdown = (['Admin', 'Owner', 'Manager', 'Staff'] as UserRole[]).filter(r => ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[r]);
+      if (currentUserSession.role === 'Super Admin'){
+          assignableRolesForDropdown = (['Admin', 'Owner', 'Manager', 'Staff'] as UserRole[]);
+      } else if (currentUserSession.role === 'Manager') {
+          assignableRolesForDropdown = ['Staff', 'Manager'].filter(r => ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[r as UserRole]);
+      } else { 
+          assignableRolesForDropdown = (['Admin', 'Owner', 'Manager', 'Staff'] as UserRole[]).filter(r => ROLE_HIERARCHY[currentUserSession.role] > ROLE_HIERARCHY[r as UserRole]);
       }
   }
 
