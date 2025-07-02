@@ -1,4 +1,3 @@
-
 // src/types/user.ts
 
 import type { Timestamp } from 'firebase/firestore'; // Import Timestamp
@@ -136,4 +135,5 @@ export interface CheckoutFormData extends Omit<UserFormData, 'role' | 'isActive'
   isTrial?: boolean;
   trialDurationDays?: number;
   revenueSharePartners?: RevenueSharePartner[];
+  partnerId?: string | null; // Added to track formal partner
 }

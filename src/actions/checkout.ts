@@ -1,4 +1,3 @@
-
 'use server';
 
 import type { CheckoutFormData } from '@/types/user';
@@ -208,6 +207,7 @@ export async function processCheckout(data: CheckoutFormData): Promise<
         selectedCourseTitles: programCourseTitles,
         revenueSharePartners: data.revenueSharePartners || null,
         maxUsersConfigured: data.maxUsers ?? null,
+        partnerId: data.partnerId || null, // Added partnerId
     };
     const customerPurchaseRecord = await addCustomerPurchaseRecord(customerPurchaseData);
     if (!customerPurchaseRecord) {

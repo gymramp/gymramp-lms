@@ -1,10 +1,9 @@
-
 // src/lib/nav-config.ts
 import type { User, UserRole, Company } from '@/types/user';
 import {
     BarChartBig, Building, Layers, CreditCard, BookOpen, FileText,
     ListChecks, UserPlus, ShoppingCart, Gift,
-    TestTube2, Percent, HelpCircle, LayoutDashboard, Users, MapPin, Settings, Award, Cog, Package
+    TestTube2, Percent, HelpCircle, LayoutDashboard, Users, MapPin, Settings, Award, Cog, Package, Handshake
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { getCompanyById } from '@/lib/company-data';
@@ -39,6 +38,7 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
       { href: '/admin/dashboard', label: 'Dashboard', icon: BarChartBig },
       { href: '/admin/companies', label: 'Brands', icon: Building },
       { href: '/admin/users', label: 'Users', icon: Users },
+      { href: '/admin/partners', label: 'Partners', icon: Handshake },
       { href: '/admin/programs', label: 'Programs', icon: Layers },
       { href: '/admin/customers', label: 'Customers', icon: CreditCard },
       {

@@ -1,4 +1,3 @@
-
 // src/types/customer.ts
 import type { Timestamp } from 'firebase/firestore';
 import type { RevenueSharePartner } from './user'; // Assuming RevenueSharePartner is in user.ts
@@ -18,6 +17,7 @@ export interface CustomerPurchaseRecord {
   selectedCourseTitles?: string[]; // For easier display, titles of courses in Program
   revenueSharePartners?: RevenueSharePartner[] | null;
   maxUsersConfigured?: number | null;
+  partnerId?: string | null; // ID of the formal Partner who brought this customer
 }
 
 export type CustomerPurchaseRecordFormData = Omit<CustomerPurchaseRecord, 'id' | 'purchaseDate'> & {

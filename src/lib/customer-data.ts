@@ -1,4 +1,3 @@
-
 // src/lib/customer-data.ts
 import { db } from './firebase';
 import {
@@ -44,6 +43,7 @@ export async function addCustomerPurchaseRecord(data: CustomerPurchaseRecordForm
         const purchaseRecordRef = collection(db, CUSTOMER_PURCHASES_COLLECTION);
         const docData = {
             ...data,
+            partnerId: data.partnerId || null, // Ensure partnerId is saved
             purchaseDate: serverTimestamp(),
         };
         const docRef = await addDoc(purchaseRecordRef, docData);
