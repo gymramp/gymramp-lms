@@ -1,6 +1,7 @@
+
 import { initializeApp } from 'firebase/app';
 import { getFirestore, enableIndexedDbPersistence, initializeFirestore, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth'; // Import GoogleAuthProvider
 import { getStorage } from 'firebase/storage'; // Import getStorage
 
 const firebaseConfig = {
@@ -22,6 +23,7 @@ const db = initializeFirestore(app, {
 
 // Initialize Auth
 const auth = getAuth(app);
+const googleAuthProvider = new GoogleAuthProvider(); // Create and export the provider
 
 // Initialize Storage
 const storage = getStorage(app); // Initialize storage
@@ -73,4 +75,4 @@ if (typeof window !== 'undefined') {
   enablePersistence();
 }
 
-export { db, auth, storage }; // Export storage
+export { db, auth, storage, googleAuthProvider }; // Export storage and googleAuthProvider

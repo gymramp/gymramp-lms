@@ -75,7 +75,7 @@ export async function createDefaultCompany(): Promise<Company | null> {
                 subdomainSlug: null,
                 customDomain: null,
                 logoUrl: null,
-                shortDescription: null,
+                shortDescription: "The default company for users signing up without a partner link.",
                 maxUsers: null,
                 assignedProgramIds: [], // Initialize as empty
                 isTrial: false,
@@ -92,7 +92,7 @@ export async function createDefaultCompany(): Promise<Company | null> {
                 stripeCustomerId: null,
                 stripeSubscriptionId: null,
                 parentBrandId: null,
-                createdByUserId: null,
+                createdByUserId: "SYSTEM", // Indicate system creation
             };
             const docRef = await addDoc(companiesRef, { ...newCompanyData, isDeleted: false, deletedAt: null, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
             const newDocSnap = await getDoc(docRef);

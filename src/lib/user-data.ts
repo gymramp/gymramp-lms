@@ -21,7 +21,8 @@ import {
     increment // Import increment
 } from 'firebase/firestore';
 import type { User, UserFormData, UserRole, UserCourseProgressData, Company } from '@/types/user';
-import { auth } from './firebase';
+import { auth, googleAuthProvider } from './firebase'; // Import googleAuthProvider
+import { signInWithPopup } from 'firebase/auth'; // Import signInWithPopup
 import { createDefaultCompany, getCompanyById as getCompanyDataById, getCompanyBySubdomainSlug, getCompanyByCustomDomain } from './company-data'; // Renamed import
 import { getCourseById } from './firestore-data';
 import { getBrandCourseById } from './brand-content-data'; // Import for brand courses
@@ -716,4 +717,54 @@ export async function incrementUserQuizAttempts(userId: string, courseId: string
         const updatedUserSnap = await getDoc(userRef);
         return updatedUserSnap.exists() ? { id: userId, ...updatedUserSnap.data() } as User : null;
     });
+}
+
+// --- Google Sign-In Handler ---
+
+export async function handleGoogleSignIn(): Promise<void> {
+  try {
+    const result = await signInWithPopup(auth, googleAuthProvider);
+    const gUser = result.user;
+
+    if (!gUser.email) {
+      throw new Error("No email returned from Google Sign-In.");
+    }
+
+    // Check if user already exists in Firestore
+    let appUser = await getUserByEmail(gUser.email);
+
+    if (!appUser) {
+      // User doesn't exist, so create them (Just-In-Time Provisioning)
+      console.log(`New user via Google Sign-In: ${gUser.email}. Creating Firestore entry.`);
+      
+      // Get or create the default company
+      const defaultCompany = await createDefaultCompany();
+      if (!defaultCompany) {
+        throw new Error("Could not get or create the default company for new user.");
+      }
+
+      const newUserFormData: Omit<UserFormData, 'password'> = {
+        name: gUser.displayName || 'New User',
+        email: gUser.email,
+        role: 'Staff', // New users from public sign-in default to 'Staff'
+        companyId: defaultCompany.id,
+        assignedLocationIds: [], // No locations by default
+        profileImageUrl: gUser.photoURL || null,
+      };
+
+      appUser = await addUser(newUserFormData);
+      if (!appUser) {
+        throw new Error("Failed to create new user in Firestore after Google Sign-In.");
+      }
+    } else {
+        console.log(`Existing user ${appUser.name} logged in via Google.`);
+        // Optionally update last login time here
+    }
+
+    // The onAuthStateChanged listener in page.tsx will handle redirection
+  } catch (error) {
+    console.error("Error during Google Sign-In process: ", error);
+    // Re-throw the error so the calling component can handle it (e.g., show a toast)
+    throw error;
+  }
 }

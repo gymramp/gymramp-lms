@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ import Image from 'next/image';
 import { useState, useEffect, Suspense } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from 'next/navigation';
-import { getUserByEmail } from '@/lib/user-data';
+import { getUserByEmail, handleGoogleSignIn } from '@/lib/user-data';
 import { getCompanyById } from '@/lib/company-data';
 import { Loader2 } from "lucide-react";
 import type { User } from '@/types/user';
@@ -217,6 +218,24 @@ export default function LoginPage() {
             setIsLoading(false);
       }
   };
+  
+    const onGoogleSignIn = async () => {
+        setIsLoading(true);
+        try {
+            await handleGoogleSignIn();
+            // The onAuthStateChanged listener will handle the redirect
+            toast({ title: "Signed In Successfully", description: "Redirecting to your dashboard..." });
+        } catch (error: any) {
+            console.error("Google Sign-In failed:", error);
+            toast({
+                title: "Google Sign-In Failed",
+                description: error.message || "An unexpected error occurred during Google Sign-In.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
   if (isCheckingAuthAndRedirecting || !isMounted) {
     return (
@@ -261,6 +280,22 @@ export default function LoginPage() {
             </div>
              <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}> {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} {isLoading ? "Logging in..." : "Login"} </Button>
           </form>
+           <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+            </div>
+           </div>
+            <Button variant="outline" className="w-full" onClick={onGoogleSignIn} disabled={isLoading}>
+                 {isLoading ? ( <Loader2 className="mr-2 h-4 w-4 animate-spin" /> ) : (
+                 <svg className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
+                    <path fill="currentColor" d="M488 261.8C488 403.3 381.5 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 126 21.2 172.4 56.2L364.6 120C324.4 86.6 289.4 68 248 68c-106 0-192 86-192 192s86 192 192 192c109.7 0 160.1-75.7 162.7-114.2H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path>
+                 </svg>
+                )}
+                Sign in with Google
+            </Button>
         </CardContent>
          <CardFooter className="flex justify-center text-sm"> </CardFooter>
       </Card>
