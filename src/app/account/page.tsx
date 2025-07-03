@@ -8,15 +8,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress'; // Import Progress
 import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/types/user';
 import { getUserByEmail, updateUser } from '@/lib/user-data'; // Import updateUser
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage'; // Import storage functions
-import { auth } from '@/lib/firebase';
-import { onAuthStateChanged, sendPasswordResetEmail } from 'firebase/auth';
-import { Building, Mail, User as UserIcon, Upload, Image as ImageIconLucide, Loader2, Trash2 } from 'lucide-react'; // Import necessary icons
+import { auth, googleAuthProvider } from '@/lib/firebase';
+import { onAuthStateChanged, sendPasswordResetEmail, linkWithPopup, type UserInfo } from 'firebase/auth';
+import { Building, Mail, User as UserIcon, Upload, Image as ImageIconLucide, Loader2, Trash2, CheckCircle } from 'lucide-react'; // Import necessary icons
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // Import Avatar components
 
 export default function AccountPage() {
@@ -25,6 +26,8 @@ export default function AccountPage() {
   const [isUploading, setIsUploading] = useState(false); // State for upload loading
   const [uploadProgress, setUploadProgress] = useState(0); // State for upload progress
   const [uploadError, setUploadError] = useState<string | null>(null); // State for upload error
+  const [isGoogleLinked, setIsGoogleLinked] = useState(false);
+  const [isLinking, setIsLinking] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null); // Ref for hidden file input
   const router = useRouter();
   const { toast } = useToast();
@@ -36,11 +39,15 @@ export default function AccountPage() {
           const userDetails = await getUserByEmail(firebaseUser.email);
           if (userDetails) {
             setCurrentUser(userDetails);
+            // Check for linked providers
+            const googleProvider = firebaseUser.providerData.find(
+              (provider: UserInfo) => provider.providerId === 'google.com'
+            );
+            setIsGoogleLinked(!!googleProvider);
           } else {
             console.error("Authenticated user profile not found in Firestore.");
             toast({ title: "Error", description: "Could not load your profile details.", variant: "destructive" });
             setCurrentUser(null);
-            // router.push('/login'); // Redirect if profile is essential
           }
         } catch (error) {
            console.error("Error fetching user profile:", error);
@@ -146,7 +153,28 @@ export default function AccountPage() {
          setIsUploading(false);
      }
   };
-
+  
+  const handleLinkGoogle = async () => {
+    if (!auth.currentUser) {
+      toast({ title: "Error", description: "You must be logged in to link an account.", variant: "destructive" });
+      return;
+    }
+    setIsLinking(true);
+    try {
+      await linkWithPopup(auth.currentUser, googleAuthProvider);
+      toast({ title: "Success!", description: "Your Google account has been successfully linked." });
+      setIsGoogleLinked(true);
+    } catch (error: any) {
+      let description = "An unexpected error occurred.";
+      if (error.code === 'auth/credential-already-in-use') {
+        description = "This Google account is already linked to another user's account.";
+      }
+      console.error("Google account linking error:", error);
+      toast({ title: "Linking Failed", description, variant: "destructive" });
+    } finally {
+      setIsLinking(false);
+    }
+  };
 
   const getInitials = (name?: string | null): string => {
     if (!name) return '??';
@@ -247,6 +275,35 @@ export default function AccountPage() {
               <Button variant="outline" onClick={handlePasswordReset} className="mt-4">
                 Reset Password
               </Button>
+              
+              <Separator className="my-6" />
+
+              <div className="space-y-4">
+                <Label className="text-base font-semibold">Linked Accounts</Label>
+                <p className="text-sm text-muted-foreground">
+                  Connect your Google account for a seamless sign-in experience.
+                </p>
+                {isGoogleLinked ? (
+                   <Button variant="outline" disabled className="w-full justify-start cursor-default">
+                    <svg className="mr-2 h-4 w-4" role="img" viewBox="0 0 488 512">
+                      <path fill="currentColor" d="M488 261.8C488 403.3 381.5 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 126 21.2 172.4 56.2L364.6 120C324.4 86.6 289.4 68 248 68c-106 0-192 86-192 192s86 192 192 192c109.7 0 160.1-75.7 162.7-114.2H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path>
+                    </svg>
+                    Google Account Linked
+                    <CheckCircle className="ml-auto h-5 w-5 text-green-500" />
+                  </Button>
+                ) : (
+                  <Button variant="outline" onClick={handleLinkGoogle} disabled={isLinking} className="w-full">
+                    {isLinking ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <svg className="mr-2 h-4 w-4" role="img" viewBox="0 0 488 512">
+                        <path fill="currentColor" d="M488 261.8C488 403.3 381.5 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 126 21.2 172.4 56.2L364.6 120C324.4 86.6 289.4 68 248 68c-106 0-192 86-192 192s86 192 192 192c109.7 0 160.1-75.7 162.7-114.2H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path>
+                      </svg>
+                    )}
+                    Link Google Account
+                  </Button>
+                )}
+              </div>
             </>
           ) : (
              <p className="text-center text-muted-foreground py-8">Could not load user details.</p>
@@ -256,5 +313,3 @@ export default function AccountPage() {
     </div>
   );
 }
-
-    
