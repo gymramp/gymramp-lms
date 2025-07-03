@@ -656,44 +656,6 @@ export const updateUserVideoProgress = async (
     });
 };
 
-
-export async function getUserCompany(identifier: string | null): Promise<Company | null> {
-  console.log(`[getUserCompany] Attempting to find brand with identifier: "${identifier}"`);
-  if (!identifier) {
-    console.log("[getUserCompany] Identifier is null, returning null.");
-    return null;
-  }
-  try {
-    // Attempt to find by customDomain first
-    let company = await getCompanyByCustomDomain(identifier);
-    if (company) {
-      console.log(`[getUserCompany] Found brand by customDomain "${identifier}": ${company.name}`);
-      return company;
-    }
-    console.log(`[getUserCompany] No brand found by customDomain "${identifier}".`);
-
-    // If not found by customDomain, try by subdomainSlug
-    const slug = identifier.includes('.') ? identifier.split('.')[0] : identifier;
-    if (slug && slug !== 'www' && slug !== 'localhost' && !slug.startsWith('gymramp-lms')) { // Added !slug.startsWith('gymramp-lms')
-      console.log(`[getUserCompany] Attempting to find brand by potential subdomainSlug: "${slug}" (derived from identifier "${identifier}")`);
-      company = await getCompanyBySubdomainSlug(slug);
-      if (company) {
-        console.log(`[getUserCompany] Found brand by subdomainSlug "${slug}": ${company.name}`);
-        return company;
-      }
-      console.log(`[getUserCompany] No brand found by subdomainSlug "${slug}".`);
-    } else {
-        console.log(`[getUserCompany] Identifier "${identifier}" does not appear to be a processable subdomain slug.`);
-    }
-
-    console.log(`[getUserCompany] No brand found for identifier "${identifier}" as custom domain or subdomain slug.`);
-    return null;
-  } catch (error) {
-    console.error(`[getUserCompany] Error fetching brand by identifier "${identifier}":`, error);
-    return null;
-  }
-}
-
 // New function to update time spent on a course
 export async function updateUserTimeSpentOnCourse(userId: string, courseId: string, additionalTimeSpentSeconds: number): Promise<User | null> {
     if (!userId || !courseId || typeof additionalTimeSpentSeconds !== 'number' || additionalTimeSpentSeconds <= 0) {

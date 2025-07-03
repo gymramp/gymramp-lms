@@ -583,4 +583,40 @@ function serializeLocationDocumentData(data: any): any {
 }
 
 
-    
+// New function specifically for login page branding
+export async function getCompanyForLogin(host: string | null): Promise<Company | null> {
+  console.log(`[getCompanyForLogin] Attempting to find brand with identifier: "${host}"`);
+  if (!host) {
+    console.log("[getCompanyForLogin] Host is null, returning null.");
+    return null;
+  }
+  try {
+    // Attempt to find by customDomain first
+    let company = await getCompanyByCustomDomain(host);
+    if (company) {
+      console.log(`[getCompanyForLogin] Found brand by customDomain "${host}": ${company.name}`);
+      return company;
+    }
+    console.log(`[getCompanyForLogin] No brand found by customDomain "${host}".`);
+
+    // If not found by customDomain, try by subdomainSlug
+    const slug = host.split('.')[0];
+    if (slug && slug !== 'www' && slug !== 'localhost' && !slug.startsWith('gymramp-lms')) {
+      console.log(`[getCompanyForLogin] Attempting to find brand by potential subdomainSlug: "${slug}" (derived from host "${host}")`);
+      company = await getCompanyBySubdomainSlug(slug);
+      if (company) {
+        console.log(`[getCompanyForLogin] Found brand by subdomainSlug "${slug}": ${company.name}`);
+        return company;
+      }
+      console.log(`[getCompanyForLogin] No brand found by subdomainSlug "${slug}".`);
+    } else {
+        console.log(`[getCompanyForLogin] Identifier "${host}" does not appear to be a processable subdomain slug.`);
+    }
+
+    console.log(`[getCompanyForLogin] No brand found for identifier "${host}" as custom domain or subdomain slug.`);
+    return null;
+  } catch (error) {
+    console.error(`[getCompanyForLogin] Error fetching brand by identifier "${host}":`, error);
+    return null;
+  }
+}

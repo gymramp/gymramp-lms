@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -24,22 +23,20 @@ import { getCompanyById } from '@/lib/company-data';
 import { Loader2 } from "lucide-react";
 import type { User } from '@/types/user';
 
-interface LoginPageProps {
-  // Props are not actually used since white-labeling was removed, but kept for structure
-  initialBrandName?: string | null;
-  initialBrandLogoUrl?: string | null;
-}
-
-function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPageProps) {
+// This is a simplified client-only approach to fix the build error.
+// The dynamic branding based on hostname is temporarily removed.
+export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isCheckingAuthAndRedirecting, setIsCheckingAuthAndRedirecting] = useState(true);
-  const [displayBrandName, setDisplayBrandName] = useState("Gymramp");
-  const [displayBrandLogoUrl, setDisplayBrandLogoUrl] = useState("/images/newlogo.png");
   const { toast } = useToast();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
+  
+  // Static branding
+  const displayBrandName = "Gymramp";
+  const displayBrandLogoUrl = "/images/newlogo.png";
 
   useEffect(() => {
     setIsMounted(true);
@@ -47,10 +44,6 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
 
   useEffect(() => {
     if (!isMounted) return;
-
-    // Static branding since white-labeling is removed
-    setDisplayBrandName("Gymramp");
-    setDisplayBrandLogoUrl("/images/newlogo.png");
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
@@ -274,12 +267,3 @@ function LoginPageContent({ initialBrandName, initialBrandLogoUrl }: LoginPagePr
     </div>
   );
 }
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={<div className="flex flex-col items-center justify-center min-h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>}>
-      <LoginPageContent initialBrandName={null} initialBrandLogoUrl={null} />
-    </Suspense>
-  );
-}
-    

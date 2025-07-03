@@ -32,7 +32,7 @@ import {
 import type { Company, CompanyFormData } from '@/types/user';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage'; // Import uploadImage and paths
 import { useToast } from '@/hooks/use-toast'; // Import useToast
-import { Loader2, Upload, ImageIcon, Trash2, Users, Globe } from 'lucide-react'; // Added Globe
+import { Loader2, Upload, ImageIcon, Trash2, Users, Globe, Link as LinkIcon } from 'lucide-react'; // Added Globe, LinkIcon
 
 // Zod schema for form validation
 const companyFormSchema = z.object({
@@ -44,6 +44,11 @@ const companyFormSchema = z.object({
     .optional()
     .or(z.literal(''))
     .nullable(),
+  customDomain: z.string()
+     .regex(/^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z]{2,6})+$/, { message: 'Please enter a valid domain name (e.g., example.com).' })
+     .optional()
+     .or(z.literal(''))
+     .nullable(),
   shortDescription: z.string().max(150, { message: 'Description must be 150 characters or less.' }).optional().or(z.literal('')), // Optional, max length
   logoUrl: z.string().url({ message: 'Invalid URL format.' }).optional().or(z.literal('')), // Track uploaded logo URL
   maxUsers: z.coerce // Use coerce for number input
@@ -76,6 +81,7 @@ export function AddEditCompanyDialog({ isOpen, setIsOpen, onSave, initialData }:
     defaultValues: {
       name: '',
       subdomainSlug: null,
+      customDomain: null,
       shortDescription: '',
       logoUrl: '',
       maxUsers: null, // Default to null (unlimited)
@@ -86,7 +92,7 @@ export function AddEditCompanyDialog({ isOpen, setIsOpen, onSave, initialData }:
 
   // Effect to reset form when dialog opens
   useEffect(() => {
-    form.reset({ name: '', subdomainSlug: null, shortDescription: '', logoUrl: '', maxUsers: null }); // Always reset for adding
+    form.reset({ name: '', subdomainSlug: null, customDomain: null, shortDescription: '', logoUrl: '', maxUsers: null }); // Always reset for adding
     setIsUploading(false);
     setUploadProgress(0);
     setUploadError(null);
@@ -140,7 +146,8 @@ export function AddEditCompanyDialog({ isOpen, setIsOpen, onSave, initialData }:
     // Prepare data, ensuring null for optional fields if empty
     const formData: CompanyFormData = {
       name: data.name,
-      subdomainSlug: data.subdomainSlug?.trim() === '' ? null : data.subdomainSlug?.toLowerCase(),
+      subdomainSlug: data.subdomainSlug?.trim().toLowerCase() || null,
+      customDomain: data.customDomain?.trim().toLowerCase() || null,
       shortDescription: data.shortDescription?.trim() === '' ? null : data.shortDescription,
       logoUrl: data.logoUrl?.trim() === '' ? null : data.logoUrl,
       maxUsers: data.maxUsers ?? null, // Include maxUsers, use null if undefined/null
@@ -213,6 +220,31 @@ export function AddEditCompanyDialog({ isOpen, setIsOpen, onSave, initialData }:
                   </FormControl>
                   <p className="text-xs text-muted-foreground">
                     Used for branded login URL. Only lowercase letters, numbers, and hyphens.
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            {/* Custom Domain */}
+            <FormField
+              control={form.control}
+              name="customDomain"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-1">
+                    <LinkIcon className="h-4 w-4" /> Custom Domain (Optional)
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="e.g., learn.partner.com"
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={e => field.onChange(e.target.value.toLowerCase())}
+                    />
+                  </FormControl>
+                   <p className="text-xs text-muted-foreground">
+                    Requires DNS configuration to point to this application.
                   </p>
                   <FormMessage />
                 </FormItem>

@@ -129,7 +129,7 @@ function PartnerCheckoutForm({ partner, programs }: { partner: Partner, programs
         ) : (
             <Handshake className="h-12 w-12 mx-auto text-primary mb-4" />
         )}
-        <CardTitle className="text-2xl font-bold">Sign Up with {partner.name}</CardTitle>
+        <CardTitle className="text-2xl font-bold">Sign Up to access GYMRAMP in association with {partner.name}</CardTitle>
         <CardDescription>Select a program and create your account to get started.</CardDescription>
       </CardHeader>
       <Form {...form}>
