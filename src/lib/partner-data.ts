@@ -1,3 +1,4 @@
+
 import { db } from './firebase';
 import {
     collection,
@@ -67,6 +68,7 @@ export async function addPartner(partnerData: PartnerFormData): Promise<Partner 
         const partnersRef = collection(db, PARTNERS_COLLECTION);
         const newPartnerDoc = {
             ...partnerData,
+            logoUrl: partnerData.logoUrl || null,
             isDeleted: false,
             deletedAt: null,
             createdAt: serverTimestamp(),

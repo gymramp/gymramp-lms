@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -20,6 +21,7 @@ import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function AdminPartnersPage() {
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -148,7 +150,15 @@ export default function AdminPartnersPage() {
                   const signupUrl = `${window.location.origin}/signup/${partner.id}`;
                   return (
                     <TableRow key={partner.id}>
-                      <TableCell className="font-medium">{partner.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8 border">
+                               <AvatarImage src={partner.logoUrl || undefined} alt={`${partner.name} logo`} className="object-contain" />
+                               <AvatarFallback className="text-xs">{partner.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <span>{partner.name}</span>
+                        </div>
+                      </TableCell>
                       <TableCell>{partner.companyName || 'N/A'}</TableCell>
                       <TableCell>{partner.email}</TableCell>
                       <TableCell><Badge variant="outline">{partner.percentage}%</Badge></TableCell>

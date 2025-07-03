@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label"; // Import Label
+import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, Layers, BookOpen, Handshake, CreditCard, ShieldCheck } from 'lucide-react';
@@ -116,7 +116,19 @@ function PartnerCheckoutForm({ partner, programs }: { partner: Partner, programs
   return (
     <Card className="w-full max-w-2xl mx-auto shadow-lg">
       <CardHeader className="text-center">
-        <Handshake className="h-12 w-12 mx-auto text-primary mb-4" />
+        {partner.logoUrl ? (
+            <div className="relative h-20 w-full mb-4">
+                <Image
+                    src={partner.logoUrl}
+                    alt={`${partner.name} Logo`}
+                    fill
+                    style={{ objectFit: 'contain' }}
+                    priority
+                />
+            </div>
+        ) : (
+            <Handshake className="h-12 w-12 mx-auto text-primary mb-4" />
+        )}
         <CardTitle className="text-2xl font-bold">Sign Up with {partner.name}</CardTitle>
         <CardDescription>Select a program and create your account to get started.</CardDescription>
       </CardHeader>

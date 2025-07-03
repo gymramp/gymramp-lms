@@ -9,6 +9,7 @@ const STORAGE_PATHS = {
     COMPANY_LOGOS: 'companies/logos',
     COURSE_IMAGES: 'courses/featured_images', // Added path for course images
     USER_PROFILE_IMAGES: 'users/profile_images', // Added path for user profile images
+    PARTNER_LOGOS: 'partners/logos', // Added path for partner logos
 };
 
 
