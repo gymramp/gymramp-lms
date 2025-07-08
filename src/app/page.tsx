@@ -23,6 +23,7 @@ import { getUserByEmail, handleGoogleSignIn } from '@/lib/user-data';
 import { getCompanyById } from '@/lib/company-data';
 import { Loader2 } from "lucide-react";
 import type { User } from '@/types/user';
+import { cn } from "@/lib/utils";
 
 // This is a simplified client-only approach to fix the build error.
 // The dynamic branding based on hostname is temporarily removed.
@@ -258,7 +259,7 @@ export default function LoginPage() {
             onError={(e) => { (e.target as HTMLImageElement).src = '/images/newlogo.png'; }}
         />
        </div>
-      <Card className="w-full max-w-md shadow-lg">
+      <Card className={cn("w-full max-w-md shadow-lg", "animate-in fade-in-0 zoom-in-95 duration-500")}>
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-primary">
             {displayBrandName === "Gymramp" || !displayBrandName ? "Welcome Back!" : `Welcome to ${displayBrandName}!`}

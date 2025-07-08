@@ -214,6 +214,14 @@ export default function DashboardPage() {
     }
   };
 
+  const handleResetFilters = () => {
+      let initialBrandId = '';
+      if (currentUser?.role === 'Super Admin') initialBrandId = 'all';
+      else if (currentUser?.companyId) initialBrandId = currentUser.companyId;
+      setSelectedBrandIdForDashboard(initialBrandId);
+      setSelectedLocationId('all');
+  };
+
   const activeEmployees = useMemo(() => filteredEmployees.filter(emp => emp.isActive), [filteredEmployees]);
   const inactiveEmployees = useMemo(() => filteredEmployees.filter(emp => !emp.isActive), [filteredEmployees]);
   const currentRowsPerPage = rowsPerPage === 'all' ? Infinity : rowsPerPage;
@@ -266,12 +274,12 @@ export default function DashboardPage() {
         <Button variant="outline" onClick={() => { setSelectedBrandIdForDashboard(userPrimaryBrand?.id || (currentUser?.role === 'Super Admin' ? 'all' : '')); setSelectedLocationId('all');}} className="h-10 self-end" disabled={isLoadingBrandDataForFilters}>Reset</Button>
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card> <CardHeader className="flex flex-row items-center justify-between pb-2"> <CardTitle className="text-sm font-medium">Active Employees</CardTitle> <UserCheck className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">{isLoadingEmployees ? <Loader2 className="h-6 w-6 animate-spin"/> : totalActiveFiltered}</div> <p className="text-xs text-muted-foreground">{isLoadingEmployees ? '...' : `${inactiveEmployees.length} inactive`}</p> </CardContent> </Card>
-        <Card> <CardHeader className="flex flex-row items-center justify-between pb-2"> <CardTitle className="text-sm font-medium">Assignable Courses</CardTitle> <BookOpen className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">N/A</div> <p className="text-xs text-muted-foreground">Contextual count</p> </CardContent> </Card>
-        <Card> <CardHeader className="flex flex-row items-center justify-between pb-2"> <CardTitle className="text-sm font-medium">Avg. Completion</CardTitle> <TrendingUp className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">{isLoadingEmployees ? <Loader2 className="h-6 w-6 animate-spin"/> : `${avgCompletion}%`}</div> <p className="text-xs text-muted-foreground">Overall, active users</p> </CardContent> </Card>
-        <Card> <CardHeader className="flex flex-row items-center justify-between pb-2"> <CardTitle className="text-sm font-medium">Certificates</CardTitle> <Award className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">{isLoadingEmployees ? <Loader2 className="h-6 w-6 animate-spin"/> : `+${certificatesIssued}`}</div> <p className="text-xs text-muted-foreground">Issued (Overall)</p> </CardContent> </Card>
+        <Card className="card-lift-hover"> <CardHeader className="flex flex-row items-center justify-between pb-2"> <CardTitle className="text-sm font-medium">Active Employees</CardTitle> <UserCheck className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">{isLoadingEmployees ? <Loader2 className="h-6 w-6 animate-spin"/> : totalActiveFiltered}</div> <p className="text-xs text-muted-foreground">{isLoadingEmployees ? '...' : `${inactiveEmployees.length} inactive`}</p> </CardContent> </Card>
+        <Card className="card-lift-hover"> <CardHeader className="flex flex-row items-center justify-between pb-2"> <CardTitle className="text-sm font-medium">Assignable Courses</CardTitle> <BookOpen className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">N/A</div> <p className="text-xs text-muted-foreground">Contextual count</p> </CardContent> </Card>
+        <Card className="card-lift-hover"> <CardHeader className="flex flex-row items-center justify-between pb-2"> <CardTitle className="text-sm font-medium">Avg. Completion</CardTitle> <TrendingUp className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">{isLoadingEmployees ? <Loader2 className="h-6 w-6 animate-spin"/> : `${avgCompletion}%`}</div> <p className="text-xs text-muted-foreground">Overall, active users</p> </CardContent> </Card>
+        <Card className="card-lift-hover"> <CardHeader className="flex flex-row items-center justify-between pb-2"> <CardTitle className="text-sm font-medium">Certificates</CardTitle> <Award className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">{isLoadingEmployees ? <Loader2 className="h-6 w-6 animate-spin"/> : `+${certificatesIssued}`}</div> <p className="text-xs text-muted-foreground">Issued (Overall)</p> </CardContent> </Card>
       </div>
-      <div className="flex flex-col space-y-4 pt-6"> <Card> <CardHeader> <CardTitle>Team Management</CardTitle> </CardHeader>
+      <div className="flex flex-col space-y-4 pt-6"> <Card className="card-lift-hover"> <CardHeader> <CardTitle>Team Management</CardTitle> </CardHeader>
           <CardContent> <Tabs defaultValue="active" className="w-full"> <TabsList className="grid w-full grid-cols-2 mb-4"> <TabsTrigger value="active">Active ({activeEmployees.length})</TabsTrigger> <TabsTrigger value="inactive">Inactive ({inactiveEmployees.length})</TabsTrigger> </TabsList>
               <TabsContent value="active"> <CardDescription className="mb-4 text-foreground">Active team members.</CardDescription> {isLoadingEmployees ? <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin mx-auto"/></div> : <EmployeeTable employees={paginatedActiveEmployees} onToggleEmployeeStatus={handleToggleUserStatus} currentUser={currentUser} locations={allSystemLocations} companies={viewableBrandsForFilter} baseEditPath="/dashboard/users" />}
                 <div className="flex items-center justify-end gap-2 py-4"> <div className="flex-1 text-sm text-muted-foreground"> Page {activeCurrentPage}/{totalActivePages} </div> <Button variant="outline" size="sm" onClick={() => setActiveCurrentPage(p=>Math.max(p-1,1))} disabled={activeCurrentPage===1}>Prev</Button> <Button variant="outline" size="sm" onClick={() => setActiveCurrentPage(p=>Math.min(p+1,totalActivePages))} disabled={activeCurrentPage===totalActivePages}>Next</Button> </div> </TabsContent>

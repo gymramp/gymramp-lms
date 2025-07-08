@@ -1,3 +1,4 @@
+
 // src/app/admin/dashboard/page.tsx
 'use client';
 
@@ -169,7 +170,7 @@ export default function SuperAdminDashboardPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="card-lift-hover">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Users</CardTitle>
             <Users className="h-5 w-5 text-muted-foreground" />
@@ -179,7 +180,7 @@ export default function SuperAdminDashboardPage() {
             <p className="text-xs text-muted-foreground">All registered users</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="card-lift-hover">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Courses</CardTitle>
             <BookOpen className="h-5 w-5 text-muted-foreground" />
@@ -189,7 +190,7 @@ export default function SuperAdminDashboardPage() {
             <p className="text-xs text-muted-foreground">Courses in the library</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="card-lift-hover">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Brands</CardTitle>
             <Building className="h-5 w-5 text-muted-foreground" />
@@ -199,7 +200,7 @@ export default function SuperAdminDashboardPage() {
             <p className="text-xs text-muted-foreground">Registered brands</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="card-lift-hover">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Sales (Last 30 Days)</CardTitle>
             <CreditCard className="h-5 w-5 text-muted-foreground" />
@@ -212,7 +213,7 @@ export default function SuperAdminDashboardPage() {
       </div>
 
       <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
+        <Card className="card-lift-hover">
             <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
                 <CardDescription>Navigate to key management areas.</CardDescription>
@@ -245,7 +246,7 @@ export default function SuperAdminDashboardPage() {
             </CardContent>
         </Card>
 
-         <Card>
+         <Card className="card-lift-hover">
             <CardHeader>
                 <CardTitle>Recent Platform Additions</CardTitle>
                 <CardDescription>Latest brands and users added to the system.</CardDescription>

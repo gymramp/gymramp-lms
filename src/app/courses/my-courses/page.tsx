@@ -171,7 +171,7 @@ export default function MyCoursesPage() {
             const isCompleted = course.status === 'Completed';
             const imageUrl = course.featuredImageUrl || (course as Course).imageUrl || `https://placehold.co/600x350.png?text=${encodeURIComponent(course.title)}`;
             return (
-              <Card key={course.id} className="flex flex-col overflow-hidden shadow-md hover:shadow-lg transition-shadow w-full sm:w-[calc(50%-1.5rem)] lg:w-[calc(33.333%-1.5rem)]">
+              <Card key={course.id} className="card-lift-hover flex flex-col overflow-hidden w-full sm:w-[calc(50%-1.5rem)] lg:w-[calc(33.333%-1.5rem)]">
                 <CardHeader className="p-0">
                   <div className="relative aspect-video w-full">
                     <Image
@@ -217,5 +217,3 @@ export default function MyCoursesPage() {
     </div>
   );
 }
-
-    
