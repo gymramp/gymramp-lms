@@ -19,14 +19,23 @@ export const helpData: Record<UserRole, HelpTopic[]> = {
       title: "Managing Brands",
       icon: Building,
       content: `
-As a Super Admin, you can create, edit, and manage all brands on the platform.
+As a Super Admin, you can create, edit, and manage all brands (companies) on the platform.
 
 *   Navigate to [**Admin > Brands**](/admin/companies) from the main sidebar.
-*   Use the **Add New Brand** button to create new client accounts (Parent Brands).
-*   From the brand list, you can **Edit Brand & Settings** to modify details, manage assigned Programs, and enable/disable features.
-*   You can also manage specific **Locations** and **Users** for each brand from the brand list actions.
-*   View the [**Revenue Share Report**](/admin/revenue-share-report) for insights on checkouts with revenue share agreements.
+*   Use the **Add New Brand** button to create new client accounts. These are considered "Parent Brands".
+*   From the brand list, you can **Edit Brand & Settings** to modify details like name, logo, user limits, and trial status. This is also where you manage which Programs are assigned to a brand.
+*   You can also manage specific **Locations** and **Users** for each brand directly from the brand list actions.
       `,
+    },
+    {
+        title: "Partners & Revenue Share",
+        icon: Handshake,
+        content: `
+You can manage referral partners and track revenue share from sales.
+
+*   **Manage Partners:** Go to [**Admin > Partners**](/admin/partners) to create new partners, define their revenue share percentage, and get their unique signup link.
+*   **Revenue Share Report:** Navigate to [**Admin > Rev Share Report**](/admin/revenue-share-report) to view a detailed breakdown of all sales that included a revenue share agreement. You can filter this report by date and search for specific partners or brands.
+        `
     },
     {
       title: "Global User Management",
@@ -60,7 +69,7 @@ Programs are then assigned to Brands to grant them access to the courses within.
       content: `
 Use the dedicated checkout pages under the **New Customers** dropdown to onboard new customers:
 
-*   [**Paid Checkout**](/admin/checkout): For new customers purchasing a Program. This flow collects Brand and admin details, processes payment, and optionally records revenue share details.
+*   [**Paid Checkout**](/admin/checkout): For new customers purchasing a Program. This flow collects Brand and admin details, processes payment via Stripe, and optionally records revenue share details.
 *   [**Free Trial Checkout**](/admin/free-trial-checkout): To set up new customers with a trial period for a selected Program.
       `,
     },
@@ -70,7 +79,7 @@ Use the dedicated checkout pages under the **New Customers** dropdown to onboard
       content: `
 Configure system-wide settings.
 
-*   [**System Settings**](/admin/settings): Configure email sending (primarily Google OAuth 2.0 via environment variables) for application emails like new user welcomes.
+*   [**System Settings**](/admin/settings): Configure email sending (primarily Google OAuth 2.0 via environment variables) for application emails like new user welcomes. You can also send test emails from this page to verify your configuration.
       `,
     },
     {
@@ -90,19 +99,24 @@ As a Super Admin, you can also force a password reset by setting a new temporary
       content: "Your dashboard provides a snapshot of your Brand's learning activity, employee progress, and active courses. Use the Brand and Location filters to scope your view if you manage Child Brands or multiple locations. Access this via the [**Dashboard**](/dashboard) link in your sidebar.",
     },
     {
-      title: "Managing Your Brand's Users & Child Brands",
+      title: "Managing Your Brands & Locations",
       icon: Building,
-      content: "Navigate to [**Brands**](/admin/companies) from your sidebar to manage your primary Brand and any Child Brands you create. Go to [**Users**](/admin/users) to add new employees (Staff, Managers), assign them to Brands and Locations, and manage their account status. You cannot create users with roles equal to or higher than your own.",
+      content: "Navigate to [**Brands**](/admin/companies) from your sidebar to manage your primary Brand and any Child Brands you create. From the Brand list, you can edit details and manage a brand's specific **Locations**.",
+    },
+    {
+      title: "Managing Your Users",
+      icon: Users,
+      content: "Go to [**Dashboard**](/dashboard) to see your user list. From there you can add new employees (Staff, Managers), edit their details, assign them to locations, and manage their account status. You cannot create users with a role equal to or higher than your own."
     },
     {
       title: "Brand Course Content Management",
       icon: Package,
       content: `
-If course management is enabled for your Brand, you will see a **Brand Content** section in your sidebar. From here, you can:
+If course management is enabled for your Brand, you will see a **My Content** section in your sidebar. This allows you to create courses, lessons, and quizzes that are exclusive to your organization.
 
-*   [**My Brand's Courses**](/brand-admin/courses): Create courses specific to your brand.
-*   [**My Brand's Lessons**](/brand-admin/lessons): Create and manage lessons unique to your brand.
-*   [**My Brand's Quizzes**](/brand-admin/quizzes): Develop quizzes and manage their questions.
+*   [**My Courses**](/brand-admin/courses): Create courses specific to your brand.
+*   [**My Lessons**](/brand-admin/lessons): Create and manage lessons unique to your brand.
+*   [**My Quizzes**](/brand-admin/quizzes): Develop quizzes and manage their questions.
       `,
     },
     {
@@ -127,15 +141,24 @@ Currently, only Super Admins can manually set temporary passwords for users.
       content: "Your dashboard shows your Brand's learning progress, active users, course completion rates, and issued certificates. Use the Brand and Location filters to scope your view if you manage Child Brands or multiple locations. Access via [**Dashboard**](/dashboard) in your sidebar.",
     },
     {
-      title: "Managing Your Brand's Users & Child Brands",
+      title: "Managing Your Brands & Locations",
       icon: Building,
-      content: "Navigate to [**Brands**](/admin/companies) from your sidebar to manage your primary Brand and any Child Brands you create. Go to [**Users**](/admin/users) to add new employees (Staff, Managers), assign them to Brands and Locations, and manage their account status. You cannot create users with roles equal to or higher than your own.",
+      content: "Navigate to [**Brands**](/admin/companies) from your sidebar to manage your primary Brand and any Child Brands you create. From the Brand list, you can edit details and manage a brand's specific **Locations**.",
+    },
+    {
+      title: "Managing Your Users",
+      icon: Users,
+      content: "Go to [**Dashboard**](/dashboard) to see your user list. From there you can add new employees (Staff, Managers), edit their details, assign them to locations, and manage their account status. You cannot create users with a role equal to or higher than your own."
     },
     {
       title: "Brand Course Content Management",
       icon: Package,
       content: `
-If course management is enabled for your Brand, you will see a **Brand Content** section in your sidebar. From here, you can manage courses, lessons, and quizzes specific to your brand, similar to an Admin.
+If course management is enabled for your Brand, you will see a **My Content** section in your sidebar. This allows you to create courses, lessons, and quizzes that are exclusive to your organization.
+
+*   [**My Courses**](/brand-admin/courses): Create courses specific to your brand.
+*   [**My Lessons**](/brand-admin/lessons): Create and manage lessons unique to your brand.
+*   [**My Quizzes**](/brand-admin/quizzes): Develop quizzes and manage their questions.
       `,
     },
     {
@@ -162,12 +185,12 @@ Currently, only Super Admins can manually set temporary passwords for users.
     {
       title: "Managing Your Team",
       icon: Users,
-      content: "You can manage Staff and other Manager users within your brand and assigned locations. This includes adding new staff/managers, editing their details, and managing their account status. Navigate to [**Users**](/admin/users) from your sidebar.",
+      content: "You can manage Staff and other Manager users within your brand and specifically within the locations you are assigned to. From the [**Dashboard**](/dashboard), you can add new staff/managers, edit their details, and manage their account status.",
     },
     {
-      title: "Viewing My Certificates",
+      title: "Viewing My Learning & Certificates",
       icon: Award,
-      content: "Once you successfully complete a course, you'll earn a certificate. You can view all your earned certificates by navigating to [**My Certificates**](/certificates) from your sidebar or user dropdown menu.",
+      content: "You can take courses just like your staff. Go to [**My Learning**](/courses/my-courses) to see your assigned courses. When you complete a course, your certificate will appear in [**My Certificates**](/certificates).",
     },
     {
       title: "User Password Resets",
@@ -183,17 +206,17 @@ Currently, only Super Admins can manually set temporary passwords for users.
     {
       title: "Accessing My Learning",
       icon: BookOpen,
-      content: "Navigate to [**My Learning**](/courses/my-courses) from your sidebar. This page lists all courses assigned to you. Click on a course to start or continue your learning journey.",
+      content: "Navigate to [**My Learning**](/courses/my-courses) from your sidebar. This page lists all courses assigned to you. Click on a course to start or continue your learning journey. Your progress is saved automatically.",
     },
     {
       title: "Viewing My Certificates",
       icon: Award,
-      content: "Once you successfully complete a course, you'll earn a certificate. You can view all your earned certificates by navigating to [**My Certificates**](/certificates) from your sidebar or user dropdown menu.",
+      content: "Once you successfully complete a course and pass all required quizzes, you'll earn a certificate. You can view all your earned certificates by navigating to [**My Certificates**](/certificates) from the user dropdown menu in the sidebar.",
     },
     {
       title: "Updating My Account",
       icon: Settings,
-      content: "You can update your profile information, such as your name and profile picture (if enabled), by going to [**My Account**](/account) from the user dropdown menu. You can also reset your password from this page.",
+      content: "You can update your profile information, such as your name and profile picture, by going to [**My Account**](/account) from the user dropdown menu. You can also request a password reset from this page.",
     },
     {
       title: "How to Reset Your Password",
