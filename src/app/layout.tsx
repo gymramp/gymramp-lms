@@ -1,6 +1,6 @@
 
 import type { Metadata, Viewport } from 'next';
-import { GeistSans } from 'geist/font/sans';
+import { Inter } from 'next/font/google';
 import './globals.css';
 // Removed: import { headers } from 'next/headers';
 // Removed: import { getUserCompany } from '@/lib/user-data';
@@ -10,6 +10,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { cn } from '@/lib/utils';
 import { Navbar } from '@/components/layout/Navbar';
 import { Sidebar } from '@/components/layout/Sidebar';
+
+const inter = Inter({ subsets: ['latin'] });
 
 // Reverted to static metadata
 export const metadata: Metadata = {
@@ -34,7 +36,7 @@ export default async function RootLayout({
   const bodyClasses = "flex flex-col h-full font-sans antialiased";
 
   return (
-    <html lang="en" className={cn("h-full", GeistSans.variable)}>
+    <html lang="en" className={cn("h-full", inter.className)}>
       <body
         className={bodyClasses}
         // Removed dynamic style prop
