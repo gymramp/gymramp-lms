@@ -318,11 +318,12 @@ export default function FreeTrialCheckoutPage() {
     return () => unsubscribe();
   }, [router, toast]);
 
+  // Effect for fetching core data (programs, courses)
   useEffect(() => {
     if (currentUser && !isCheckingAuth) {
       (async () => {
         setIsLoadingData(true);
-        setGeneratedPassword(null); 
+        setGeneratedPassword(null);
         try {
           const [programsData, coursesData] = await Promise.all([
              getAllPrograms(),
@@ -330,9 +331,6 @@ export default function FreeTrialCheckoutPage() {
           ]);
           setAllPrograms(programsData);
           setAllCourses(coursesData);
-           if (programsData.length === 1 && !selectedProgramId) {
-             setSelectedProgramId(programsData[0].id);
-          }
         } catch(error) {
             console.error("Error fetching programs/courses:", error);
             toast({ title: "Error", description: "Could not load programs or courses.", variant: "destructive" });
@@ -343,7 +341,15 @@ export default function FreeTrialCheckoutPage() {
         }
       })();
     }
-  }, [currentUser, isCheckingAuth, toast, selectedProgramId]);
+  }, [currentUser, isCheckingAuth, toast]);
+
+  // Separate effect to handle default selection after data is loaded
+  useEffect(() => {
+    if (!isLoadingData && allPrograms.length === 1 && !selectedProgramId) {
+      setSelectedProgramId(allPrograms[0].id);
+    }
+  }, [isLoadingData, allPrograms, selectedProgramId]);
+
 
   useEffect(() => {
     if (selectedProgramId && allPrograms.length > 0 && allCourses.length > 0) {
@@ -408,5 +414,3 @@ export default function FreeTrialCheckoutPage() {
     </div>
   );
 }
-
-    
