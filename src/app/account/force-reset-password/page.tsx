@@ -15,7 +15,7 @@ import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, updatePassword, signOut } from 'firebase/auth';
 import { getUserByEmail, updateUser } from '@/lib/user-data';
 import type { User } from '@/types/user';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Eye, EyeOff } from 'lucide-react';
 
 const passwordResetSchema = z.object({
   newPassword: z.string().min(6, { message: 'Password must be at least 6 characters long.' }),
@@ -33,6 +33,8 @@ export default function ForceResetPasswordPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const form = useForm<PasswordResetFormValues>({
     resolver: zodResolver(passwordResetSchema),
@@ -145,9 +147,30 @@ export default function ForceResetPasswordPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>New Password</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="Enter new password" {...field} />
-                    </FormControl>
+                    <div className="relative">
+                      <FormControl>
+                        <Input
+                          type={showNewPassword ? 'text' : 'password'}
+                          placeholder="Enter new password"
+                          {...field}
+                          className="pr-10"
+                        />
+                      </FormControl>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowNewPassword((prev) => !prev)}
+                        aria-label={showNewPassword ? "Hide password" : "Show password"}
+                      >
+                        {showNewPassword ? (
+                          <EyeOff className="h-4 w-4" aria-hidden="true" />
+                        ) : (
+                          <Eye className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </Button>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -158,9 +181,30 @@ export default function ForceResetPasswordPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Confirm New Password</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="Confirm new password" {...field} />
-                    </FormControl>
+                    <div className="relative">
+                      <FormControl>
+                        <Input
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          placeholder="Confirm new password"
+                          {...field}
+                          className="pr-10"
+                        />
+                      </FormControl>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowConfirmPassword((prev) => !prev)}
+                        aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4" aria-hidden="true" />
+                        ) : (
+                          <Eye className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </Button>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}

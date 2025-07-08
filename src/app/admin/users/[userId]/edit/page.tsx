@@ -26,7 +26,7 @@ import { getBrandCoursesByBrandId, getBrandQuizzesByBrandId, getBrandQuizById } 
 import { Skeleton } from '@/components/ui/skeleton';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { ArrowLeft, User as UserIcon, Building, MapPin, BookOpen, BarChart3, Save, Loader2, AlertCircle, KeyRound, Clock, ListChecks } from 'lucide-react';
+import { ArrowLeft, User as UserIcon, Building, MapPin, BookOpen, BarChart3, Save, Loader2, AlertCircle, KeyRound, Clock, ListChecks, Eye, EyeOff } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from '@/components/ui/badge';
 
@@ -67,6 +67,7 @@ export default function AdminEditUserPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingLocationsForDialog, setIsLoadingLocationsForDialog] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showTempPassword, setShowTempPassword] = useState(false);
 
   const form = useForm<EditUserFormValues>({
     resolver: zodResolver(editUserFormSchema),
@@ -323,7 +324,32 @@ export default function AdminEditUserPage() {
                       </ScrollArea><FormMessage />
                     </FormItem>
                   )} />
-                   {canSetPassword && ( <FormField control={form.control} name="newTemporaryPassword" render={({ field }) => ( <FormItem className="pt-4 border-t"> <FormLabel className="flex items-center gap-2 font-semibold"><KeyRound className="h-4 w-4 text-orange-500" />Set New Temporary Password</FormLabel> <FormControl><Input type="text" placeholder="Leave blank to keep current password" {...field} value={field.value ?? ''} /></FormControl> <p className="text-xs text-muted-foreground">User will be forced to change on next login if set.</p> <FormMessage /> </FormItem> )} /> )}
+                   {canSetPassword && ( <FormField control={form.control} name="newTemporaryPassword" render={({ field }) => ( 
+                      <FormItem className="pt-4 border-t"> 
+                        <FormLabel className="flex items-center gap-2 font-semibold"><KeyRound className="h-4 w-4 text-orange-500" />Set New Temporary Password</FormLabel> 
+                          <div className="relative">
+                            <FormControl>
+                              <Input 
+                                type={showTempPassword ? "text" : "password"} 
+                                placeholder="Leave blank to keep current password" 
+                                {...field} value={field.value ?? ''} 
+                                className="pr-10"
+                              />
+                            </FormControl>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                              onClick={() => setShowTempPassword((prev) => !prev)}
+                            >
+                              {showTempPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              <span className="sr-only">{showTempPassword ? "Hide password" : "Show password"}</span>
+                            </Button>
+                          </div>
+                        <p className="text-xs text-muted-foreground">User will be forced to change on next login if set.</p> <FormMessage /> 
+                      </FormItem> 
+                    )} /> )}
                 </CardContent>
                 <CardFooter>
                   <Button type="submit" disabled={isSaving} className="bg-primary hover:bg-primary/90">
@@ -407,4 +433,3 @@ export default function AdminEditUserPage() {
     </div>
   );
 }
-
