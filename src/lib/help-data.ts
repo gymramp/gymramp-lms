@@ -106,6 +106,11 @@ If course management is enabled for your Brand, you will see a **Brand Content**
       `,
     },
     {
+      title: "Viewing My Certificates",
+      icon: Award,
+      content: "Once you successfully complete a course, you'll earn a certificate. You can view all your earned certificates by navigating to [**My Certificates**](/certificates) from your sidebar or user dropdown menu.",
+    },
+    {
       title: "User Password Resets",
       icon: KeyRound,
       content: `
@@ -134,6 +139,11 @@ If course management is enabled for your Brand, you will see a **Brand Content**
       `,
     },
     {
+      title: "Viewing My Certificates",
+      icon: Award,
+      content: "Once you successfully complete a course, you'll earn a certificate. You can view all your earned certificates by navigating to [**My Certificates**](/certificates) from your sidebar or user dropdown menu.",
+    },
+    {
       title: "User Password Resets",
       icon: KeyRound,
       content: `
@@ -153,6 +163,11 @@ Currently, only Super Admins can manually set temporary passwords for users.
       title: "Managing Your Team",
       icon: Users,
       content: "You can manage Staff and other Manager users within your brand and assigned locations. This includes adding new staff/managers, editing their details, and managing their account status. Navigate to [**Users**](/admin/users) from your sidebar.",
+    },
+    {
+      title: "Viewing My Certificates",
+      icon: Award,
+      content: "Once you successfully complete a course, you'll earn a certificate. You can view all your earned certificates by navigating to [**My Certificates**](/certificates) from your sidebar or user dropdown menu.",
     },
     {
       title: "User Password Resets",
