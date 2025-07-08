@@ -10,22 +10,34 @@ import { askSiteSupport } from '@/ai/flows/site-support';
 import type { User } from '@/types/user';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
-
-interface AiChatAssistantProps {
-  currentUser: User | null;
-}
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { getUserByEmail } from '@/lib/user-data';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
 }
 
-export function AiChatAssistant({ currentUser }: AiChatAssistantProps) {
+export function AiChatAssistant() {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser?.email) {
+        const userDetails = await getUserByEmail(firebaseUser.email);
+        setCurrentUser(userDetails);
+      } else {
+        setCurrentUser(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Load chat history from localStorage when the component mounts or the user changes.
   useEffect(() => {
@@ -104,12 +116,21 @@ export function AiChatAssistant({ currentUser }: AiChatAssistantProps) {
   const handleSheetOpenChange = (open: boolean) => {
     setIsOpen(open);
   };
+  
+  if (!currentUser) {
+    return null;
+  }
 
   return (
     <Sheet open={isOpen} onOpenChange={handleSheetOpenChange}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" title="AI Assistant">
-          <Bot className="h-5 w-5" />
+        <Button
+          variant="default"
+          size="icon"
+          title="AI Assistant"
+          className="fixed bottom-6 right-6 h-16 w-16 rounded-full shadow-lg z-50 animate-in fade-in-0 zoom-in-95 duration-500 bg-primary hover:bg-primary/90"
+        >
+          <Bot className="h-8 w-8" />
           <span className="sr-only">Open AI Chat Assistant</span>
         </Button>
       </SheetTrigger>

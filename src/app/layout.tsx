@@ -10,6 +10,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { cn } from '@/lib/utils';
 import { Navbar } from '@/components/layout/Navbar';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { AiChatAssistant } from '@/components/layout/AiChatAssistant';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -54,6 +55,7 @@ export default async function RootLayout({
         </div>
         {/* Footer removed from being a direct child of body */}
         <Toaster />
+        <AiChatAssistant />
       </body>
     </html>
   );

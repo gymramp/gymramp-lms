@@ -28,7 +28,6 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { getNavigationStructure, getUserDropdownItems, NavItemType } from '@/lib/nav-config';
 import { Skeleton } from '../ui/skeleton';
-import { AiChatAssistant } from './AiChatAssistant'; // Import the new component
 
 export function Navbar() {
   const router = useRouter();
@@ -224,7 +223,6 @@ export function Navbar() {
             </div>
           ) : isLoggedIn && currentUser && userMenuItems.length > 0 ? (
             <>
-              <AiChatAssistant currentUser={currentUser} />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
