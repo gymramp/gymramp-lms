@@ -160,7 +160,7 @@ export default function ForceResetPasswordPage() {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:text-accent"
                         onClick={() => setShowNewPassword((prev) => !prev)}
                         aria-label={showNewPassword ? "Hide password" : "Show password"}
                       >
@@ -194,7 +194,7 @@ export default function ForceResetPasswordPage() {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:text-accent"
                         onClick={() => setShowConfirmPassword((prev) => !prev)}
                         aria-label={showConfirmPassword ? "Hide password" : "Show password"}
                       >
