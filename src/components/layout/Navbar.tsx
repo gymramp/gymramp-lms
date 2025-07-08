@@ -23,15 +23,12 @@ import {
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { getUserByEmail } from '@/lib/user-data';
-// Removed: import { getCompanyById } from '@/lib/company-data';
-import type { User } from '@/types/user'; // Removed Company import
+import type { User } from '@/types/user';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { getNavigationStructure, getUserDropdownItems, NavItemType } from '@/lib/nav-config';
 import { Skeleton } from '../ui/skeleton';
-// Removed: import { hexToHslString } from '@/lib/utils';
-
-// Removed theme constants and applyTheme function
+import { AiChatAssistant } from './AiChatAssistant'; // Import the new component
 
 export function Navbar() {
   const router = useRouter();
@@ -44,7 +41,6 @@ export function Navbar() {
   const [userMenuItems, setUserMenuItems] = useState<NavItemType[]>([]);
   const [isLoadingNav, setIsLoadingNav] = useState(true);
 
-  // Reverted logo and name to static defaults
   const currentBrandLogoUrl = "/images/newlogo.png";
   const currentBrandName = "Gymramp";
   const displayLogoAlt = `${currentBrandName} Logo`;
@@ -69,7 +65,7 @@ export function Navbar() {
       }
     } else {
       setCurrentUser(null);
-      const publicNav = await getNavigationStructure(null); // Should be empty or login specific
+      const publicNav = await getNavigationStructure(null);
       setNavItems(publicNav); setUserMenuItems([]);
     }
     setIsLoadingNav(false);
@@ -215,7 +211,6 @@ export function Navbar() {
         </div>
 
         <nav className="hidden md:flex items-center justify-center space-x-1 text-sm font-medium flex-grow">
-          {/* Main desktop nav items are now in Sidebar.tsx */}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -228,43 +223,46 @@ export function Navbar() {
               <Skeleton className="h-8 w-8 rounded-full" />
             </div>
           ) : isLoggedIn && currentUser && userMenuItems.length > 0 ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={currentUser.profileImageUrl || undefined} alt={currentUser.name || 'User Avatar'} />
-                    <AvatarFallback>{getInitials(currentUser.name)}</AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="end" forceMount>
-                <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{currentUser.name}</p>
-                    <p className="text-xs leading-none text-muted-foreground">
-                      {currentUser.email}
-                    </p>
-                    <p className="text-xs leading-none text-muted-foreground pt-1">
-                      Role: <span className="font-medium text-foreground">{currentUser.role}</span>
-                    </p>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {userMenuItems.map((item) => (
-                  <DropdownMenuItem key={item.label} asChild className="cursor-pointer">
-                    <Link href={item.href || '#'} className="flex items-center gap-2">
-                      {item.icon && <item.icon className="mr-2 h-4 w-4" />}
-                      <span>{item.label}</span>
-                    </Link>
+            <>
+              <AiChatAssistant currentUser={currentUser} />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={currentUser.profileImageUrl || undefined} alt={currentUser.name || 'User Avatar'} />
+                      <AvatarFallback>{getInitials(currentUser.name)}</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">{currentUser.name}</p>
+                      <p className="text-xs leading-none text-muted-foreground">
+                        {currentUser.email}
+                      </p>
+                      <p className="text-xs leading-none text-muted-foreground pt-1">
+                        Role: <span className="font-medium text-foreground">{currentUser.role}</span>
+                      </p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {userMenuItems.map((item) => (
+                    <DropdownMenuItem key={item.label} asChild className="cursor-pointer">
+                      <Link href={item.href || '#'} className="flex items-center gap-2">
+                        {item.icon && <item.icon className="mr-2 h-4 w-4" />}
+                        <span>{item.label}</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Logout</span>
                   </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Logout</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
           ) : !isLoggedIn ? (
             <>
               <Button asChild size="sm" variant="ghost">
