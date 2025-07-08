@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -5,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { User as UserIcon, Loader2, HelpCircle, Send } from 'lucide-react';
+import { User as UserIcon, Loader2, HelpCircle, Send, MessageCircleQuestion } from 'lucide-react';
 import { askSiteSupport } from '@/ai/flows/site-support';
 import type { User } from '@/types/user';
 import { cn } from '@/lib/utils';
@@ -130,7 +131,7 @@ export function AiChatAssistant() {
           title="Help and Support"
           className="fixed bottom-6 right-6 h-16 w-16 rounded-full shadow-lg z-50 animate-in fade-in-0 zoom-in-95 duration-500 bg-primary hover:bg-primary/90"
         >
-          <HelpCircle className="h-8 w-8" />
+          <MessageCircleQuestion className="h-10 w-10" />
           <span className="sr-only">Open Help and Support</span>
         </Button>
       </SheetTrigger>
