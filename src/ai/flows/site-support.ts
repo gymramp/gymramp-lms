@@ -9,7 +9,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { z } from 'zod';
 import { helpData } from '@/lib/help-data';
 import type { UserRole } from '@/types/user';
 
@@ -66,7 +66,7 @@ const siteSupportFlow = ai.defineFlow(
       .map(topic => `## ${topic.title}\n\n${topic.content}`)
       .join('\n\n---\n\n');
 
-    const { output } = await prompt({ query: input.query, context: contextString });
+    const { output } = await siteSupportPrompt({ query: input.query, context: contextString });
     return output!;
   }
 );
