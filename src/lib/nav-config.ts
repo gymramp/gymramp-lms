@@ -136,3 +136,39 @@ export function getUserDropdownItems(user: User | null): NavItemType[] {
 
     return items;
 }
+
+export async function getQuickAddItems(user: User | null): Promise<NavItemType[]> {
+  if (!user) return [];
+
+  const items: NavItemType[] = [];
+
+  // Super Admin can always add users and brands
+  if (user.role === 'Super Admin') {
+    items.push({ href: '/admin/users', label: 'New User', icon: UserPlus });
+    items.push({ href: '/admin/companies', label: 'New Brand', icon: Building });
+  } 
+  // Admin/Owner/Manager can add users
+  else if (user.role === 'Admin' || user.role === 'Owner' || user.role === 'Manager') {
+    items.push({ href: '/admin/users', label: 'New User', icon: UserPlus });
+  }
+
+  // Admin/Owner can add child brands
+  if (user.role === 'Admin' || user.role === 'Owner') {
+    items.push({ href: '/admin/companies', label: 'New Brand', icon: Building });
+  }
+
+  // Check for brand-specific content creation
+  if (user.companyId) {
+    const company = await getCompanyById(user.companyId);
+    if (company?.canManageCourses) {
+      if (items.length > 0) { // Add a separator if other items exist
+        items.push({ label: 'Separator' }); // This will be handled as a separator in the UI
+      }
+      items.push({ href: '/brand-admin/courses', label: 'New Course', icon: BookOpen });
+      items.push({ href: '/brand-admin/lessons', label: 'New Lesson', icon: FileText });
+      items.push({ href: '/brand-admin/quizzes', label: 'New Quiz', icon: ListChecks });
+    }
+  }
+
+  return items;
+}

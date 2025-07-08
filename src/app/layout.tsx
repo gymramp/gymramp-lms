@@ -8,7 +8,6 @@ import './globals.css';
 import { Footer } from '@/components/layout/Footer';
 import { Toaster } from "@/components/ui/toaster";
 import { cn } from '@/lib/utils';
-import { Navbar } from '@/components/layout/Navbar';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { AiChatAssistant } from '@/components/layout/AiChatAssistant';
 
@@ -34,7 +33,7 @@ export default async function RootLayout({
 }>) {
   console.log('[RootLayout] Rendering with default theme. White-labeling based on hostname/user has been removed.');
 
-  const bodyClasses = "flex flex-col h-full font-sans antialiased";
+  const bodyClasses = "h-full font-sans antialiased";
 
   return (
     <html lang="en" className={cn("h-full", inter.className)}>
@@ -42,18 +41,15 @@ export default async function RootLayout({
         className={bodyClasses}
         // Removed dynamic style prop
       >
-        {/* Navbar no longer receives brandLogoUrl/brandName from RootLayout for white-labeling */}
-        <Navbar />
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex h-full">
           <Sidebar />
-          <main className="flex-1 overflow-y-auto bg-secondary/30 flex flex-col"> {/* Added flex flex-col, removed padding */}
-            <div className="flex-grow p-4 md:p-6 lg:p-8"> {/* New wrapper for children with padding */}
+          <main className="flex-1 overflow-y-auto bg-secondary/30 flex flex-col">
+            <div className="flex-grow p-4 md:p-6 lg:p-8">
               {children}
             </div>
-            <Footer /> {/* Moved Footer here */}
+            <Footer />
           </main>
         </div>
-        {/* Footer removed from being a direct child of body */}
         <Toaster />
         <AiChatAssistant />
       </body>
