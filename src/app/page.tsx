@@ -39,7 +39,6 @@ export default function LoginPage() {
   
   // Static branding
   const displayBrandName = "Gymramp";
-  const displayBrandLogoUrl = "/images/newlogo.png";
 
   useEffect(() => {
     setIsMounted(true);
@@ -250,15 +249,9 @@ export default function LoginPage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-theme(spacing.14)*2)] py-12 px-4 sm:px-6 lg:px-8">
        <div className="mb-8 h-[45px] flex items-center justify-center">
-         <Image
-            src={displayBrandLogoUrl}
-            alt={`${displayBrandName} Logo`}
-            width={150}
-            height={45}
-            priority
-            className="max-h-[45px] object-contain"
-            onError={(e) => { (e.target as HTMLImageElement).src = '/images/newlogo.png'; }}
-        />
+         <h1 className="text-4xl font-bold text-primary tracking-tighter">
+            {displayBrandName}
+          </h1>
        </div>
       <Card className={cn("w-full max-w-md shadow-lg", "animate-in fade-in-0 zoom-in-95 duration-500")}>
         <CardHeader className="text-center">

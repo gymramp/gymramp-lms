@@ -30,7 +30,6 @@ export function Sidebar() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const currentBrandLogoUrl = "/images/newlogo.png";
   const currentBrandName = "Gymramp";
 
   const fetchNavAndUserData = useCallback(async (firebaseUser: import('firebase/auth').User | null) => {
@@ -131,8 +130,10 @@ export function Sidebar() {
   return (
     <aside className="hidden md:flex flex-col w-64 border-r bg-background h-full">
       <div className="p-4 border-b h-20 flex items-center shrink-0">
-        <Link href={currentUser.role === 'Staff' ? "/courses/my-courses" : "/dashboard"} className="flex items-center">
-          <Image src={currentBrandLogoUrl} alt={`${currentBrandName} Logo`} width={150} height={45} priority className="max-h-[45px] object-contain" />
+        <Link href={currentUser.role === 'Staff' ? "/courses/my-courses" : "/dashboard"} className="flex items-center w-full">
+           <h1 className="text-2xl font-bold text-primary tracking-tighter">
+            {currentBrandName}
+          </h1>
         </Link>
       </div>
 
@@ -172,12 +173,14 @@ export function Sidebar() {
               <DropdownMenuLabel>Create New</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {quickAddItems.map(item => (
+                item.label === 'Separator' ? <DropdownMenuSeparator key="quick-add-separator" /> : (
                 <DropdownMenuItem key={item.label} asChild className="cursor-pointer">
                   <Link href={item.href || '#'} className="flex items-center gap-2">
                     {item.icon && <item.icon className="mr-2 h-4 w-4" />}
                     <span>{item.label}</span>
                   </Link>
                 </DropdownMenuItem>
+                )
               ))}
             </DropdownMenuContent>
           </DropdownMenu>

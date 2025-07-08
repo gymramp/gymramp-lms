@@ -29,12 +29,9 @@ export function Footer() {
       {/* Adjusted padding classes and removed md:h-24 */}
       <div className="container flex flex-col items-center justify-between gap-4 py-6 md:flex-row md:py-8">
         <div className="flex flex-col items-center gap-4 px-8 md:flex-row md:gap-2 md:px-0">
-          <Image
-            src="/images/gymramp-logo.png" // Path to your logo
-            alt="GYMRAMP Logo"
-            width={120}
-            height={30}
-          />
+          <h2 className="text-lg font-bold text-primary">
+            Gymramp
+          </h2>
           <p className="text-center text-sm leading-loose text-muted-foreground md:text-left">
             Built by GYMRAMP. © {new Date().getFullYear()} All rights reserved.
           </p>
