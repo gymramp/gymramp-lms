@@ -110,7 +110,7 @@ export function Sidebar() {
   if (isLoading) {
     return (
       <aside className="hidden md:flex flex-col w-64 border-r bg-background p-4 h-full">
-        <div className="p-4 border-b h-14 flex items-center"><Skeleton className="h-8 w-32" /></div>
+        <div className="p-4 border-b h-20 flex items-center"><Skeleton className="h-8 w-32" /></div>
         <div className="flex-1 mt-4 space-y-3">
           {[...Array(5)].map((_, i) => (
             <div key={i} className="space-y-2">
@@ -130,9 +130,9 @@ export function Sidebar() {
 
   return (
     <aside className="hidden md:flex flex-col w-64 border-r bg-background h-full">
-      <div className="p-4 border-b h-14 flex items-center shrink-0">
+      <div className="p-4 border-b h-20 flex items-center shrink-0">
         <Link href={currentUser.role === 'Staff' ? "/courses/my-courses" : "/dashboard"} className="flex items-center">
-          <Image src={currentBrandLogoUrl} alt={`${currentBrandName} Logo`} width={150} height={45} priority className="max-h-[30px] object-contain" />
+          <Image src={currentBrandLogoUrl} alt={`${currentBrandName} Logo`} width={150} height={45} priority className="max-h-[45px] object-contain" />
         </Link>
       </div>
 
