@@ -26,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { StatCard } from '@/components/dashboard/StatCard';
+import { format, subDays } from 'date-fns';
 
 const DEFAULT_ROWS_PER_PAGE = 5;
 
@@ -40,13 +41,24 @@ type EmployeeWithOverallProgress = User & {
 
 // Helper function to generate mock chart data
 const generateChartData = (baseValue: number, max: number = 100) => {
-    if (baseValue === 0) return Array(30).fill({ value: 0 });
+    if (baseValue === 0) {
+        return Array(30).fill(null).map((_, i) => ({
+            date: format(subDays(new Date(), 29 - i), 'MMM d'),
+            value: 0
+        }));
+    }
     const data = [];
     let currentValue = baseValue * 0.8; // Start at 80% of the final value
-    for (let i = 0; i < 30; i++) {
+    const today = new Date();
+    for (let i = 29; i >= 0; i--) { // Iterate from 29 days ago to today
         const fluctuation = (Math.random() - 0.45) * (currentValue * 0.1); // Fluctuate by up to 10%
         currentValue += fluctuation + (baseValue * 0.2 / 30); // Add a small upward trend
-        data.push({ value: Math.max(0, Math.min(max, Math.round(currentValue))) });
+        
+        const date = subDays(today, i);
+        data.push({ 
+            date: format(date, 'MMM d'),
+            value: Math.max(0, Math.min(max, Math.round(currentValue))) 
+        });
     }
     return data;
 };
@@ -224,6 +236,14 @@ export default function DashboardPage() {
     } else {
         toast({ title: "Error", variant: "destructive" });
     }
+  };
+
+  const handleResetFilters = () => {
+      let initialBrandId = '';
+      if (currentUser?.role === 'Super Admin') initialBrandId = 'all';
+      else if (currentUser?.companyId) initialBrandId = currentUser.companyId;
+      setSelectedBrandIdForDashboard(initialBrandId);
+      setSelectedLocationId('all');
   };
 
   const activeEmployees = useMemo(() => filteredEmployees.filter(emp => emp.isActive), [filteredEmployees]);

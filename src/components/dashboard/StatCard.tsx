@@ -7,6 +7,25 @@ import { Badge } from "@/components/ui/badge";
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+// Custom Tooltip Component
+const CustomTooltip = ({ active, payload, label, valuePrefix = '' }: any) => {
+    if (active && payload && payload.length) {
+        const data = payload[0].payload;
+        return (
+            <div className="rounded-lg border bg-background/95 p-2 text-sm shadow-lg backdrop-blur-sm">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                    <div className="text-muted-foreground">Date</div>
+                    <div>{data.date}</div>
+                    <div className="text-muted-foreground">Value</div>
+                    <div className="font-semibold">{`${valuePrefix}${data.value.toLocaleString()}`}</div>
+                </div>
+            </div>
+        );
+    }
+    return null;
+};
+
+
 interface StatCardProps {
   title: string;
   value: string | number;
@@ -14,7 +33,7 @@ interface StatCardProps {
   change?: string;
   changeVariant?: "default" | "destructive"; // "default" for green, "destructive" for red
   icon: LucideIcon;
-  chartData: any[]; // e.g., [{ name: 'A', value: 400 }]
+  chartData: any[]; // e.g., [{ date: 'Jan 1', value: 400 }]
   chartColor: string; // e.g., "hsl(var(--chart-1))"
 }
 
@@ -38,6 +57,8 @@ export function StatCard({
     return "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700";
   };
   
+  const valuePrefix = typeof value === 'string' && value.startsWith('$') ? '$' : '';
+
   return (
     <Card className="card-lift-hover">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -68,15 +89,8 @@ export function StatCard({
                 </linearGradient>
               </defs>
               <Tooltip
-                contentStyle={{
-                  backgroundColor: 'hsl(var(--background))',
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: 'var(--radius)',
-                  fontSize: '12px',
-                  boxShadow: 'hsl(var(--shadow))',
-                }}
-                labelStyle={{ display: 'none' }}
-                cursor={false}
+                cursor={{ stroke: 'hsl(var(--border))', strokeWidth: 1, strokeDasharray: '3 3' }}
+                content={<CustomTooltip valuePrefix={valuePrefix} />}
               />
               <Area
                 type="monotone"
