@@ -37,10 +37,9 @@ import { PlusCircle, MoreHorizontal, Trash2, Edit, Users, MapPin, Loader2, Build
 import { useToast } from '@/hooks/use-toast';
 import type { Company, User, CompanyFormData } from '@/types/user';
 import type { Program } from '@/types/course'; // Import Program type
-import { getAllCompanies, deleteCompany, addCompany, getLocationsByCompanyId } from '@/lib/company-data';
+import { getAllCompanies, deleteCompany } from '@/lib/company-data';
 import { getAllPrograms } from '@/lib/firestore-data'; // Import getAllPrograms
 import { getUserCountByCompanyId } from '@/lib/user-data';
-import { AddEditCompanyDialog } from '@/components/admin/AddEditCompanyDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
@@ -57,7 +56,6 @@ export default function AdminCompaniesPage() {
   const [filteredCompanies, setFilteredCompanies] = useState<CompanyWithCounts[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingCounts, setIsLoadingCounts] = useState(true); // Retain for user/location counts if fetched separately initially
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -145,14 +143,6 @@ export default function AdminCompaniesPage() {
     setFilteredCompanies(filtered);
   }, [searchTerm, companies]);
 
-  const handleAddCompanyClick = () => {
-    if (!currentUser || (currentUser.role !== 'Super Admin' && currentUser.role !== 'Admin' && currentUser.role !== 'Owner')) {
-      toast({ title: "Permission Denied", description: "You do not have permission to add brands.", variant: "destructive" });
-      return;
-    }
-    setIsAddDialogOpen(true);
-  };
-
   const openDeleteConfirmation = (company: Company) => {
      if (!currentUser) return;
      let canDelete = false;
@@ -196,31 +186,6 @@ export default function AdminCompaniesPage() {
     }
   };
 
-   const handleSaveNewCompany = async (companyData: CompanyFormData) => {
-     if (!currentUser) {
-       toast({ title: "Error", description: "Current user not found.", variant: "destructive" });
-       return;
-     }
-     let added: Company | null = null;
-     if (currentUser.role === 'Super Admin') {
-       added = await addCompany(companyData, currentUser.id, null);
-     } else if ((currentUser.role === 'Admin' || currentUser.role === 'Owner') && currentUser.companyId) {
-       added = await addCompany(companyData, currentUser.id, currentUser.companyId);
-     } else {
-       toast({ title: "Permission Denied", description: "You do not have the necessary permissions or brand association to create a new brand.", variant: "destructive" });
-       setIsAddDialogOpen(false);
-       return;
-     }
-
-     if (added) {
-        toast({ title: "Brand Added", description: `"${added.name}" added successfully.` });
-        fetchCompanies(currentUser); 
-     } else {
-         toast({ title: "Error", description: "Failed to add brand.", variant: "destructive" });
-     }
-     setIsAddDialogOpen(false);
-   };
-
    if (!currentUser || !(currentUser.role === 'Super Admin' || currentUser.role === 'Admin' || currentUser.role === 'Owner')) {
      return <div className="container mx-auto text-center">Loading or Access Denied...</div>;
    }
@@ -229,8 +194,10 @@ export default function AdminCompaniesPage() {
     <div className="container mx-auto">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-primary">Brand Management</h1>
-        <Button onClick={handleAddCompanyClick} className="bg-accent text-accent-foreground hover:bg-accent/90">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add New Brand
+        <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90">
+          <Link href="/admin/companies/new">
+            <PlusCircle className="mr-2 h-4 w-4" /> Add New Brand
+          </Link>
         </Button>
       </div>
       <div className="mb-6 flex items-center gap-2">
@@ -334,7 +301,6 @@ export default function AdminCompaniesPage() {
           )}
         </CardContent>
       </Card>
-      <AddEditCompanyDialog isOpen={isAddDialogOpen} setIsOpen={setIsAddDialogOpen} initialData={null} onSave={handleSaveNewCompany}/>
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader> <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle> <AlertDialogDescription> This action cannot be undone. This will permanently mark the brand "{companyToDelete?.name}" as deleted. Associated users and locations will also be marked as deleted. Child brands (if any) will NOT be automatically deleted but will become orphaned. </AlertDialogDescription> </AlertDialogHeader>
@@ -344,7 +310,3 @@ export default function AdminCompaniesPage() {
     </div>
   );
 }
-
-    
-
-    

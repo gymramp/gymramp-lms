@@ -145,7 +145,7 @@ export async function getQuickAddItems(user: User | null): Promise<NavItemType[]
   // Super Admin can always add users and brands
   if (user.role === 'Super Admin') {
     items.push({ href: '/admin/users/new', label: 'New User', icon: UserPlus });
-    items.push({ href: '/admin/companies', label: 'New Brand', icon: Building });
+    items.push({ href: '/admin/companies/new', label: 'New Brand', icon: Building });
   } 
   // Admin/Owner/Manager can add users
   else if (user.role === 'Admin' || user.role === 'Owner' || user.role === 'Manager') {
@@ -154,7 +154,7 @@ export async function getQuickAddItems(user: User | null): Promise<NavItemType[]
 
   // Admin/Owner can add child brands
   if (user.role === 'Admin' || user.role === 'Owner') {
-    items.push({ href: '/admin/companies', label: 'New Brand', icon: Building });
+    items.push({ href: '/admin/companies/new', label: 'New Brand', icon: Building });
   }
 
   // Check for brand-specific content creation
