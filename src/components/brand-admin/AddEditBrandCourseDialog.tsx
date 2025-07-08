@@ -186,16 +186,16 @@ export function AddEditBrandCourseDialog({ isOpen, setIsOpen, brandId, onCourseS
         }
 
         if (savedCourse) {
-            toast({ title: isEditing ? 'Brand Course Updated' : 'Brand Course Created', description: `"${savedCourse.title}" has been successfully saved.` });
+            toast({ title: isEditing ? 'Course Updated' : 'Course Created', description: `"${savedCourse.title}" has been successfully saved.` });
             onCourseSaved(savedCourse);
             handleClose(); // Close dialog on success
         } else {
-            throw new Error(isEditing ? "Failed to update brand course." : "Failed to create brand course.");
+            throw new Error(isEditing ? "Failed to update course." : "Failed to create course.");
         }
     } catch (error: any) {
         console.error("Failed to save brand course:", error);
         toast({
-            title: 'Error Saving Brand Course',
+            title: 'Error Saving Course',
             description: error instanceof Error ? error.message : 'An unknown error occurred.',
             variant: 'destructive',
         });
@@ -213,9 +213,9 @@ export function AddEditBrandCourseDialog({ isOpen, setIsOpen, brandId, onCourseS
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit Brand Course' : 'Add New Brand Course'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit My Course' : 'Add New Course'}</DialogTitle>
           <DialogDescription>
-            {isEditing ? 'Update the details of this brand-specific course.' : 'Fill in the details for the new course for your brand.'}
+            {isEditing ? 'Update the details of this course.' : 'Fill in the details for the new course.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -404,7 +404,7 @@ export function AddEditBrandCourseDialog({ isOpen, setIsOpen, brandId, onCourseS
               </DialogClose>
               <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isSaving || isUploading}>
                 {(isSaving || isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                {isEditing ? 'Save Changes' : 'Add Brand Course'}
+                {isEditing ? 'Save Changes' : 'Add Course'}
               </Button>
             </DialogFooter>
           </form>

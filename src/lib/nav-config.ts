@@ -1,3 +1,4 @@
+
 // src/lib/nav-config.ts
 import type { User, UserRole, Company } from '@/types/user';
 import {
@@ -69,14 +70,14 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
       { href: '/admin/companies', label: 'Brands', icon: Building, requiresCompanyId: true },
       { href: `/admin/companies/${user.companyId}/locations`, label: 'Locations', icon: MapPin, requiresCompanyId: true },
       {
-        label: 'Brand Content',
+        label: 'My Content',
         isDropdown: true,
         icon: Package,
         requiresCanManageCourses: true,
         subItems: [
-            { href: '/brand-admin/courses', label: "My Brand's Courses", icon: BookOpen },
-            { href: '/brand-admin/lessons', label: "My Brand's Lessons", icon: FileText },
-            { href: '/brand-admin/quizzes', label: "My Brand's Quizzes", icon: ListChecks },
+            { href: '/brand-admin/courses', label: "My Courses", icon: BookOpen },
+            { href: '/brand-admin/lessons', label: "My Lessons", icon: FileText },
+            { href: '/brand-admin/quizzes', label: "My Quizzes", icon: ListChecks },
         ]
       },
       { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },

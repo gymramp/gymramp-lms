@@ -119,12 +119,12 @@ export default function ManageBrandQuizQuestionsPage() {
   return (
     <div className="container mx-auto">
       <Button variant="outline" onClick={() => router.push('/brand-admin/quizzes')} className="mb-6">
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back to My Brand's Quizzes
+        <ArrowLeft className="mr-2 h-4 w-4" /> Back to My Quizzes
       </Button>
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-primary flex items-center gap-2"><HelpCircle className="h-7 w-7"/>{quiz.title}</h1>
-          <p className="text-muted-foreground">Manage Questions for Your Brand's Quiz</p>
+          <p className="text-muted-foreground">Manage Questions for My Quiz</p>
         </div>
         <Button onClick={handleAddQuestionClick} className="bg-accent hover:bg-accent/90 text-accent-foreground">
           <PlusCircle className="mr-2 h-4 w-4" /> Add New Question

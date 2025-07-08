@@ -98,7 +98,7 @@ export default function BrandAdminCoursesPage() {
       setFilteredCourses(coursesData);
     } catch (error) {
       console.error("Failed to fetch brand courses:", error);
-      toast({ title: "Error", description: "Could not fetch brand courses.", variant: "destructive" });
+      toast({ title: "Error", description: "Could not fetch courses.", variant: "destructive" });
       setCourses([]);
       setFilteredCourses([]);
     } finally {
@@ -155,7 +155,7 @@ export default function BrandAdminCoursesPage() {
       const success = await deleteBrandCourse(courseToDelete.id);
       if (success) {
         await fetchBrandCourses();
-        toast({ title: 'Brand Course Deleted', description: `Course "${courseToDelete.title}" deleted.` });
+        toast({ title: 'Course Deleted', description: `Course "${courseToDelete.title}" deleted.` });
       } else {
         throw new Error("Failed to delete brand course.");
       }
@@ -187,9 +187,9 @@ export default function BrandAdminCoursesPage() {
   return (
     <div className="container mx-auto">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">My Brand's Courses</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-primary">My Courses</h1>
         <Button onClick={handleAddCourse} className="bg-accent text-accent-foreground hover:bg-accent/90">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add New Brand Course
+          <PlusCircle className="mr-2 h-4 w-4" /> Add New Course
         </Button>
       </div>
 
@@ -207,14 +207,14 @@ export default function BrandAdminCoursesPage() {
       <Card>
         <CardHeader>
           <CardTitle>Course Library for {currentBrand.name}</CardTitle>
-          <CardDescription>Manage courses created specifically for your brand.</CardDescription>
+          <CardDescription>Manage courses created specifically for your account.</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="space-y-4 py-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
           ) : filteredCourses.length === 0 ? (
             <div className="text-center text-muted-foreground py-8">
-              {searchTerm ? `No brand courses found matching "${searchTerm}".` : "No brand courses created yet."}
+              {searchTerm ? `No courses found matching "${searchTerm}".` : "No courses created yet."}
             </div>
           ) : (
             <>
@@ -282,7 +282,7 @@ export default function BrandAdminCoursesPage() {
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete the brand course "{courseToDelete?.title}". This may also affect any users assigned to this course through brand-specific enrollments.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete the course "{courseToDelete?.title}". This may also affect any users assigned to this course through brand-specific enrollments.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setCourseToDelete(null)}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isDeleting}>

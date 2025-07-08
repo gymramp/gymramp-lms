@@ -98,7 +98,7 @@ export default function BrandAdminLessonsPage() {
       setFilteredLessons(lessonsData);
     } catch (error) {
       console.error("Failed to fetch brand lessons:", error);
-      toast({ title: "Error", description: "Could not fetch brand lessons.", variant: "destructive" });
+      toast({ title: "Error", description: "Could not fetch lessons.", variant: "destructive" });
       setLessons([]);
       setFilteredLessons([]);
     } finally {
@@ -155,7 +155,7 @@ export default function BrandAdminLessonsPage() {
       const success = await deleteBrandLessonAndCleanUp(lessonToDelete.id, currentUser.companyId);
       if (success) {
         await fetchBrandLessons();
-        toast({ title: 'Brand Lesson Deleted', description: `Lesson "${lessonToDelete.title}" deleted.` });
+        toast({ title: 'Lesson Deleted', description: `Lesson "${lessonToDelete.title}" deleted.` });
       } else {
         throw new Error("Failed to delete brand lesson.");
       }
@@ -187,9 +187,9 @@ export default function BrandAdminLessonsPage() {
   return (
     <div className="container mx-auto">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">My Brand's Lessons</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-primary">My Lessons</h1>
         <Button onClick={handleAddLesson} className="bg-accent text-accent-foreground hover:bg-accent/90">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add New Brand Lesson
+          <PlusCircle className="mr-2 h-4 w-4" /> Add New Lesson
         </Button>
       </div>
 
@@ -207,14 +207,14 @@ export default function BrandAdminLessonsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Lesson Library for {currentBrand.name}</CardTitle>
-          <CardDescription>Manage lessons created specifically for your brand.</CardDescription>
+          <CardDescription>Manage lessons created specifically for your account.</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="space-y-4 py-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
           ) : filteredLessons.length === 0 ? (
             <div className="text-center text-muted-foreground py-8">
-              {searchTerm ? `No lessons found matching "${searchTerm}".` : "No brand lessons created yet."}
+              {searchTerm ? `No lessons found matching "${searchTerm}".` : "No lessons created yet."}
             </div>
           ) : (
             <>
@@ -278,7 +278,7 @@ export default function BrandAdminLessonsPage() {
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete the brand lesson "{lessonToDelete?.title}". It will also be removed from any brand course curriculums it belongs to.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete the lesson "{lessonToDelete?.title}". It will also be removed from any course curriculums it belongs to.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setLessonToDelete(null)}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isDeleting}>

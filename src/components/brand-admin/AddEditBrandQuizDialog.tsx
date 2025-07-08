@@ -89,17 +89,17 @@ export function AddEditBrandQuizDialog({
 
       if (savedQuiz) {
         toast({
-          title: isEditing ? 'Brand Quiz Updated' : 'Brand Quiz Created',
+          title: isEditing ? 'Quiz Updated' : 'Quiz Created',
           description: `Quiz "${savedQuiz.title}" has been successfully saved. You can now add questions to it.`,
         });
         onQuizSaved(savedQuiz);
         handleClose();
       } else {
-        throw new Error('Failed to save brand quiz.');
+        throw new Error('Failed to save quiz.');
       }
     } catch (error: any) {
       toast({
-        title: 'Error Saving Brand Quiz',
+        title: 'Error Saving Quiz',
         description: error.message || 'An unknown error occurred.',
         variant: 'destructive',
       });
@@ -116,9 +116,9 @@ export function AddEditBrandQuizDialog({
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit Brand Quiz Title' : 'Create New Brand Quiz'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit My Quiz Title' : 'Create New Quiz'}</DialogTitle>
           <DialogDescription>
-            {isEditing ? 'Update the title of this brand-specific quiz.' : 'Enter the title for the new quiz for your brand. Questions can be added later.'}
+            {isEditing ? 'Update the title of this quiz.' : 'Enter the title for the new quiz.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>

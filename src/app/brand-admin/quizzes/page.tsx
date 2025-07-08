@@ -91,7 +91,7 @@ export default function BrandAdminQuizzesPage() {
       setFilteredQuizzes(quizzesData);
     } catch (error) {
       console.error("Failed to fetch brand quizzes:", error);
-      toast({ title: "Error", description: "Could not fetch brand quizzes.", variant: "destructive" });
+      toast({ title: "Error", description: "Could not fetch quizzes.", variant: "destructive" });
       setQuizzes([]); setFilteredQuizzes([]);
     } finally {
       setIsLoading(false);
@@ -125,7 +125,7 @@ export default function BrandAdminQuizzesPage() {
     try {
       await deleteBrandQuizAndCleanUp(quizToDelete.id, currentUser.companyId);
       await fetchBrandQuizzes();
-      toast({ title: 'Brand Quiz Deleted', description: `Quiz "${quizToDelete.title}" deleted.` });
+      toast({ title: 'Quiz Deleted', description: `Quiz "${quizToDelete.title}" deleted.` });
     } catch (error) {
       toast({ title: 'Error', description: `Failed to delete quiz.`, variant: 'destructive' });
     } finally {
@@ -145,9 +145,9 @@ export default function BrandAdminQuizzesPage() {
   return (
     <div className="container mx-auto">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">My Brand's Quizzes</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-primary">My Quizzes</h1>
         <Button onClick={handleAddQuiz} className="bg-accent text-accent-foreground hover:bg-accent/90">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add New Brand Quiz
+          <PlusCircle className="mr-2 h-4 w-4" /> Add New Quiz
         </Button>
       </div>
 
@@ -159,13 +159,13 @@ export default function BrandAdminQuizzesPage() {
       <Card>
         <CardHeader>
           <CardTitle>Quiz Library for {currentBrand.name}</CardTitle>
-          <CardDescription>Manage quizzes created specifically for your brand.</CardDescription>
+          <CardDescription>Manage quizzes created specifically for your account.</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="space-y-4 py-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
           ) : filteredQuizzes.length === 0 ? (
-            <div className="text-center text-muted-foreground py-8">{searchTerm ? `No brand quizzes found for "${searchTerm}".` : "No brand quizzes created yet."}</div>
+            <div className="text-center text-muted-foreground py-8">{searchTerm ? `No quizzes found for "${searchTerm}".` : "No quizzes created yet."}</div>
           ) : (
             <>
               <Table>
@@ -203,8 +203,8 @@ export default function BrandAdminQuizzesPage() {
                   </Select>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /> Prev</Button>
-                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>Next <ChevronRight className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}>Prev</Button>
+                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>Next</Button>
                 </div>
               </div>
             </>
@@ -224,7 +224,7 @@ export default function BrandAdminQuizzesPage() {
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the brand quiz "{quizToDelete?.title}" and all its questions. It will also be removed from any brand course curriculums.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the quiz "{quizToDelete?.title}" and all its questions. It will also be removed from any course curriculums.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setQuizToDelete(null)}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>

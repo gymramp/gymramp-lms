@@ -181,7 +181,7 @@ export function AddEditBrandLessonDialog({
       }
 
       if (savedLesson) {
-        toast({ title: isEditing ? 'Brand Lesson Updated' : 'Brand Lesson Created', description: `"${savedLesson.title}" saved.` });
+        toast({ title: isEditing ? 'Lesson Updated' : 'Lesson Created', description: `"${savedLesson.title}" saved.` });
         onLessonSaved(savedLesson);
         handleClose();
       } else {
@@ -203,10 +203,10 @@ export function AddEditBrandLessonDialog({
           <DialogHeader className="px-6 pt-6 pb-4 border-b">
             <div className="flex items-center space-x-2">
               <PlaySquare className="h-6 w-6 text-primary" />
-              <DialogTitle className="text-xl">{isEditing ? 'Edit Brand Lesson' : 'Create New Brand Lesson'}</DialogTitle>
+              <DialogTitle className="text-xl">{isEditing ? 'Edit My Lesson' : 'Create New Lesson'}</DialogTitle>
             </div>
             <DialogDescription>
-              {isEditing ? 'Update the details of this brand-specific lesson.' : 'Create a new lesson for your brand.'}
+              {isEditing ? 'Update the details of this lesson.' : 'Create a new lesson for your account.'}
             </DialogDescription>
           </DialogHeader>
 

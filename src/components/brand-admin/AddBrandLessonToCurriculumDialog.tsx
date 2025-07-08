@@ -42,7 +42,7 @@ export function AddBrandLessonToCurriculumDialog({
 
   const handleSubmit = () => {
     if (!selectedLessonId) {
-        toast({ title: "No Lesson Selected", description: "Please choose a brand lesson to add.", variant: "destructive" });
+        toast({ title: "No Lesson Selected", description: "Please choose a lesson to add.", variant: "destructive" });
         return;
     }
     onAddLesson(selectedLessonId);
@@ -59,20 +59,20 @@ export function AddBrandLessonToCurriculumDialog({
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Add Brand Lesson to Curriculum</DialogTitle>
+          <DialogTitle>Add Lesson to Curriculum</DialogTitle>
           <DialogDescription>
-            Select an existing lesson created by your brand to add to this course's curriculum.
+            Select an existing lesson created by you to add to this course's curriculum.
           </DialogDescription>
         </DialogHeader>
         <div className="py-4 space-y-4">
            <div className="space-y-2">
-            <Label htmlFor="brand-lesson-select">Available Brand Lessons</Label>
+            <Label htmlFor="brand-lesson-select">Available Lessons</Label>
             {availableLessons.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">No more brand lessons available to add, or all are already in the curriculum.</p>
+                <p className="text-sm text-muted-foreground italic">No more lessons available to add, or all are already in the curriculum.</p>
             ) : (
                 <Select value={selectedLessonId} onValueChange={setSelectedLessonId}>
                   <SelectTrigger id="brand-lesson-select">
-                    <SelectValue placeholder="Select a brand lesson..." />
+                    <SelectValue placeholder="Select a lesson..." />
                   </SelectTrigger>
                   <SelectContent>
                      <ScrollArea className="h-[200px]">

@@ -42,7 +42,7 @@ export function AddBrandQuizToCurriculumDialog({
 
   const handleSubmit = () => {
     if (!selectedQuizId) {
-        toast({ title: "No Quiz Selected", description: "Please choose a brand quiz to add.", variant: "destructive" });
+        toast({ title: "No Quiz Selected", description: "Please choose a quiz to add.", variant: "destructive" });
         return;
     }
     onAddQuiz(selectedQuizId);
@@ -59,20 +59,20 @@ export function AddBrandQuizToCurriculumDialog({
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Add Brand Quiz to Curriculum</DialogTitle>
+          <DialogTitle>Add Quiz to Curriculum</DialogTitle>
           <DialogDescription>
-            Select an existing quiz created by your brand to add to this course's curriculum.
+            Select an existing quiz created by you to add to this course's curriculum.
           </DialogDescription>
         </DialogHeader>
         <div className="py-4 space-y-4">
            <div className="space-y-2">
-            <Label htmlFor="brand-quiz-select">Available Brand Quizzes</Label>
+            <Label htmlFor="brand-quiz-select">Available Quizzes</Label>
             {availableQuizzes.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">No more brand quizzes available to add, or all are already in the curriculum.</p>
+                <p className="text-sm text-muted-foreground italic">No more quizzes available to add, or all are already in the curriculum.</p>
             ) : (
                 <Select value={selectedQuizId} onValueChange={setSelectedQuizId}>
                   <SelectTrigger id="brand-quiz-select">
-                    <SelectValue placeholder="Select a brand quiz..." />
+                    <SelectValue placeholder="Select a quiz..." />
                   </SelectTrigger>
                   <SelectContent>
                      <ScrollArea className="h-[200px]">
