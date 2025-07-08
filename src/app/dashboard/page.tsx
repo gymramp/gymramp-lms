@@ -1,3 +1,4 @@
+
 // src/app/dashboard/page.tsx
 'use client';
 
@@ -5,8 +6,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, TrendingUp, Award, UserCheck, BookOpen, MapPin, Building, Activity, ChevronLeft, ChevronRight, Loader2, Layers, Info, ShieldCheck, PlusCircle } from "lucide-react";
 import { EmployeeTable } from "@/components/dashboard/EmployeeTable";
-import { AddUserDialog } from '@/components/admin/AddUserDialog'; // Changed path
-// EditUserDialog and AssignCourseDialog are removed as their functionality moves to a new page
 import type { User, Company, Location, UserRole } from '@/types/user';
 import type { Course, BrandCourse, Program } from '@/types/course';
 import type { ActivityLog } from '@/types/activity';
@@ -27,6 +26,7 @@ import { useRouter } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { StatCard } from '@/components/dashboard/StatCard';
 import { format, subDays } from 'date-fns';
+import Link from 'next/link';
 
 const DEFAULT_ROWS_PER_PAGE = 5;
 
@@ -74,8 +74,6 @@ export default function DashboardPage() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isLoadingBrandDataForFilters, setIsLoadingBrandDataForFilters] = useState(true);
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
-  const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false);
-  const [lastGeneratedPassword, setLastGeneratedPassword] = useState<string | null>(null);
   const [selectedBrandIdForDashboard, setSelectedBrandIdForDashboard] = useState<string>('');
   const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
 
@@ -143,7 +141,7 @@ export default function DashboardPage() {
     if (!currentUser || isAuthLoading || isLoadingBrandDataForFilters || !selectedBrandIdForDashboard) {
       setEmployees([]); setIsLoadingEmployees(false); return;
     }
-    setIsLoadingEmployees(true); setLastGeneratedPassword(null);
+    setIsLoadingEmployees(true);
     try {
       let usersToProcess: User[] = [];
       if (currentUser.role === 'Super Admin') {
@@ -196,22 +194,6 @@ export default function DashboardPage() {
     setFilteredEmployees(tempUsers);
     setActiveCurrentPage(1); setInactiveCurrentPage(1);
   }, [employees, selectedLocationId, currentUser, isLoadingEmployees, selectedBrandIdForDashboard, allSystemLocations]);
-
-  const refreshDashboardData = (newUser?: User, tempPassword?: string) => {
-    if (tempPassword) setLastGeneratedPassword(tempPassword); else setLastGeneratedPassword(null);
-    if (currentUser) fetchEmployeesAndAssignableCourses();
-  };
-
-  const handleAddEmployeeClick = () => {
-    if (!currentUser) return;
-    if ((currentUser.role === 'Super Admin' && viewableBrandsForFilter.length === 0 && (selectedBrandIdForDashboard === 'all' || !selectedBrandIdForDashboard ))) {
-      toast({ title: "Cannot Add User", variant: "destructive" }); return;
-    }
-    if (currentUser.role !== 'Super Admin' && !currentUser.companyId) {
-      toast({ title: "Cannot Add User", variant: "destructive" }); return;
-    }
-    setLastGeneratedPassword(null); setIsAddUserDialogOpen(true);
-  };
   
   const handleToggleUserStatus = async (userId: string, userName: string, currentIsActive: boolean) => {
     if (!currentUser || currentUser.id === userId) {
@@ -279,9 +261,14 @@ export default function DashboardPage() {
     <div className="container mx-auto flex-1 space-y-4 pb-6">
       <div className="flex items-center justify-between space-y-2">
         <div> <h1 className="text-3xl font-bold text-primary">{displayBrandNameForTitle} Dashboard</h1> <p className="text-muted-foreground flex items-center gap-2"> <MapPin className="h-4 w-4" /> {displayLocationName ? `Viewing: ${displayLocationName}` : 'Overview'} </p> </div>
-        <div className="flex items-center space-x-2"> {currentUser && ['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role) && ( <Button onClick={handleAddEmployeeClick} className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={isLoadingEmployees || isLoadingBrandDataForFilters || (currentUser.role === 'Super Admin' && viewableBrandsForFilter.length === 0 && (selectedBrandIdForDashboard === 'all' || !selectedBrandIdForDashboard))} title={(currentUser.role === 'Super Admin' && viewableBrandsForFilter.length === 0 && (selectedBrandIdForDashboard === 'all' || !selectedBrandIdForDashboard)) ? "Add a brand first" : ""}> <PlusCircle className="mr-2 h-4 w-4" /> Add Employee </Button> )} </div>
+        <div className="flex items-center space-x-2"> {currentUser && ['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role) && ( 
+            <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={isLoadingEmployees || isLoadingBrandDataForFilters || (currentUser.role === 'Super Admin' && viewableBrandsForFilter.length === 0 && (selectedBrandIdForDashboard === 'all' || !selectedBrandIdForDashboard))} title={(currentUser.role === 'Super Admin' && viewableBrandsForFilter.length === 0 && (selectedBrandIdForDashboard === 'all' || !selectedBrandIdForDashboard)) ? "Add a brand first" : ""}> 
+                <Link href="/admin/users/new">
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add Employee 
+                </Link>
+            </Button> 
+        )} </div>
       </div>
-      {lastGeneratedPassword && ( <Alert variant="success" className="mb-6"> <ShieldCheck className="h-4 w-4" /> <AlertTitle>New User Added!</AlertTitle> <AlertDescription> Temporary password: <strong className="font-bold">{lastGeneratedPassword}</strong>. Welcome email sent. <Button variant="ghost" size="sm" onClick={() => setLastGeneratedPassword(null)} className="ml-4">Dismiss</Button> </AlertDescription> </Alert> )}
       <div className="flex flex-wrap items-end gap-4 mb-6 p-4 bg-secondary rounded-lg shadow-sm">
         <h2 className="text-lg font-semibold mr-4 self-center text-foreground">Filters:</h2>
           <div className="flex flex-col space-y-1"> <Label htmlFor="brand-filter-dashboard" className="text-sm text-muted-foreground">Brand</Label>
@@ -355,7 +342,6 @@ export default function DashboardPage() {
             <div className="flex items-center justify-end gap-2 pt-4 border-t mt-4"> <Label htmlFor="rows-per-page">Rows:</Label> <Select value={rowsPerPage === 'all' ? 'all' : String(rowsPerPage)} onValueChange={handleRowsPerPageChange}> <SelectTrigger id="rows-per-page" className="w-[80px]"> <SelectValue /> </SelectTrigger> <SelectContent> <SelectItem value="5">5</SelectItem> <SelectItem value="10">10</SelectItem> <SelectItem value="15">15</SelectItem> <SelectItem value="all">All</SelectItem> </SelectContent> </Select> </div>
           </CardContent> </Card>
       </div>
-      {isAddUserDialogOpen && currentUser && ( <AddUserDialog onUserAdded={refreshDashboardData} isOpen={isAddUserDialogOpen} setIsOpen={setIsAddUserDialogOpen} companies={viewableBrandsForFilter} locations={allSystemLocations} currentUser={currentUser}/> )}
     </div>
   );
 }

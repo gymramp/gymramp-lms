@@ -23,13 +23,13 @@ import { useToast } from '@/hooks/use-toast';
 import type { UserRole, User, Company, Location } from '@/types/user';
 import { getUserByEmail, toggleUserStatus as toggleUserDataStatus, getAllUsers as fetchAllSystemUsers, getUsersByCompanyId } from '@/lib/user-data';
 import { getCompanyById, getLocationsByCompanyId, getAllLocations as fetchAllSystemLocations, getAllCompanies as fetchAllAccessibleBrandsForUser } from '@/lib/company-data';
-import { AddUserDialog } from '@/components/admin/AddUserDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { EmployeeTable } from '@/components/dashboard/EmployeeTable';
+import Link from 'next/link';
 // AssignCourseDialog and EditUserDialog are removed as their functionality moves to a new page
 
 type EmployeeWithOverallProgress = User & {
@@ -42,7 +42,6 @@ export default function AdminUsersPage() {
   const [filteredUsers, setFilteredUsers] = useState<EmployeeWithOverallProgress[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingFilters, setIsLoadingFilters] = useState(true);
-  const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [accessibleBrandsForFilter, setAccessibleBrandsForFilter] = useState<Company[]>([]);
   const [allSystemLocations, setAllSystemLocations] = useState<Location[]>([]);
@@ -158,25 +157,6 @@ export default function AdminUsersPage() {
     setFilteredUsers(tempUsers);
   }, [users, selectedLocationIdForFilter, currentUser, isLoading]);
 
-  const refreshUsersAndShowPassword = (user: User, tempPassword?: string) => {
-     fetchUsersForCurrentFilters();
-     if (tempPassword) setLastGeneratedPasswordForNewUser(tempPassword);
- };
-
-  const handleAddUserClick = () => {
-     if (!currentUser || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role)) {
-       toast({ title: "Permission Denied", variant: "destructive"}); return;
-     }
-     if (currentUser.role === 'Super Admin' && accessibleBrandsForFilter.length === 0 && (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter)) {
-        toast({ title: "No Brands Exist", variant: "destructive"}); return;
-     }
-     if (currentUser.role !== 'Super Admin' && !currentUser.companyId) {
-        toast({ title: "Brand Required", variant: "destructive"}); return;
-     }
-    setLastGeneratedPasswordForNewUser(null);
-    setIsAddUserDialogOpen(true);
-  };
-
   const handleToggleUserStatus = async (userId: string, userName: string, currentIsActive: boolean) => {
     if (!currentUser || currentUser.id === userId) {
         toast({ title: "Action Denied", description: "You cannot change your own status.", variant: "destructive"}); return;
@@ -218,10 +198,12 @@ export default function AdminUsersPage() {
        <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-primary">User Management</h1>
          <div className="flex items-center gap-2">
-            <Button onClick={handleAddUserClick} className="bg-accent text-accent-foreground hover:bg-accent/90"
+            <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90"
                 disabled={isLoadingFilters || !currentUser || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role) || (currentUser.role === 'Super Admin' && accessibleBrandsForFilter.length === 0 && (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter))}
                 title={ (currentUser?.role === 'Super Admin' && accessibleBrandsForFilter.length === 0 && (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter)) ? "Add a brand first" : ""} >
-                <PlusCircle className="mr-2 h-4 w-4" /> Add New User
+                <Link href="/admin/users/new">
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add New User
+                </Link>
             </Button>
          </div>
         </div>
@@ -294,15 +276,6 @@ export default function AdminUsersPage() {
            )}
        </CardContent>
       </Card>
-
-      <AddUserDialog
-        onUserAdded={refreshUsersAndShowPassword}
-        isOpen={isAddUserDialogOpen}
-        setIsOpen={setIsAddUserDialogOpen}
-        companies={accessibleBrandsForFilter}
-        locations={allSystemLocations}
-        currentUser={currentUser}
-      />
     </div>
   );
 }
