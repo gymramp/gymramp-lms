@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -27,6 +26,46 @@ export function AiChatAssistant({ currentUser }: AiChatAssistantProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  // Load chat history from localStorage when the component mounts or the user changes.
+  useEffect(() => {
+    if (currentUser) {
+      try {
+        const key = `chatHistory_${currentUser.id}`;
+        const savedMessages = localStorage.getItem(key);
+        if (savedMessages) {
+          setMessages(JSON.parse(savedMessages));
+        } else {
+          // If no history, start with a welcome message.
+          setMessages([
+            { role: 'assistant', content: `Hello ${currentUser.name}! I'm your AI support assistant. How can I help you today?` }
+          ]);
+        }
+      } catch (error) {
+        console.error("Failed to load chat history from localStorage:", error);
+        // On error, start with a fresh welcome message.
+        setMessages([
+          { role: 'assistant', content: `Hello ${currentUser.name}! I'm your AI support assistant. How can I help you today?` }
+        ]);
+      }
+    } else {
+      // Clear messages if there's no user.
+      setMessages([]);
+    }
+  }, [currentUser]); // This effect depends on the user object.
+
+  // Save chat history to localStorage whenever messages change.
+  useEffect(() => {
+    if (currentUser && messages.length > 0) {
+      try {
+        const key = `chatHistory_${currentUser.id}`;
+        localStorage.setItem(key, JSON.stringify(messages));
+      } catch (error) {
+        console.error("Failed to save chat history to localStorage:", error);
+      }
+    }
+  }, [messages, currentUser]);
+
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -64,11 +103,6 @@ export function AiChatAssistant({ currentUser }: AiChatAssistantProps) {
 
   const handleSheetOpenChange = (open: boolean) => {
     setIsOpen(open);
-    if (open && messages.length === 0) {
-      setMessages([
-        { role: 'assistant', content: `Hello ${currentUser?.name || 'there'}! I'm your AI support assistant. How can I help you today?` }
-      ]);
-    }
   };
 
   return (
