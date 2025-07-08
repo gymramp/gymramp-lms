@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image'; // Import Image
+import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
@@ -29,9 +29,13 @@ export function Footer() {
       {/* Adjusted padding classes and removed md:h-24 */}
       <div className="container flex flex-col items-center justify-between gap-4 py-6 md:flex-row md:py-8">
         <div className="flex flex-col items-center gap-4 px-8 md:flex-row md:gap-2 md:px-0">
-          <h2 className="text-lg font-bold text-primary">
-            Gymramp
-          </h2>
+          <Image
+            src="/images/newlogo.png"
+            alt="Gymramp Logo"
+            width={120}
+            height={30}
+            className="max-h-[30px] w-auto"
+          />
           <p className="text-center text-sm leading-loose text-muted-foreground md:text-left">
             Built by GYMRAMP. © {new Date().getFullYear()} All rights reserved.
           </p>

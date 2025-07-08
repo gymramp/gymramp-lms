@@ -115,7 +115,9 @@ export async function sendNewUserWelcomeEmail(to: string, name: string, temporar
                 <td align="center" style="padding: 0;">
                     <div class="email-container" style="width: 100%; max-width: 600px; margin: 0 auto; background-color: #202124; padding: 0;">
                         <div class="header" style="padding: 20px 30px; text-align: left; border-bottom: 1px solid #3c4043;">
-                            <a href="${loginUrl}" class="header-app-name" style="font-size: 20px; font-weight: bold; color: #E8EAED; text-decoration: none;">${appName}</a>
+                            <a href="${loginUrl}" style="text-decoration: none;">
+                                <img src="${appLogoUrlEmail || `${process.env.NEXT_PUBLIC_APP_URL}/images/newlogo.png`}" alt="${appName} Logo" style="max-height: 45px; width: auto; border: 0;" />
+                            </a>
                         </div>
                         <div class="content" style="padding: 30px 30px; text-align: center;">
                             <h1 class="welcome-text" style="font-size: 28px; font-weight: bold; color: #FFFFFF; margin-top: 0; margin-bottom: 10px;">Welcome to ${appName}, ${name}!</h1>
