@@ -18,7 +18,7 @@ import { getUserByEmail } from '@/lib/user-data';
 import type { User } from '@/types/user';
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from '@/components/ui/skeleton';
-import { LogOut, PlusCircle } from 'lucide-react';
+import { LogOut, PlusCircle, MoreVertical } from 'lucide-react';
 
 export function Sidebar() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -182,35 +182,41 @@ export function Sidebar() {
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center justify-start gap-2 h-auto px-2 py-2 w-full text-left">
-              <Avatar className="h-9 w-9">
-                <AvatarImage src={currentUser.profileImageUrl || undefined} alt={currentUser.name || 'User Avatar'} />
-                <AvatarFallback>{getInitials(currentUser.name)}</AvatarFallback>
-              </Avatar>
-              <div className="flex-1 overflow-hidden">
-                <p className="font-semibold text-sm truncate">{currentUser.name}</p>
-                <p className="text-xs text-muted-foreground truncate">{currentUser.email}</p>
-              </div>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56" align="end" side="top">
-            {userMenuItems.map((item) => (
-              <DropdownMenuItem key={item.label} asChild className="cursor-pointer">
-                <Link href={item.href || '#'} className="flex items-center gap-2">
-                  {item.icon && <item.icon className="mr-2 h-4 w-4" />}
-                  <span>{item.label}</span>
-                </Link>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center justify-start gap-2 h-auto px-2 py-2 text-left flex-1 overflow-hidden">
+            <Avatar className="h-9 w-9">
+              <AvatarImage src={currentUser.profileImageUrl || undefined} alt={currentUser.name || 'User Avatar'} />
+              <AvatarFallback>{getInitials(currentUser.name)}</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 overflow-hidden">
+              <p className="font-semibold text-sm truncate">{currentUser.name}</p>
+              <p className="text-xs text-muted-foreground truncate">{currentUser.email}</p>
+            </div>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
+                <MoreVertical className="h-4 w-4" />
+                <span className="sr-only">Open user menu</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56" align="end" side="top">
+              {userMenuItems.map((item) => (
+                <DropdownMenuItem key={item.label} asChild className="cursor-pointer">
+                  <Link href={item.href || '#'} className="flex items-center gap-2">
+                    {item.icon && <item.icon className="mr-2 h-4 w-4" />}
+                    <span>{item.label}</span>
+                  </Link>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10">
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Logout</span>
               </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10">
-              <LogOut className="mr-2 h-4 w-4" />
-              <span>Logout</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </aside>
   );
