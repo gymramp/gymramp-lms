@@ -1,8 +1,29 @@
 
+'use client';
+
 import Link from 'next/link';
 import Image from 'next/image'; // Import Image
+import { useState, useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 export function Footer() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAuthCheckComplete, setIsAuthCheckComplete] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsLoggedIn(!!user);
+      setIsAuthCheckComplete(true);
+    });
+
+    return () => unsubscribe();
+  }, []);
+  
+  if (!isAuthCheckComplete || isLoggedIn) {
+    return null; // Don't render anything if auth is checking or if user is logged in
+  }
+  
   return (
     <footer className="border-t bg-secondary">
       {/* Adjusted padding classes and removed md:h-24 */}
