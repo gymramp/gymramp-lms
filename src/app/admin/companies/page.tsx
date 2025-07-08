@@ -37,7 +37,7 @@ import { PlusCircle, MoreHorizontal, Trash2, Edit, Users, MapPin, Loader2, Build
 import { useToast } from '@/hooks/use-toast';
 import type { Company, User, CompanyFormData } from '@/types/user';
 import type { Program } from '@/types/course'; // Import Program type
-import { getAllCompanies, deleteCompany } from '@/lib/company-data';
+import { getAllCompanies, deleteCompany, getLocationsByCompanyId } from '@/lib/company-data';
 import { getAllPrograms } from '@/lib/firestore-data'; // Import getAllPrograms
 import { getUserCountByCompanyId } from '@/lib/user-data';
 import { Skeleton } from '@/components/ui/skeleton';
