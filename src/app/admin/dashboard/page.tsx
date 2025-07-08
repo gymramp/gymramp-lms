@@ -1,4 +1,3 @@
-
 // src/app/admin/dashboard/page.tsx
 'use client';
 
@@ -17,6 +16,20 @@ import type { User, Company } from '@/types/user';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
+import { StatCard } from '@/components/dashboard/StatCard';
+
+// Helper function to generate mock chart data
+const generateChartData = (baseValue: number) => {
+  if (baseValue === 0) return Array(30).fill({ value: 0 });
+  const data = [];
+  let currentValue = baseValue * 0.8; // Start at 80% of the final value
+  for (let i = 0; i < 30; i++) {
+    const fluctuation = (Math.random() - 0.45) * (currentValue * 0.1); // Fluctuate by up to 10%
+    currentValue += fluctuation + (baseValue * 0.2 / 30); // Add a small upward trend
+    data.push({ value: Math.max(0, Math.round(currentValue)) });
+  }
+  return data;
+};
 
 export default function SuperAdminDashboardPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -123,6 +136,7 @@ export default function SuperAdminDashboardPage() {
               <CardContent>
                 <Skeleton className="h-8 w-1/2" />
                 <Skeleton className="h-4 w-3/4 mt-1" />
+                 <Skeleton className="h-20 w-full mt-4" />
               </CardContent>
             </Card>
           ))}
@@ -170,46 +184,46 @@ export default function SuperAdminDashboardPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="card-lift-hover">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-            <Users className="h-5 w-5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalUsers}</div>
-            <p className="text-xs text-muted-foreground">All registered users</p>
-          </CardContent>
-        </Card>
-        <Card className="card-lift-hover">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Courses</CardTitle>
-            <BookOpen className="h-5 w-5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalCourses}</div>
-            <p className="text-xs text-muted-foreground">Courses in the library</p>
-          </CardContent>
-        </Card>
-        <Card className="card-lift-hover">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Brands</CardTitle>
-            <Building className="h-5 w-5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalCompanies}</div>
-            <p className="text-xs text-muted-foreground">Registered brands</p>
-          </CardContent>
-        </Card>
-        <Card className="card-lift-hover">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sales (Last 30 Days)</CardTitle>
-            <CreditCard className="h-5 w-5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${totalRecentSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            <p className="text-xs text-muted-foreground">From new paid checkouts</p>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Total Users"
+          value={totalUsers}
+          description="All registered users"
+          icon={Users}
+          chartData={generateChartData(totalUsers)}
+          chartColor="hsl(var(--chart-1))"
+          change="+5.2%"
+          changeVariant="default"
+        />
+        <StatCard
+          title="Total Courses"
+          value={totalCourses}
+          description="Courses in the library"
+          icon={BookOpen}
+          chartData={generateChartData(totalCourses)}
+          chartColor="hsl(var(--chart-2))"
+          change="+2.1%"
+          changeVariant="default"
+        />
+        <StatCard
+          title="Total Brands"
+          value={totalCompanies}
+          description="Registered brands"
+          icon={Building}
+          chartData={generateChartData(totalCompanies)}
+          chartColor="hsl(var(--chart-3))"
+          change="+1.5%"
+          changeVariant="default"
+        />
+        <StatCard
+          title="Sales (30 Days)"
+          value={`$${totalRecentSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          description="From new paid checkouts"
+          icon={CreditCard}
+          chartData={generateChartData(totalRecentSales)}
+          chartColor="hsl(var(--chart-5))"
+          change="+12%"
+          changeVariant="default"
+        />
       </div>
 
       <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6">

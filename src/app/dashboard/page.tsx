@@ -1,4 +1,3 @@
-
 // src/app/dashboard/page.tsx
 'use client';
 
@@ -26,6 +25,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { StatCard } from '@/components/dashboard/StatCard';
 
 const DEFAULT_ROWS_PER_PAGE = 5;
 
@@ -38,6 +38,18 @@ type EmployeeWithOverallProgress = User & {
     overallStatus: "Not Started" | "Started" | "In Progress" | "Completed";
 };
 
+// Helper function to generate mock chart data
+const generateChartData = (baseValue: number, max: number = 100) => {
+    if (baseValue === 0) return Array(30).fill({ value: 0 });
+    const data = [];
+    let currentValue = baseValue * 0.8; // Start at 80% of the final value
+    for (let i = 0; i < 30; i++) {
+        const fluctuation = (Math.random() - 0.45) * (currentValue * 0.1); // Fluctuate by up to 10%
+        currentValue += fluctuation + (baseValue * 0.2 / 30); // Add a small upward trend
+        data.push({ value: Math.max(0, Math.min(max, Math.round(currentValue))) });
+    }
+    return data;
+};
 
 export default function DashboardPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -214,14 +226,6 @@ export default function DashboardPage() {
     }
   };
 
-  const handleResetFilters = () => {
-      let initialBrandId = '';
-      if (currentUser?.role === 'Super Admin') initialBrandId = 'all';
-      else if (currentUser?.companyId) initialBrandId = currentUser.companyId;
-      setSelectedBrandIdForDashboard(initialBrandId);
-      setSelectedLocationId('all');
-  };
-
   const activeEmployees = useMemo(() => filteredEmployees.filter(emp => emp.isActive), [filteredEmployees]);
   const inactiveEmployees = useMemo(() => filteredEmployees.filter(emp => !emp.isActive), [filteredEmployees]);
   const currentRowsPerPage = rowsPerPage === 'all' ? Infinity : rowsPerPage;
@@ -243,7 +247,12 @@ export default function DashboardPage() {
   const displayLocationName = selectedLocationId === 'all' ? 'All Locations' : allSystemLocations.find(l => l.id === selectedLocationId)?.name || '';
   const pageIsLoading = isAuthLoading || isLoadingBrandDataForFilters;
 
-  if (pageIsLoading || !currentUser) return ( <div className="container mx-auto flex-1 space-y-4"> <Skeleton className="h-8 w-1/3 mb-4" /> <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"> {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)} </div> <div className="grid gap-4"> <Skeleton className="h-64" /> </div> </div> );
+  if (pageIsLoading || !currentUser) return ( <div className="container mx-auto flex-1 space-y-4"> <Skeleton className="h-8 w-1/3 mb-4" /> <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"> {[...Array(4)].map((_, i) => (
+    <Card key={i}>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><Skeleton className="h-6 w-1/3" /><Skeleton className="h-6 w-6 rounded-full" /></CardHeader>
+      <CardContent><Skeleton className="h-8 w-1/2" /><Skeleton className="h-4 w-3/4 mt-1" /><Skeleton className="h-20 mt-4 w-full" /></CardContent>
+    </Card>
+  ))} </div> <div className="grid gap-4"> <Skeleton className="h-64" /> </div> </div> );
   if (!userPrimaryBrand && currentUser.role !== 'Super Admin') return <div className="container mx-auto text-center">Error: User not associated with a primary brand.</div>;
 
   return (
@@ -274,10 +283,47 @@ export default function DashboardPage() {
         <Button variant="outline" onClick={() => { setSelectedBrandIdForDashboard(userPrimaryBrand?.id || (currentUser?.role === 'Super Admin' ? 'all' : '')); setSelectedLocationId('all');}} className="h-10 self-end" disabled={isLoadingBrandDataForFilters}>Reset</Button>
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="card-lift-hover"> <CardHeader className="flex flex-row items-center justify-between pb-2"> <CardTitle className="text-sm font-medium">Active Employees</CardTitle> <UserCheck className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">{isLoadingEmployees ? <Loader2 className="h-6 w-6 animate-spin"/> : totalActiveFiltered}</div> <p className="text-xs text-muted-foreground">{isLoadingEmployees ? '...' : `${inactiveEmployees.length} inactive`}</p> </CardContent> </Card>
-        <Card className="card-lift-hover"> <CardHeader className="flex flex-row items-center justify-between pb-2"> <CardTitle className="text-sm font-medium">Assignable Courses</CardTitle> <BookOpen className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">N/A</div> <p className="text-xs text-muted-foreground">Contextual count</p> </CardContent> </Card>
-        <Card className="card-lift-hover"> <CardHeader className="flex flex-row items-center justify-between pb-2"> <CardTitle className="text-sm font-medium">Avg. Completion</CardTitle> <TrendingUp className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">{isLoadingEmployees ? <Loader2 className="h-6 w-6 animate-spin"/> : `${avgCompletion}%`}</div> <p className="text-xs text-muted-foreground">Overall, active users</p> </CardContent> </Card>
-        <Card className="card-lift-hover"> <CardHeader className="flex flex-row items-center justify-between pb-2"> <CardTitle className="text-sm font-medium">Certificates</CardTitle> <Award className="h-4 w-4 text-muted-foreground" /> </CardHeader> <CardContent> <div className="text-2xl font-bold">{isLoadingEmployees ? <Loader2 className="h-6 w-6 animate-spin"/> : `+${certificatesIssued}`}</div> <p className="text-xs text-muted-foreground">Issued (Overall)</p> </CardContent> </Card>
+        <StatCard
+          title="Active Employees"
+          value={isLoadingEmployees ? <Loader2 className="h-6 w-6 animate-spin"/> : totalActiveFiltered}
+          description={`${inactiveEmployees.length} inactive`}
+          icon={UserCheck}
+          chartData={generateChartData(totalActiveFiltered)}
+          chartColor="hsl(var(--chart-1))"
+          change="+2.5%"
+          changeVariant="default"
+        />
+        <StatCard
+          title="Avg. Completion"
+          value={isLoadingEmployees ? <Loader2 className="h-6 w-6 animate-spin"/> : `${avgCompletion}%`}
+          description="Overall for active users"
+          icon={TrendingUp}
+          chartData={generateChartData(avgCompletion, 100)}
+          chartColor="hsl(var(--chart-2))"
+          change="+1.8%"
+          changeVariant="default"
+        />
+        <StatCard
+          title="Certificates Issued"
+          value={isLoadingEmployees ? <Loader2 className="h-6 w-6 animate-spin"/> : `+${certificatesIssued}`}
+          description="Total completions"
+          icon={Award}
+          chartData={generateChartData(certificatesIssued)}
+          chartColor="hsl(var(--chart-3))"
+          change="-0.5%"
+          changeVariant="destructive"
+        />
+        <Card className="card-lift-hover">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Assignable Courses</CardTitle>
+                <BookOpen className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">N/A</div>
+                <p className="text-xs text-muted-foreground">Contextual count</p>
+                <div className="h-20 mt-4"></div>
+            </CardContent>
+        </Card>
       </div>
       <div className="flex flex-col space-y-4 pt-6"> <Card className="card-lift-hover"> <CardHeader> <CardTitle>Team Management</CardTitle> </CardHeader>
           <CardContent> <Tabs defaultValue="active" className="w-full"> <TabsList className="grid w-full grid-cols-2 mb-4"> <TabsTrigger value="active">Active ({activeEmployees.length})</TabsTrigger> <TabsTrigger value="inactive">Inactive ({inactiveEmployees.length})</TabsTrigger> </TabsList>
