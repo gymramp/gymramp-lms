@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -26,7 +25,7 @@ export function AiChatAssistant() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -79,15 +78,17 @@ export function AiChatAssistant() {
     }
   }, [messages, currentUser]);
 
-
   useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTo({
-        top: scrollAreaRef.current.scrollHeight,
-        behavior: 'smooth',
-      });
+    if (messages.length) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 100);
+    }
+  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,7 +143,7 @@ export function AiChatAssistant() {
             Gymramp Help and Support
           </SheetTitle>
         </SheetHeader>
-        <ScrollArea className="flex-1 p-4" ref={scrollAreaRef as any}>
+        <ScrollArea className="flex-1 p-4">
           <div className="space-y-6">
             {messages.map((message, index) => (
               <div key={index} className={cn("flex items-start gap-3", message.role === 'user' ? 'justify-end' : '')}>
@@ -186,6 +187,7 @@ export function AiChatAssistant() {
                 </div>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
         <div className="p-4 border-t bg-background">
