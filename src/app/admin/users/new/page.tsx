@@ -9,7 +9,7 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -209,22 +209,39 @@ export default function AddNewUserPage() {
           </Alert>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField control={form.control} name="name" render={({ field }) => ( <FormItem> <FormLabel>Full Name</FormLabel> <FormControl><Input placeholder="John Doe" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
-              <FormField control={form.control} name="email" render={({ field }) => ( <FormItem> <FormLabel>Email Address</FormLabel> <FormControl><Input type="email" placeholder="john.doe@example.com" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+              <FormField control={form.control} name="name" render={({ field }) => ( 
+                <FormItem> 
+                  <FormLabel>Full Name</FormLabel> 
+                  <FormControl><Input placeholder="John Doe" {...field} /></FormControl>
+                  <FormDescription>The user's full name for certificates and display.</FormDescription>
+                  <FormMessage /> 
+                </FormItem> 
+              )} />
+              <FormField control={form.control} name="email" render={({ field }) => ( 
+                <FormItem> 
+                  <FormLabel>Email Address</FormLabel> 
+                  <FormControl><Input type="email" placeholder="john.doe@example.com" {...field} /></FormControl> 
+                  <FormDescription>The email address the user will use to log in.</FormDescription>
+                  <FormMessage /> 
+                </FormItem> 
+              )} />
               
               <FormField control={form.control} name="companyId" render={({ field }) => (
-                <FormItem> <FormLabel>Brand</FormLabel>
+                <FormItem> 
+                  <FormLabel>Brand</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value} disabled={currentUser?.role !== 'Super Admin' && companies.length <= 1}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl>
                     <SelectContent>{companies.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}</SelectContent>
                   </Select>
+                  <FormDescription>Assigns the user to a specific company or brand.</FormDescription>
                   {isUserLimitReached && <p className="text-xs font-medium text-destructive mt-1">User limit reached for this brand.</p>}
                   <FormMessage />
                 </FormItem>
               )} />
               
               <FormField control={form.control} name="assignedLocationIds" render={({ field }) => (
-                <FormItem> <FormLabel>Assign to Locations (Optional)</FormLabel>
+                <FormItem> 
+                  <FormLabel>Assign to Locations (Optional)</FormLabel>
                   <FormControl>
                     <ScrollArea className="h-40 w-full rounded-md border p-4">
                       {locationsForSelectedBrand.length > 0 ? (
@@ -235,16 +252,29 @@ export default function AddNewUserPage() {
                         ))}</div>
                       ) : (<div className="text-sm text-muted-foreground italic h-full flex items-center justify-center">{selectedCompanyIdForm ? 'No locations for this brand.' : 'Select a brand first.'}</div>)}
                     </ScrollArea>
-                  </FormControl> <FormMessage />
+                  </FormControl> 
+                  <FormDescription>Determines which location-specific data the user can access or be associated with.</FormDescription>
+                  <FormMessage />
                 </FormItem>
               )} />
 
               <FormField control={form.control} name="role" render={({ field }) => (
-                <FormItem> <FormLabel>User Role</FormLabel>
+                <FormItem> 
+                  <FormLabel>User Role</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value} disabled={assignableRoles.length === 0}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger></FormControl>
-                    <SelectContent>{assignableRoles.map((r) => (<SelectItem key={r} value={r}>{r}</SelectItem>))}</SelectContent>
+                    <SelectContent>
+                      {assignableRoles.map((r) => (<SelectItem key={r} value={r}>{r}</SelectItem>))}
+                      {ASSIGNABLE_ROLES_BY_ADMINS.filter(r => !assignableRoles.includes(r) && r !== 'Super Admin').map(r => ( <SelectItem key={r} value={r} disabled>{r} (Permission Denied)</SelectItem> ))}
+                    </SelectContent>
                   </Select>
+                   <FormDescription>
+                      <ul className="list-disc pl-4 text-xs space-y-1 mt-2">
+                        <li><strong>Admin/Owner:</strong> Full control over their brand & child brands.</li>
+                        <li><strong>Manager:</strong> Manages users within their assigned locations.</li>
+                        <li><strong>Staff:</strong> Standard user, can only access assigned learning content.</li>
+                      </ul>
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )} />
