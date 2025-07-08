@@ -4,7 +4,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
     BarChartBig, Building, Layers, CreditCard, BookOpen, FileText,
     ListChecks, UserPlus, ShoppingCart, Gift,
-    TestTube2, Percent, HelpCircle, LayoutDashboard, Users, MapPin, Settings, Award, Cog, Package, Handshake
+    TestTube2, Percent, HelpCircle, LayoutDashboard, Users, MapPin, Settings, Award, Cog, Package, Handshake, KeyRound
 } from 'lucide-react';
 
 export interface HelpTopic {
@@ -73,6 +73,15 @@ Configure system-wide settings.
 *   [**System Settings**](/admin/settings): Configure email sending (primarily Google OAuth 2.0 via environment variables) for application emails like new user welcomes.
       `,
     },
+    {
+      title: "Resetting User Passwords",
+      icon: KeyRound,
+      content: `
+Users can reset their own password by clicking the **'Forgot password?'** link on the login screen. This will send a reset link to their email address.
+
+As a Super Admin, you can also force a password reset by setting a new temporary password for any non-Super Admin user. To do this, navigate to the [**Users**](/admin/users) page, click 'Edit' for the desired user, and enter a new password in the 'Set New Temporary Password' field. The user will be required to change this temporary password on their next login.
+      `,
+    }
   ],
   'Admin': [
     {
@@ -96,6 +105,15 @@ If course management is enabled for your Brand, you will see a **Brand Content**
 *   [**My Brand's Quizzes**](/brand-admin/quizzes): Develop quizzes and manage their questions.
       `,
     },
+    {
+      title: "User Password Resets",
+      icon: KeyRound,
+      content: `
+If one of your users forgets their password, they can reset it themselves by using the **'Forgot password?'** link on the login screen. This will send a secure password reset link to their registered email address.
+
+Currently, only Super Admins can manually set temporary passwords for users.
+      `,
+    }
   ],
   'Owner': [
     {
@@ -115,6 +133,15 @@ If course management is enabled for your Brand, you will see a **Brand Content**
 If course management is enabled for your Brand, you will see a **Brand Content** section in your sidebar. From here, you can manage courses, lessons, and quizzes specific to your brand, similar to an Admin.
       `,
     },
+    {
+      title: "User Password Resets",
+      icon: KeyRound,
+      content: `
+If one of your users forgets their password, they can reset it themselves by using the **'Forgot password?'** link on the login screen. This will send a secure password reset link to their registered email address.
+
+Currently, only Super Admins can manually set temporary passwords for users.
+      `,
+    }
   ],
   'Manager': [
     {
@@ -127,6 +154,15 @@ If course management is enabled for your Brand, you will see a **Brand Content**
       icon: Users,
       content: "You can manage Staff and other Manager users within your brand and assigned locations. This includes adding new staff/managers, editing their details, and managing their account status. Navigate to [**Users**](/admin/users) from your sidebar.",
     },
+    {
+      title: "User Password Resets",
+      icon: KeyRound,
+      content: `
+If one of your users forgets their password, they can reset it themselves by using the **'Forgot password?'** link on the login screen. This will send a secure password reset link to their registered email address.
+
+Currently, only Super Admins can manually set temporary passwords for users.
+      `,
+    }
   ],
   'Staff': [
     {
@@ -143,6 +179,15 @@ If course management is enabled for your Brand, you will see a **Brand Content**
       title: "Updating My Account",
       icon: Settings,
       content: "You can update your profile information, such as your name and profile picture (if enabled), by going to [**My Account**](/account) from the user dropdown menu. You can also reset your password from this page.",
+    },
+    {
+      title: "How to Reset Your Password",
+      icon: KeyRound,
+      content: `
+If you forget your password, you can easily reset it. Go to the main login page and click the **'Forgot password?'** link located under the password field.
+
+Enter your email address, and you will receive an email with instructions on how to set a new password.
+      `,
     }
   ],
 };
