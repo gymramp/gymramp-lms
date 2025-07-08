@@ -34,7 +34,9 @@ const siteSupportPrompt = ai.definePrompt({
   The context provided is the official help documentation for the user's specific role.
 
   Analyze the user's question and the documentation. Provide a clear, concise answer drawn directly from the documentation.
-  If the documentation does not contain the answer, you MUST state that you do not have information on that topic and suggest contacting human support.
+  
+  If the documentation does not contain the answer, you MUST state that you do not have information on that topic. Then, you MUST suggest contacting human support by providing a markdown link to email them. The link should look exactly like this: [contact our support team](mailto:support@gymramp.com).
+
   Do not make up answers or provide information not present in the context.
 
   USER'S QUESTION:
@@ -58,7 +60,7 @@ const siteSupportFlow = ai.defineFlow(
     const relevantHelpTopics = helpData[userRole] || [];
 
     if (relevantHelpTopics.length === 0) {
-      return { response: "I'm sorry, I don't have any specific help documentation for your role right now. Please contact support for assistance." };
+      return { response: "I'm sorry, I don't have any specific help documentation for your role right now. Please [contact our support team](mailto:support@gymramp.com) for assistance." };
     }
 
     // Convert the array of help topics into a single markdown string
