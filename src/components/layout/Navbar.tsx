@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -220,16 +219,18 @@ export function Navbar() {
           ) : isLoadingNav ? (
             <div className="flex items-center gap-2">
               <Skeleton className="h-8 w-8 rounded-full" />
+              <Skeleton className="hidden md:block h-6 w-20" />
             </div>
           ) : isLoggedIn && currentUser && userMenuItems.length > 0 ? (
             <>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                  <Button variant="ghost" className="flex items-center gap-2 h-auto px-2 py-1 rounded-md">
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={currentUser.profileImageUrl || undefined} alt={currentUser.name || 'User Avatar'} />
                       <AvatarFallback>{getInitials(currentUser.name)}</AvatarFallback>
                     </Avatar>
+                    <span className="hidden md:block font-medium text-sm">{currentUser.name}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="end" forceMount>
