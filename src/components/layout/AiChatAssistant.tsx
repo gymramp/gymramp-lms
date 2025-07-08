@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { Bot, User as UserIcon, Loader2, Sparkles, Send } from 'lucide-react';
+import { User as UserIcon, Loader2, HelpCircle, Send } from 'lucide-react';
 import { askSiteSupport } from '@/ai/flows/site-support';
 import type { User } from '@/types/user';
 import { cn } from '@/lib/utils';
@@ -127,18 +127,18 @@ export function AiChatAssistant() {
         <Button
           variant="default"
           size="icon"
-          title="AI Assistant"
+          title="Help and Support"
           className="fixed bottom-6 right-6 h-16 w-16 rounded-full shadow-lg z-50 animate-in fade-in-0 zoom-in-95 duration-500 bg-primary hover:bg-primary/90"
         >
-          <Bot className="h-8 w-8" />
-          <span className="sr-only">Open AI Chat Assistant</span>
+          <HelpCircle className="h-8 w-8" />
+          <span className="sr-only">Open Help and Support</span>
         </Button>
       </SheetTrigger>
       <SheetContent className="w-[400px] sm:w-[540px] flex flex-col p-0">
         <SheetHeader className="p-4 border-b">
           <SheetTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            AI Support Assistant
+            <HelpCircle className="h-5 w-5 text-primary" />
+            Gymramp Help and Support
           </SheetTitle>
         </SheetHeader>
         <ScrollArea className="flex-1 p-4" ref={scrollAreaRef as any}>
@@ -147,7 +147,7 @@ export function AiChatAssistant() {
               <div key={index} className={cn("flex items-start gap-3", message.role === 'user' ? 'justify-end' : '')}>
                 {message.role === 'assistant' && (
                   <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-                    <Bot className="h-5 w-5" />
+                    <HelpCircle className="h-5 w-5" />
                   </div>
                 )}
                 <div
@@ -178,7 +178,7 @@ export function AiChatAssistant() {
             {isLoading && (
               <div className="flex items-start gap-3">
                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-                    <Bot className="h-5 w-5" />
+                    <HelpCircle className="h-5 w-5" />
                   </div>
                 <div className="bg-secondary rounded-lg px-4 py-3 flex items-center">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
