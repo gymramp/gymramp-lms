@@ -50,14 +50,14 @@ export function StatCard({
           {change && <Badge className={cn("text-xs font-semibold", getBadgeClass())}>{change}</Badge>}
         </div>
         <p className="text-xs text-muted-foreground">{description}</p>
-        <div className="h-20 mt-4 -ml-6 -mr-2 -mb-6">
+        <div className="h-20 mt-4 -mx-6 -mb-6">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={chartData}
               margin={{
                 top: 5,
-                right: 5,
-                left: 5,
+                right: 0,
+                left: 0,
                 bottom: 0,
               }}
             >
