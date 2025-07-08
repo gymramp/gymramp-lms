@@ -21,11 +21,11 @@ export const helpData: Record<UserRole, HelpTopic[]> = {
       content: `
 As a Super Admin, you can create, edit, and manage all brands on the platform.
 
-*   Navigate to **Admin > Brands** from the main sidebar.
+*   Navigate to [**Admin > Brands**](/admin/companies) from the main sidebar.
 *   Use the **Add New Brand** button to create new client accounts (Parent Brands).
 *   From the brand list, you can **Edit Brand & Settings** to modify details, manage assigned Programs, and enable/disable features.
 *   You can also manage specific **Locations** and **Users** for each brand from the brand list actions.
-*   View the [Revenue Share Report](/admin/revenue-share-report) for insights on checkouts with revenue share agreements.
+*   View the [**Revenue Share Report**](/admin/revenue-share-report) for insights on checkouts with revenue share agreements.
       `,
     },
     {
@@ -34,7 +34,7 @@ As a Super Admin, you can create, edit, and manage all brands on the platform.
       content: `
 You have full control over all user accounts across the platform.
 
-*   Go to **Admin > Users** to view and manage users. Use the Brand and Location filters to narrow down the user list.
+*   Go to [**Admin > Users**](/admin/users) to view and manage users. Use the Brand and Location filters to narrow down the user list.
 *   You can add new users of any role. When adding a user, you must assign them to a Brand and optionally to specific locations.
 *   Activate or deactivate user accounts. Deactivated users cannot log in.
 *   Edit user details, including their name, role, assigned Brand, and assigned locations.
@@ -46,10 +46,10 @@ You have full control over all user accounts across the platform.
       content: `
 Manage the master library of Programs, Courses, Lessons, and Quizzes. Access these via the **Admin** section in the main sidebar.
 
-*   **Programs:** Create and manage Programs, which are collections of courses. Define pricing and assign courses to each Program.
-*   **Courses (Global Library):** Create new global courses, define details, and build the curriculum by adding lessons and quizzes.
-*   **Lessons (Global Library):** Build individual lesson content with text, videos, and images.
-*   **Quizzes (Global Library):** Create quizzes and manage their questions.
+*   **Programs:** Create and manage Programs, which are collections of courses. Define pricing and assign courses to each Program. You can find this under [**Admin > Programs**](/admin/programs).
+*   **Courses:** Create new global courses, define details, and build the curriculum by adding lessons and quizzes. Find this at [**Admin > Course Admin > Courses**](/admin/courses).
+*   **Lessons:** Build individual lesson content with text, videos, and images. Find this at [**Admin > Course Admin > Lessons**](/admin/lessons).
+*   **Quizzes:** Create quizzes and manage their questions. Find this at [**Admin > Course Admin > Quizzes**](/admin/quizzes).
 
 Programs are then assigned to Brands to grant them access to the courses within.
       `,
@@ -60,8 +60,8 @@ Programs are then assigned to Brands to grant them access to the courses within.
       content: `
 Use the dedicated checkout pages under the **New Customers** dropdown to onboard new customers:
 
-*   [Paid Checkout](/admin/checkout): For new customers purchasing a Program. This flow collects Brand and admin details, processes payment, and optionally records revenue share details.
-*   [Free Trial Checkout](/admin/free-trial-checkout): To set up new customers with a trial period for a selected Program.
+*   [**Paid Checkout**](/admin/checkout): For new customers purchasing a Program. This flow collects Brand and admin details, processes payment, and optionally records revenue share details.
+*   [**Free Trial Checkout**](/admin/free-trial-checkout): To set up new customers with a trial period for a selected Program.
       `,
     },
     {
@@ -70,7 +70,7 @@ Use the dedicated checkout pages under the **New Customers** dropdown to onboard
       content: `
 Configure system-wide settings.
 
-*   [System Settings](/admin/settings): Configure email sending (primarily Google OAuth 2.0 via environment variables) for application emails like new user welcomes.
+*   [**System Settings**](/admin/settings): Configure email sending (primarily Google OAuth 2.0 via environment variables) for application emails like new user welcomes.
       `,
     },
   ],
@@ -78,12 +78,12 @@ Configure system-wide settings.
     {
       title: "Admin Dashboard Overview",
       icon: LayoutDashboard,
-      content: "Your dashboard provides a snapshot of your Brand's learning activity, employee progress, and active courses. Use the Brand and Location filters to scope your view if you manage Child Brands or multiple locations. Access this via the **Dashboard** link in your sidebar.",
+      content: "Your dashboard provides a snapshot of your Brand's learning activity, employee progress, and active courses. Use the Brand and Location filters to scope your view if you manage Child Brands or multiple locations. Access this via the [**Dashboard**](/dashboard) link in your sidebar.",
     },
     {
       title: "Managing Your Brand's Users & Child Brands",
       icon: Building,
-      content: "Navigate to **Brands** from your sidebar to manage your primary Brand and any Child Brands you create. Go to **Users** to add new employees (Staff, Managers), assign them to Brands and Locations, and manage their account status. You cannot create users with roles equal to or higher than your own.",
+      content: "Navigate to [**Brands**](/admin/companies) from your sidebar to manage your primary Brand and any Child Brands you create. Go to [**Users**](/admin/users) to add new employees (Staff, Managers), assign them to Brands and Locations, and manage their account status. You cannot create users with roles equal to or higher than your own.",
     },
     {
       title: "Brand Course Content Management",
@@ -91,9 +91,9 @@ Configure system-wide settings.
       content: `
 If course management is enabled for your Brand, you will see a **Brand Content** section in your sidebar. From here, you can:
 
-*   **My Brand's Courses:** Create courses specific to your brand.
-*   **My Brand's Lessons:** Create and manage lessons unique to your brand.
-*   **My Brand's Quizzes:** Develop quizzes and manage their questions.
+*   [**My Brand's Courses**](/brand-admin/courses): Create courses specific to your brand.
+*   [**My Brand's Lessons**](/brand-admin/lessons): Create and manage lessons unique to your brand.
+*   [**My Brand's Quizzes**](/brand-admin/quizzes): Develop quizzes and manage their questions.
       `,
     },
   ],
@@ -101,12 +101,12 @@ If course management is enabled for your Brand, you will see a **Brand Content**
     {
       title: "Owner Dashboard Overview",
       icon: LayoutDashboard,
-      content: "Your dashboard shows your Brand's learning progress, active users, course completion rates, and issued certificates. Use the Brand and Location filters to scope your view if you manage Child Brands or multiple locations. Access via **Dashboard** in your sidebar.",
+      content: "Your dashboard shows your Brand's learning progress, active users, course completion rates, and issued certificates. Use the Brand and Location filters to scope your view if you manage Child Brands or multiple locations. Access via [**Dashboard**](/dashboard) in your sidebar.",
     },
     {
       title: "Managing Your Brand's Users & Child Brands",
       icon: Building,
-      content: "Navigate to **Brands** from your sidebar to manage your primary Brand and any Child Brands you create. Go to **Users** to add new employees (Staff, Managers), assign them to Brands and Locations, and manage their account status. You cannot create users with roles equal to or higher than your own.",
+      content: "Navigate to [**Brands**](/admin/companies) from your sidebar to manage your primary Brand and any Child Brands you create. Go to [**Users**](/admin/users) to add new employees (Staff, Managers), assign them to Brands and Locations, and manage their account status. You cannot create users with roles equal to or higher than your own.",
     },
     {
       title: "Brand Course Content Management",
@@ -120,29 +120,29 @@ If course management is enabled for your Brand, you will see a **Brand Content**
     {
       title: "Manager Dashboard",
       icon: LayoutDashboard,
-      content: "Your dashboard focuses on your team's progress within your assigned location(s) and brand. Track completion rates for assigned courses and view issued certificates. Access via **Dashboard** in your sidebar.",
+      content: "Your dashboard focuses on your team's progress within your assigned location(s) and brand. Track completion rates for assigned courses and view issued certificates. Access via [**Dashboard**](/dashboard) in your sidebar.",
     },
     {
       title: "Managing Your Team",
       icon: Users,
-      content: "You can manage Staff and other Manager users within your brand and assigned locations. This includes adding new staff/managers, editing their details, and managing their account status. Navigate to **Users** from your sidebar.",
+      content: "You can manage Staff and other Manager users within your brand and assigned locations. This includes adding new staff/managers, editing their details, and managing their account status. Navigate to [**Users**](/admin/users) from your sidebar.",
     },
   ],
   'Staff': [
     {
       title: "Accessing My Learning",
       icon: BookOpen,
-      content: "Navigate to **My Learning** from your sidebar. This page lists all courses assigned to you. Click on a course to start or continue your learning journey.",
+      content: "Navigate to [**My Learning**](/courses/my-courses) from your sidebar. This page lists all courses assigned to you. Click on a course to start or continue your learning journey.",
     },
     {
       title: "Viewing My Certificates",
       icon: Award,
-      content: "Once you successfully complete a course, you'll earn a certificate. You can view all your earned certificates by navigating to **My Certificates** from your sidebar or user dropdown menu.",
+      content: "Once you successfully complete a course, you'll earn a certificate. You can view all your earned certificates by navigating to [**My Certificates**](/certificates) from your sidebar or user dropdown menu.",
     },
     {
       title: "Updating My Account",
       icon: Settings,
-      content: "You can update your profile information, such as your name and profile picture (if enabled), by going to **My Account** from the user dropdown menu. You can also reset your password from this page.",
+      content: "You can update your profile information, such as your name and profile picture (if enabled), by going to [**My Account**](/account) from the user dropdown menu. You can also reset your password from this page.",
     }
   ],
 };
