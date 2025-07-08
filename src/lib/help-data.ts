@@ -90,6 +90,11 @@ Users can reset their own password by clicking the **'Forgot password?'** link o
 
 As a Super Admin, you can also force a password reset by setting a new temporary password for any non-Super Admin user. To do this, navigate to the [**Users**](/admin/users) page, click 'Edit' for the desired user, and enter a new password in the 'Set New Temporary Password' field. The user will be required to change this temporary password on their next login.
       `,
+    },
+    {
+      title: "Viewing My Certificates",
+      icon: Award,
+      content: "Even Super Admins can earn certificates! If you complete any courses, you can view your certificates by navigating to [**My Certificates**](/certificates) from the user dropdown menu in the sidebar.",
     }
   ],
   'Admin': [
