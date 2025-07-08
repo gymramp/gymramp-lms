@@ -107,7 +107,7 @@ export function AiChatAssistant({ currentUser }: AiChatAssistantProps) {
                     className="prose prose-sm dark:prose-invert max-w-none"
                     components={{
                         p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
-                        a: ({node, ...props}) => <a className="text-accent-foreground underline" {...props} />,
+                        a: ({node, ...props}) => <a className="text-accent underline" {...props} />,
                     }}
                   >
                     {message.content}
