@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Building, Users, Globe, Link as LinkIcon, Gift, AlertTriangle, Infinity, PlusCircle } from 'lucide-react';
+import { ArrowLeft, Building, Users, Globe, Link as LinkIcon, Gift, AlertTriangle, Infinity, PlusCircle, Edit } from 'lucide-react';
 import type { Company, User } from '@/types/user';
 import { getCompanyById, getChildBrandsByParentId } from '@/lib/company-data';
 import { getUserByEmail, getUsersByCompanyId } from '@/lib/user-data'; // Import getUsersByCompanyId
@@ -135,7 +135,9 @@ export default function EditCompanyPage() {
             </CardDescription>
           </div>
            <Button asChild>
-              <Link href={`/admin/companies/${companyId}/edit-form`}>Edit Account</Link>
+              <Link href={`/admin/companies/${companyId}/edit-form`}>
+                <Edit className="mr-2 h-4 w-4" /> Edit Account
+              </Link>
           </Button>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8 pt-6">
