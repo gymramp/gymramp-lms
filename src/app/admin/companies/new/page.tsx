@@ -25,7 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Loader2, Info, ArrowLeft, Building, Upload, ImageIcon, Trash2, Globe, Link as LinkIcon, Users } from 'lucide-react';
 
 const companyFormSchema = z.object({
-  name: z.string().min(2, { message: 'Account name must be at least 2 characters.' }),
+  name: z.string().min(2, { message: 'Brand name must be at least 2 characters.' }),
   subdomainSlug: z.string()
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug can only contain lowercase letters, numbers, and hyphens, and cannot start/end with a hyphen.' })
     .min(3, { message: 'Subdomain slug must be at least 3 characters.'})
@@ -64,7 +64,7 @@ export default function AddNewCompanyPage() {
         const userDetails = await getUserByEmail(firebaseUser.email);
         setCurrentUser(userDetails);
         if (!userDetails || !['Super Admin', 'Admin', 'Owner'].includes(userDetails.role)) {
-          toast({ title: "Access Denied", description: "You don't have permission to create new accounts.", variant: "destructive" });
+          toast({ title: "Access Denied", description: "You don't have permission to create new brands.", variant: "destructive" });
           router.push('/dashboard');
         }
       } else {
@@ -88,10 +88,10 @@ export default function AddNewCompanyPage() {
            const storagePath = `${STORAGE_PATHS.COMPANY_LOGOS}/${uniqueFileName}`;
            const downloadURL = await uploadImage(file, storagePath, setUploadProgress);
            form.setValue('logoUrl', downloadURL, { shouldValidate: true });
-           toast({ title: "Logo Uploaded", description: "Account logo successfully uploaded." });
+           toast({ title: "Logo Uploaded", description: "Brand logo successfully uploaded." });
        } catch (error: any) {
            setUploadError(error.message || "Failed to upload logo.");
-           toast({ title: "Upload Failed", description: error.message || "Could not upload the account logo.", variant: "destructive" });
+           toast({ title: "Upload Failed", description: error.message || "Could not upload the brand logo.", variant: "destructive" });
        } finally {
            setIsUploading(false);
        }
@@ -124,10 +124,10 @@ export default function AddNewCompanyPage() {
       const newCompany = await addCompany(formData, currentUser.id, parentBrandIdForChild);
       
       if (newCompany) {
-        toast({ title: "Account Created", description: `Successfully created the account "${newCompany.name}".` });
+        toast({ title: "Brand Created", description: `Successfully created the brand "${newCompany.name}".` });
         router.push(`/admin/companies/${newCompany.id}/edit`);
       } else {
-        toast({ title: 'Account Creation Failed', description: 'An unexpected error occurred.', variant: 'destructive' });
+        toast({ title: 'Brand Creation Failed', description: 'An unexpected error occurred.', variant: 'destructive' });
       }
     });
   };
@@ -145,19 +145,19 @@ export default function AddNewCompanyPage() {
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8">
       <Button variant="outline" onClick={() => router.push('/admin/companies')} className="mb-6">
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Accounts
+        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Brands
       </Button>
 
       <Card className="max-w-3xl mx-auto">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-2xl"><Building className="h-6 w-6"/> Add New Account</CardTitle>
-          <CardDescription>Fill out the form below to create a new customer account. This will create a Parent Account if you are a Super Admin, or a Child Account if you are an Admin/Owner.</CardDescription>
+          <CardTitle className="flex items-center gap-2 text-2xl"><Building className="h-6 w-6"/> Add New Brand</CardTitle>
+          <CardDescription>Fill out the form below to create a new customer brand. This will create a Parent Brand if you are a Super Admin, or a Child Brand if you are an Admin/Owner.</CardDescription>
         </CardHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <CardContent className="space-y-6">
-                <FormField control={form.control} name="name" render={({ field }) => ( <FormItem> <FormLabel>Account Name</FormLabel> <FormControl><Input placeholder="e.g., Global Fitness Inc." {...field} /></FormControl> <FormMessage /> </FormItem> )} />
-                <FormField control={form.control} name="shortDescription" render={({ field }) => ( <FormItem> <FormLabel>Short Description (Optional)</FormLabel> <FormControl><Textarea rows={3} placeholder="A brief description of the account (max 150 characters)" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} />
+                <FormField control={form.control} name="name" render={({ field }) => ( <FormItem> <FormLabel>Brand Name</FormLabel> <FormControl><Input placeholder="e.g., Global Fitness Inc." {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+                <FormField control={form.control} name="shortDescription" render={({ field }) => ( <FormItem> <FormLabel>Short Description (Optional)</FormLabel> <FormControl><Textarea rows={3} placeholder="A brief description of the brand (max 150 characters)" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} />
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField control={form.control} name="subdomainSlug" render={({ field }) => ( <FormItem> <FormLabel className="flex items-center gap-1"><Globe className="h-4 w-4" /> Subdomain (Optional)</FormLabel> <FormControl><Input placeholder="e.g., global-fitness" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /></FormControl> <FormDescription className="text-xs">Lowercase letters, numbers, hyphens.</FormDescription> <FormMessage /> </FormItem> )} />
@@ -167,7 +167,7 @@ export default function AddNewCompanyPage() {
                 <FormField control={form.control} name="maxUsers" render={({ field }) => ( <FormItem> <FormLabel className="flex items-center gap-1"><Users className="h-4 w-4" /> Max Users</FormLabel> <FormControl><Input type="number" min="1" placeholder="Leave blank for unlimited" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl> <FormMessage /> </FormItem> )} />
 
                 <FormItem>
-                    <FormLabel>Account Logo (Optional)</FormLabel>
+                    <FormLabel>Brand Logo (Optional)</FormLabel>
                     <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
                         {logoUrlValue && !isUploading ? (
                             <div className="relative w-32 h-32 mx-auto mb-2"><Image src={logoUrlValue} alt="Logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" onError={() => form.setValue('logoUrl', null)} /><Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6" onClick={() => form.setValue('logoUrl', null)}><Trash2 className="h-4 w-4" /></Button></div>
@@ -182,7 +182,7 @@ export default function AddNewCompanyPage() {
             <CardFooter>
               <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isPending || isUploading}>
                 {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {isPending ? 'Creating Account...' : 'Create Account'}
+                {isPending ? 'Creating Brand...' : 'Create Brand'}
               </Button>
             </CardFooter>
           </form>

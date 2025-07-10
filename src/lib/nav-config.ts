@@ -36,7 +36,7 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
   if (user.role === 'Super Admin') {
     roleSpecificItems.push(
       { href: '/admin/dashboard', label: 'Dashboard', icon: BarChartBig },
-      { href: '/admin/companies', label: 'Accounts', icon: Building },
+      { href: '/admin/companies', label: 'Brands', icon: Building },
       { href: '/admin/users', label: 'Users', icon: Users },
       { href: '/admin/partners', label: 'Partners', icon: Handshake },
       { href: '/admin/programs', label: 'Programs', icon: Layers },
@@ -66,7 +66,7 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
   } else if (user.role === 'Admin' || user.role === 'Owner') {
     roleSpecificItems.push(
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { href: '/admin/companies', label: 'Accounts', icon: Building, requiresCompanyId: true },
+      { href: '/admin/companies', label: 'Brands', icon: Building, requiresCompanyId: true },
       { href: `/admin/companies/${user.companyId}/locations`, label: 'Locations', icon: MapPin, requiresCompanyId: true },
       {
         label: 'My Content',
@@ -141,19 +141,19 @@ export async function getQuickAddItems(user: User | null): Promise<NavItemType[]
 
   const items: NavItemType[] = [];
 
-  // Super Admin can always add users and accounts
+  // Super Admin can always add users and brands
   if (user.role === 'Super Admin') {
     items.push({ href: '/admin/users/new', label: 'New User', icon: UserPlus });
-    items.push({ href: '/admin/companies/new', label: 'New Account', icon: Building });
+    items.push({ href: '/admin/companies/new', label: 'New Brand', icon: Building });
   } 
   // Admin/Owner/Manager can add users
   else if (user.role === 'Admin' || user.role === 'Owner' || user.role === 'Manager') {
     items.push({ href: '/admin/users/new', label: 'New User', icon: UserPlus });
   }
 
-  // Admin/Owner can add child accounts
+  // Admin/Owner can add child brands
   if (user.role === 'Admin' || user.role === 'Owner') {
-    items.push({ href: '/admin/companies/new', label: 'New Account', icon: Building });
+    items.push({ href: '/admin/companies/new', label: 'New Brand', icon: Building });
   }
 
   // Check for brand-specific content creation
