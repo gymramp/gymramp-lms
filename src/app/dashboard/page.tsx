@@ -1,3 +1,4 @@
+
 // src/app/dashboard/page.tsx
 'use client';
 
@@ -259,14 +260,8 @@ export default function DashboardPage() {
   return (
     <div className="container mx-auto flex-1 space-y-4 pb-6">
       <div className="flex items-center justify-between space-y-2">
-        <div> <h1 className="text-3xl font-bold text-primary">{displayBrandNameForTitle} Dashboard</h1> <p className="text-muted-foreground flex items-center gap-2"> <MapPin className="h-4 w-4" /> {displayLocationName ? `Viewing: ${displayLocationName}` : 'Overview'} </p> </div>
-        <div className="flex items-center space-x-2"> {currentUser && ['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role) && ( 
-            <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={isLoadingEmployees || isLoadingBrandDataForFilters || (currentUser.role === 'Super Admin' && viewableBrandsForFilter.length === 0 && (selectedBrandIdForDashboard === 'all' || !selectedBrandIdForDashboard))} title={(currentUser.role === 'Super Admin' && viewableBrandsForFilter.length === 0 && (selectedBrandIdForDashboard === 'all' || !selectedBrandIdForDashboard)) ? "Add a brand first" : ""}> 
-                <Link href="/admin/users/new">
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add Employee 
-                </Link>
-            </Button> 
-        )} </div>
+        <div> <h1 className="text-3xl font-bold text-primary">{displayBrandNameForTitle} Dashboard</h1> <p className="text-muted-foreground flex items-center gap-2"> <MapPin className="h-4 w-4" /> {displayLocationName ? `Viewing: ${displayLocationName}` : 'Overview'} </p> 
+        </div>
       </div>
       <div className="flex flex-wrap items-end gap-4 mb-6 p-4 bg-secondary rounded-lg shadow-sm">
         <h2 className="text-lg font-semibold mr-4 self-center text-foreground">Filters:</h2>

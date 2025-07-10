@@ -68,6 +68,7 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
     roleSpecificItems.push(
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/admin/companies', label: 'Brands', icon: Building, requiresCompanyId: true },
+      { href: '/admin/users', label: 'Team', icon: Users, requiresCompanyId: true },
       { href: `/admin/companies/${user.companyId}/locations`, label: 'Locations', icon: MapPin, requiresCompanyId: true },
       {
         label: 'My Content',
@@ -86,7 +87,7 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
   } else if (user.role === 'Manager') {
     roleSpecificItems.push(
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { href: '/admin/users', label: 'Users', icon: Users, requiresCompanyId: true },
+      { href: '/admin/users', label: 'Team', icon: Users, requiresCompanyId: true },
       { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },
       { href: '/certificates', label: 'My Certificates', icon: Award },
     );

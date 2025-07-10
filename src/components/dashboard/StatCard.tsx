@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -28,7 +29,7 @@ const CustomTooltip = ({ active, payload, label, valuePrefix = '' }: any) => {
 
 interface StatCardProps {
   title: string;
-  value: string | number;
+  value: string | number | React.ReactNode; // Allow ReactNode for loading spinner
   description: string;
   change?: string;
   changeVariant?: "default" | "destructive"; // "default" for green, "destructive" for red
