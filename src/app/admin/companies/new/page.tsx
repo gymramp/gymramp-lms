@@ -185,8 +185,8 @@ export default function AddNewCompanyPage() {
                       <FormItem>
                         <FormLabel className="flex items-center gap-1"><GitBranch className="h-4 w-4" /> Parent Brand (Optional)</FormLabel>
                         <Select
-                          onValueChange={field.onChange}
-                          value={field.value ?? ''}
+                          onValueChange={(value) => field.onChange(value === "none" ? null : value)}
+                          value={field.value || "none"}
                         >
                           <FormControl>
                             <SelectTrigger>
@@ -194,7 +194,7 @@ export default function AddNewCompanyPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                             <SelectItem value="">None (Create as Parent Brand)</SelectItem>
+                             <SelectItem value="none">None (Create as Parent Brand)</SelectItem>
                             {parentBrands.map(brand => (
                               <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>
                             ))}
