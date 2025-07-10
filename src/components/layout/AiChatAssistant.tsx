@@ -1,10 +1,11 @@
+
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from '@/components/ui/sheet';
 import { User as UserIcon, Loader2, HelpCircle, Send, MessageCircleQuestion } from 'lucide-react';
 import { askSiteSupport } from '@/ai/flows/site-support';
 import type { User } from '@/types/user';
@@ -142,6 +143,9 @@ export function AiChatAssistant() {
             <HelpCircle className="h-5 w-5 text-primary" />
             Gymramp Help and Support
           </SheetTitle>
+           <SheetDescription className="sr-only">
+             An AI assistant to help answer questions about using the platform.
+           </SheetDescription>
         </SheetHeader>
         <ScrollArea className="flex-1 p-4">
           <div className="space-y-6">
