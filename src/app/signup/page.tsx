@@ -15,6 +15,8 @@ import { Eye, EyeOff, Loader2, User, Building } from 'lucide-react';
 import Image from 'next/image';
 import { processPublicSignup } from '@/actions/signup';
 import Link from 'next/link';
+import { signInWithCustomToken } from 'firebase/auth'; // Import for custom token sign-in
+import { auth } from '@/lib/firebase'; // Import client auth instance
 
 const signupFormSchema = z.object({
   customerName: z.string().min(2, { message: "Your full name is required." }),
@@ -45,13 +47,15 @@ export default function SignupPage() {
     setIsSubmitting(true);
     try {
         const result = await processPublicSignup(data);
-        if (result.success) {
+        if (result.success && result.customToken) {
             toast({
                 title: "Account Created!",
-                description: "Welcome! Redirecting you to get started.",
+                description: "Welcome! Logging you in now...",
                 duration: 7000,
             });
-            router.push('/onboarding'); // Redirect to onboarding page
+            // Sign in with the custom token
+            await signInWithCustomToken(auth, result.customToken);
+            router.push('/onboarding'); // Redirect to onboarding page after sign-in
         } else {
              toast({
                 title: "Signup Failed",

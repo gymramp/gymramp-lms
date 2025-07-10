@@ -2,7 +2,12 @@
 'use server';
 
 import { initializeApp, getApps, deleteApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, type Auth } from 'firebase/auth';
+// Import the SERVER-SIDE Firebase Admin SDK
+import { getAuth as getAdminAuth } from 'firebase-admin/auth';
+import { adminApp } from '@/lib/firebase-admin'; // Import server-side admin app
+
+// Keep client auth for user creation
+import { getAuth as getClientAuth, createUserWithEmailAndPassword, type Auth } from 'firebase/auth';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { CompanyFormData } from '@/types/user';
@@ -25,6 +30,7 @@ interface SignupResult {
   companyId?: string;
   adminUserId?: string;
   error?: string;
+  customToken?: string; // Add customToken to the return type
 }
 
 const firebaseConfig = {
@@ -36,13 +42,14 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+// This function remains for client-side user creation
 const getFirebaseAuthInstance = (appName: string): Auth => {
   const existingApp = getApps().find(app => app.name === appName);
   if (existingApp) {
-    return getAuth(existingApp);
+    return getClientAuth(existingApp);
   }
   const localApp = initializeApp(firebaseConfig, appName);
-  return getAuth(localApp);
+  return getClientAuth(localApp);
 };
 
 const cleanupFirebaseApp = async (appName: string): Promise<void> => {
@@ -73,10 +80,10 @@ export async function processPublicSignup(data: SignupFormValues): Promise<Signu
 
     const newCompanyData: CompanyFormData = {
         name: companyName,
-        isTrial: false, // Default to not a trial
+        isTrial: false, 
         trialEndsAt: null,
         assignedProgramIds: [],
-        maxUsers: 5, // Default max users
+        maxUsers: 5, 
         saleAmount: 0,
         revenueSharePartners: null,
         whiteLabelEnabled: false,
@@ -109,7 +116,6 @@ export async function processPublicSignup(data: SignupFormValues): Promise<Signu
     let authUserUid: string;
     try {
         localAuthInstance = getFirebaseAuthInstance(localAuthAppName);
-        // Use the password from the form, not a temp one
         const userCredential = await createUserWithEmailAndPassword(localAuthInstance, adminEmail, password);
         authUserUid = userCredential.user.uid;
         console.log(`[processPublicSignup] Admin user CREATED IN FIREBASE AUTH with UID: ${authUserUid} for email ${adminEmail}.`);
@@ -140,30 +146,33 @@ export async function processPublicSignup(data: SignupFormValues): Promise<Signu
             console.warn(`[processPublicSignup] Firestore user creation failed. Attempting to soft-delete brand ${newCompanyId}`);
             await deleteDoc(doc(db, 'companies', newCompanyId));
       }
-      const authUserToDelete = getAuth(getApps().find(app => app.name === localAuthAppName) || undefined)?.currentUser;
-      if (authUserToDelete && authUserToDelete.uid === authUserUid) {
-          await authUserToDelete.delete().catch(e => console.error("Failed to delete auth user on cleanup:", e));
-      }
+      // This is a critical failure, we should try to clean up the Auth user as well
+      const adminAuth = getAdminAuth(adminApp);
+      await adminAuth.deleteUser(authUserUid).catch(e => console.error("Failed to delete auth user on cleanup:", e));
       throw new Error("Failed to create the admin user account in Firestore.");
     }
 
     console.log(`[processPublicSignup] Admin user "${newAdminUser.name}" created in Firestore with ID: ${newAdminUser.id}`);
 
-    // Welcome email can be sent without a password, as they just set it.
     try {
-        await sendNewUserWelcomeEmail(newAdminUser.email, newAdminUser.name, "your chosen password");
+        await sendNewUserWelcomeEmail(newAdminUser.email, newAdminUser.name, password);
         console.log(`[processPublicSignup] Welcome email sent to ${newAdminUser.email}`);
     } catch (emailError) {
         console.error(`[processPublicSignup] Failed to send welcome email to ${newAdminUser.email}:`, emailError);
     }
 
+    // Generate custom token for auto-login
+    const adminAuth = getAdminAuth(adminApp);
+    const customToken = await adminAuth.createCustomToken(authUserUid);
+    console.log(`[processPublicSignup] Custom token generated for UID: ${authUserUid}`);
+
     await cleanupFirebaseApp(localAuthAppName);
-    return { success: true, companyId: newCompany.id, adminUserId: newAdminUser.id };
+    // Return custom token
+    return { success: true, companyId: newCompany.id, adminUserId: newAdminUser.id, customToken };
 
   } catch (error: any) {
     console.error("[processPublicSignup] Error during public signup:", error);
     await cleanupFirebaseApp(localAuthAppName);
-    // Cleanup brand if it was created before the error
     if (newCompanyId && !error.message?.includes('already registered')) {
         try {
             console.warn(`[processPublicSignup] Cleaning up brand ${newCompanyId} due to error: ${error.message}`);
