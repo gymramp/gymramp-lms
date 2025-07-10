@@ -1,3 +1,4 @@
+
 // src/app/admin/companies/[companyId]/edit/page.tsx
 'use client';
 
@@ -23,7 +24,7 @@ import { getCompanyById, updateCompany } from '@/lib/company-data';
 import { getAllPrograms, getProgramById, getAllCourses } from '@/lib/firestore-data';
 import { getCustomerPurchaseRecordByBrandId } from '@/lib/customer-data';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Users, CalendarDays, Briefcase, Package, Save, Layers, BookOpen, Info } from 'lucide-react'; // Removed Palette
+import { ArrowLeft, Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Users, CalendarDays, Briefcase, Package, Save, Layers, BookOpen, Info, GitBranch } from 'lucide-react'; // Added GitBranch
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -278,8 +279,7 @@ export default function EditCompanyPage() {
       </Button>
       <h1 className="text-3xl font-bold tracking-tight text-primary mb-2"> Edit Brand: {company.name} </h1>
       <p className="text-muted-foreground mb-8"> Manage settings for this brand. </p>
-      {company.parentBrandId && ( <Card className="mb-6 bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700"> <CardContent className="p-4"> <p className="text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2"> <Briefcase className="h-4 w-4" /> This is a Child Brand. Parent Brand: {isLoadingParentBrand ? <Loader2 className="h-4 w-4 animate-spin" /> : <strong>{parentBrandName || 'Loading...'}</strong>} </p> </CardContent> </Card> )}
-
+      
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -318,6 +318,23 @@ export default function EditCompanyPage() {
             </div>
 
             <div className="lg:col-span-1 space-y-6">
+              {company.parentBrandId && (
+                <Card className="bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-blue-800 dark:text-blue-300"><GitBranch className="h-5 w-5" />Parent Brand</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-blue-700 dark:text-blue-400">
+                      This is a Child Brand of:
+                      {isLoadingParentBrand ? <Skeleton className="h-5 w-3/4 mt-1" /> : (
+                        <Link href={`/admin/companies/${company.parentBrandId}/edit`} className="font-semibold block mt-1 hover:underline">
+                          {parentBrandName || 'Loading...'}
+                        </Link>
+                      )}
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> User & Trial Settings</CardTitle></CardHeader>
                 <CardContent className="space-y-4">

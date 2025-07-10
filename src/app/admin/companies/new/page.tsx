@@ -17,15 +17,17 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { useToast } from '@/hooks/use-toast';
 import type { User, Company, CompanyFormData } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
-import { addCompany } from '@/lib/company-data';
+import { addCompany, getAllCompanies } from '@/lib/company-data';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2, Info, ArrowLeft, Building, Upload, ImageIcon, Trash2, Globe, Link as LinkIcon, Users } from 'lucide-react';
+import { Loader2, Info, ArrowLeft, Building, Upload, ImageIcon, Trash2, Globe, Link as LinkIcon, Users, GitBranch } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const companyFormSchema = z.object({
   name: z.string().min(2, { message: 'Brand name must be at least 2 characters.' }),
+  parentBrandId: z.string().optional().nullable(),
   subdomainSlug: z.string()
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug can only contain lowercase letters, numbers, and hyphens, and cannot start/end with a hyphen.' })
     .min(3, { message: 'Subdomain slug must be at least 3 characters.'})
@@ -43,6 +45,7 @@ type CompanyFormValues = z.infer<typeof companyFormSchema>;
 
 export default function AddNewCompanyPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [parentBrands, setParentBrands] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
   const [isUploading, setIsUploading] = useState(false);
@@ -53,7 +56,7 @@ export default function AddNewCompanyPage() {
 
   const form = useForm<CompanyFormValues>({
     resolver: zodResolver(companyFormSchema),
-    defaultValues: { name: '', subdomainSlug: null, customDomain: null, shortDescription: null, logoUrl: null, maxUsers: null },
+    defaultValues: { name: '', parentBrandId: null, subdomainSlug: null, customDomain: null, shortDescription: null, logoUrl: null, maxUsers: null },
   });
   
   const logoUrlValue = form.watch('logoUrl');
@@ -66,11 +69,26 @@ export default function AddNewCompanyPage() {
         if (!userDetails || !['Super Admin', 'Admin', 'Owner'].includes(userDetails.role)) {
           toast({ title: "Access Denied", description: "You don't have permission to create new brands.", variant: "destructive" });
           router.push('/dashboard');
+          setIsLoading(false);
+          return;
         }
+
+        if (userDetails.role === 'Super Admin') {
+          try {
+            const allCompanies = await getAllCompanies(userDetails);
+            // Filter for parent brands (those without a parentBrandId)
+            const parents = allCompanies.filter(c => !c.parentBrandId);
+            setParentBrands(parents);
+          } catch (error) {
+             toast({ title: "Error", description: "Could not load parent brands.", variant: "destructive" });
+          }
+        }
+        setIsLoading(false);
+
       } else {
         router.push('/');
+        setIsLoading(false);
       }
-      setIsLoading(false);
     });
     return () => unsubscribe();
   }, [router, toast]);
@@ -109,7 +127,6 @@ export default function AddNewCompanyPage() {
         shortDescription: data.shortDescription || null,
         logoUrl: data.logoUrl || null,
         maxUsers: data.maxUsers ?? null,
-        // Default values for other fields
         assignedProgramIds: [], isTrial: false, trialEndsAt: null, saleAmount: null, revenueSharePartners: null,
         whiteLabelEnabled: false, primaryColor: null, secondaryColor: null, accentColor: null,
         brandBackgroundColor: null, brandForegroundColor: null, canManageCourses: false,
@@ -117,8 +134,10 @@ export default function AddNewCompanyPage() {
       };
 
       let parentBrandIdForChild: string | null = null;
-      if (currentUser.role === 'Admin' || currentUser.role === 'Owner') {
-          parentBrandIdForChild = currentUser.companyId;
+      if (currentUser.role === 'Super Admin') {
+        parentBrandIdForChild = data.parentBrandId || null;
+      } else if (currentUser.role === 'Admin' || currentUser.role === 'Owner') {
+        parentBrandIdForChild = currentUser.companyId;
       }
       
       const newCompany = await addCompany(formData, currentUser.id, parentBrandIdForChild);
@@ -157,6 +176,37 @@ export default function AddNewCompanyPage() {
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <CardContent className="space-y-6">
                 <FormField control={form.control} name="name" render={({ field }) => ( <FormItem> <FormLabel>Brand Name</FormLabel> <FormControl><Input placeholder="e.g., Global Fitness Inc." {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+                
+                {currentUser.role === 'Super Admin' && (
+                  <FormField
+                    control={form.control}
+                    name="parentBrandId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1"><GitBranch className="h-4 w-4" /> Parent Brand (Optional)</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value ?? ''}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a parent brand to create a child brand..." />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                             <SelectItem value="">None (Create as Parent Brand)</SelectItem>
+                            {parentBrands.map(brand => (
+                              <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription className="text-xs">Assigning a parent brand makes this a "Child Brand". Leave blank to create a "Parent Brand".</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
                 <FormField control={form.control} name="shortDescription" render={({ field }) => ( <FormItem> <FormLabel>Short Description (Optional)</FormLabel> <FormControl><Textarea rows={3} placeholder="A brief description of the brand (max 150 characters)" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} />
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
