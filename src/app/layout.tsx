@@ -6,10 +6,11 @@ import { Footer } from '@/components/layout/Footer';
 import { Toaster } from "@/components/ui/toaster";
 import { cn } from '@/lib/utils';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { MobileSidebar } from '@/components/layout/MobileSidebar'; // Import the new component
 import { AiChatAssistant } from '@/components/layout/AiChatAssistant';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetTrigger } from '@/components/ui/sheet';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -55,14 +56,8 @@ export default async function RootLayout({
                             <span className="sr-only">Toggle navigation menu</span>
                           </Button>
                     </SheetTrigger>
-                    <SheetContent side="left" className="w-[280px] p-0">
-                         {/* Correctly place SheetHeader inside SheetContent */}
-                         <SheetHeader className="sr-only">
-                           <SheetTitle>Navigation Menu</SheetTitle>
-                           <SheetDescription>Main application navigation links and user menu.</SheetDescription>
-                         </SheetHeader>
-                         <Sidebar />
-                    </SheetContent>
+                    {/* The new MobileSidebar component will render the SheetContent */}
+                    <MobileSidebar />
                 </Sheet>
                  <h1 className="flex-1 text-lg font-semibold truncate">Gymramp</h1>
             </header>
