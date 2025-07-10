@@ -1,4 +1,3 @@
-
 // src/app/admin/companies/[companyId]/edit/page.tsx
 'use client';
 
@@ -344,7 +343,15 @@ export default function EditCompanyPage() {
           </div>
           <div className="flex justify-end pt-6 border-t">
             <Button type="submit" size="lg" className="bg-primary hover:bg-primary/90" disabled={isSaving || isLogoUploading || !userCanEdit}>
-              {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} Save Changes
+              {isSaving ? (
+                <span className="flex items-center">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...
+                </span>
+              ) : (
+                <span className="flex items-center">
+                  <Save className="mr-2 h-4 w-4" /> Save Changes
+                </span>
+              )}
             </Button>
           </div>
         </form>
