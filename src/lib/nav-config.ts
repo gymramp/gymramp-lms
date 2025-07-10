@@ -1,3 +1,4 @@
+
 // src/lib/nav-config.ts
 import type { User, UserRole, Company } from '@/types/user';
 import {
@@ -36,7 +37,7 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
   if (user.role === 'Super Admin') {
     roleSpecificItems.push(
       { href: '/admin/dashboard', label: 'Dashboard', icon: BarChartBig },
-      { href: '/admin/accounts', label: 'Accounts', icon: Building },
+      { href: '/admin/accounts', label: 'Accounts', icon: Users },
       { href: '/admin/companies', label: 'Brands', icon: Building },
       { href: '/admin/users', label: 'Users', icon: Users },
       { href: '/admin/partners', label: 'Partners', icon: Handshake },
