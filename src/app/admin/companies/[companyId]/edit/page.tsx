@@ -1,21 +1,175 @@
 
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ArrowLeft, Building, Users, Globe, Link as LinkIcon, Gift, AlertTriangle, Infinity } from 'lucide-react';
+import type { Company, User } from '@/types/user';
+import { getCompanyById } from '@/lib/company-data';
+import { getUserByEmail } from '@/lib/user-data';
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { useToast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge';
+import { Timestamp } from 'firebase/firestore';
+import Link from 'next/link';
 
 export default function EditCompanyPage() {
+  const params = useParams();
   const router = useRouter();
+  const companyId = params.companyId as string;
+  const { toast } = useToast();
+
+  const [company, setCompany] = useState<Company | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchCompanyData = useCallback(async (user: User | null) => {
+    if (!user || user.role !== 'Super Admin' || !companyId) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const companyData = await getCompanyById(companyId);
+      if (!companyData) {
+        toast({ title: "Error", description: "Account not found.", variant: "destructive" });
+        router.push('/admin/accounts');
+        return;
+      }
+      setCompany(companyData);
+    } catch (error) {
+      console.error("Failed to fetch company data:", error);
+      toast({ title: "Error", description: "Could not load account details.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [companyId, router, toast]);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser?.email) {
+        const userDetails = await getUserByEmail(firebaseUser.email);
+        setCurrentUser(userDetails);
+        if (userDetails?.role === 'Super Admin') {
+          fetchCompanyData(userDetails);
+        } else {
+          toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
+          router.push('/dashboard');
+        }
+      } else {
+        router.push('/login');
+      }
+    });
+    return () => unsubscribe();
+  }, [router, toast, fetchCompanyData]);
+
+  const trialStatusDisplay = () => {
+    if (!company) return null;
+    if (company.isTrial && company.trialEndsAt) {
+      const endsAt = new Date(company.trialEndsAt as string);
+      if (endsAt < new Date()) {
+        return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3" />Trial Ended: {endsAt.toLocaleDateString()}</Badge>;
+      } else {
+        return <Badge variant="default" className="bg-green-100 text-green-700 flex items-center gap-1"><Gift className="h-3 w-3" />Active Trial: Ends {endsAt.toLocaleDateString()}</Badge>;
+      }
+    } else if (company.isTrial) {
+      return <Badge variant="secondary">Trial (No End Date)</Badge>;
+    } else {
+      return <span className="text-sm text-muted-foreground">Not a Trial Account</span>;
+    }
+  };
+
+  if (isLoading || !company || !currentUser) {
+    return (
+      <div className="container mx-auto">
+        <Skeleton className="h-8 w-32 mb-6" />
+        <div className="flex justify-between items-center mb-4">
+          <Skeleton className="h-10 w-1/2" />
+        </div>
+        <Card>
+          <CardHeader><Skeleton className="h-6 w-1/4" /><Skeleton className="h-4 w-1/3 mt-2" /></CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-24 w-full md:col-span-2" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto">
-      <Button variant="outline" onClick={() => router.back()} className="mb-6">
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back
+      <Button variant="outline" onClick={() => router.push('/admin/accounts')} className="mb-6">
+        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Accounts
       </Button>
-      <h1 className="text-3xl font-bold">Account Details Page</h1>
-      <p className="text-muted-foreground mt-2">This is a placeholder for the Account Details page. Content will be added here.</p>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-3xl font-bold tracking-tight text-primary flex items-center gap-2">
+          <Building className="h-7 w-7" /> Account Details
+        </h1>
+        {/* Placeholder for future edit/action buttons */}
+        <Button asChild>
+            <Link href={`/admin/companies/${companyId}/edit`}>Edit Account</Link>
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{company.name}</CardTitle>
+          <CardDescription>
+            This page shows read-only information for the parent brand/account.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8 pt-6">
+          <div className="space-y-1">
+            <Label htmlFor="subdomain" className="text-muted-foreground flex items-center gap-1"><Globe className="h-4 w-4" /> Subdomain</Label>
+            <Input id="subdomain" value={company.subdomainSlug || 'Not set'} readOnly disabled />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="domain" className="text-muted-foreground flex items-center gap-1"><LinkIcon className="h-4 w-4" /> Custom Domain</Label>
+            <Input id="domain" value={company.customDomain || 'Not set'} readOnly disabled />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="max-users" className="text-muted-foreground flex items-center gap-1"><Users className="h-4 w-4" /> Max Users</Label>
+            <div className="flex items-center h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                {company.maxUsers === null || company.maxUsers === undefined ? <Infinity className="h-5 w-5"/> : company.maxUsers}
+            </div>
+          </div>
+           <div className="space-y-1">
+            <Label className="text-muted-foreground flex items-center gap-1"><Gift className="h-4 w-4" /> Trial Status</Label>
+            <div className="flex items-center h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                 {trialStatusDisplay()}
+            </div>
+          </div>
+           <div className="md:col-span-2 space-y-1">
+            <Label htmlFor="description" className="text-muted-foreground">Short Description</Label>
+            <p id="description" className="text-sm text-foreground p-3 border rounded-md min-h-[60px] bg-muted/50">
+              {company.shortDescription || 'No description provided.'}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Placeholder sections for future implementation */}
+      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <Card>
+            <CardHeader><CardTitle>Child Brands</CardTitle></CardHeader>
+            <CardContent><p className="text-muted-foreground">List of child brands will appear here.</p></CardContent>
+          </Card>
+           <Card>
+            <CardHeader><CardTitle>Users in this Account</CardTitle></CardHeader>
+            <CardContent><p className="text-muted-foreground">List of users directly assigned to this parent account will appear here.</p></CardContent>
+          </Card>
+      </div>
+
     </div>
   );
 }
