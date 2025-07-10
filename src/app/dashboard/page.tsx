@@ -9,7 +9,7 @@ import { EmployeeTable } from "@/components/dashboard/EmployeeTable";
 import type { User, Company, Location, UserRole } from '@/types/user';
 import type { Course, BrandCourse, Program } from '@/types/course';
 import type { ActivityLog } from '@/types/activity';
-import { getUserByEmail, toggleUserStatus as toggleUserDataStatus, getAllUsers as fetchAllSystemUsers, getUserOverallProgress, getUsersByCompanyId } from '@/lib/user-data';
+import { getUserByEmail, toggleUserStatus, getAllUsers as fetchAllSystemUsers, getUserOverallProgress, getUsersByCompanyId } from '@/lib/user-data';
 import { getCompanyById, getLocationsByCompanyId, getAllLocations as fetchAllSystemLocations, getAllCompanies as fetchAllAccessibleBrandsForUser } from '@/lib/company-data';
 import { getAllCourses as getAllLibraryCourses, getCourseById as fetchGlobalCourseById, getAllPrograms as fetchAllGlobalPrograms } from '@/lib/firestore-data';
 import { getBrandCoursesByBrandId } from '@/lib/brand-content-data';
@@ -197,11 +197,11 @@ export default function DashboardPage() {
   
   const handleToggleUserStatus = async (userId: string, userName: string, currentIsActive: boolean) => {
     if (!currentUser || currentUser.id === userId) {
-        toast({ title: "Action Denied", variant: "destructive"}); return;
+        toast({ title: "Action Denied", description: "You cannot change your own status.", variant: "destructive"}); return;
     }
     const targetUser = employees.find(u => u.id === userId);
     if (!targetUser) {
-         toast({ title: "Error", variant: "destructive"}); return;
+         toast({ title: "Error", description: "User not found.", variant: "destructive"}); return;
     }
     let canToggle = false;
     if (currentUser.role === 'Super Admin') canToggle = true;
@@ -211,7 +211,7 @@ export default function DashboardPage() {
         canToggle = (targetUser.role === 'Staff' || targetUser.role === 'Manager');
     }
     if (!canToggle) { toast({ title: "Permission Denied", variant: "destructive" }); return; }
-    const updatedUser = await toggleUserDataStatus(userId);
+    const updatedUser = await toggleUserStatus(userId);
     if (updatedUser) {
       fetchEmployeesAndAssignableCourses();
       toast({ title: currentIsActive ? "User Deactivated" : "User Reactivated", variant: currentIsActive ? "destructive" : "default" });

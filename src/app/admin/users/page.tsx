@@ -5,24 +5,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Badge } from "@/components/ui/badge";
-import { ShieldCheck, Users, Archive, Undo, Building, MapPin, AlertCircle, Loader2, Info, PlusCircle } from 'lucide-react';
-// DropdownMenu related imports removed as they are no longer used for edit/assign
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from '@/components/ui/input'; // Keep Input if used for search, etc.
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import type { UserRole, User, Company, Location } from '@/types/user';
-import { getUserByEmail, toggleUserStatus as toggleUserDataStatus, getAllUsers as fetchAllSystemUsers, getUsersByCompanyId } from '@/lib/user-data';
-import { getCompanyById, getLocationsByCompanyId, getAllLocations as fetchAllSystemLocations, getAllCompanies as fetchAllAccessibleBrandsForUser } from '@/lib/company-data';
+import type { User, Company, Location } from '@/types/user';
+import { getUserByEmail, toggleUserStatus, getAllUsers as fetchAllSystemUsers, getUsersByCompanyId } from '@/lib/user-data';
+import { getAllLocations as fetchAllSystemLocations, getAllCompanies as fetchAllAccessibleBrandsForUser } from '@/lib/company-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -30,7 +19,7 @@ import { useRouter } from 'next/navigation';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { EmployeeTable } from '@/components/dashboard/EmployeeTable';
 import Link from 'next/link';
-// AssignCourseDialog and EditUserDialog are removed as their functionality moves to a new page
+import { PlusCircle, Loader2 } from 'lucide-react';
 
 type EmployeeWithOverallProgress = User & {
     overallProgress: number;
@@ -165,7 +154,7 @@ export default function AdminUsersPage() {
     if (!targetUser) {
          toast({ title: "Error", description: "User not found.", variant: "destructive"}); return;
     }
-    const updatedUser = await toggleUserDataStatus(userId);
+    const updatedUser = await toggleUserStatus(userId);
     if (updatedUser) {
       fetchUsersForCurrentFilters();
       toast({ title: currentIsActive ? "User Deactivated" : "User Reactivated", variant: currentIsActive ? "destructive" : "default" });
@@ -207,8 +196,6 @@ export default function AdminUsersPage() {
             </Button>
          </div>
         </div>
-
-        {lastGeneratedPasswordForNewUser && ( <Alert variant="success" className="mb-6"> <ShieldCheck className="h-4 w-4" /> <AlertTitle>New User Added!</AlertTitle> <AlertDescription> Temporary password: <strong className="font-bold">{lastGeneratedPasswordForNewUser}</strong>. Welcome email sent. <Button variant="ghost" size="sm" onClick={() => setLastGeneratedPasswordForNewUser(null)} className="ml-4">Dismiss</Button> </AlertDescription> </Alert> )}
 
        <div className="flex flex-wrap items-end gap-4 mb-6 p-4 bg-secondary rounded-lg shadow-sm">
          <h2 className="text-lg font-semibold mr-4 self-center text-foreground">Filters:</h2>
@@ -271,7 +258,7 @@ export default function AdminUsersPage() {
                 currentUser={currentUser}
                 locations={allSystemLocations}
                 companies={accessibleBrandsForFilter}
-                baseEditPath="/admin/users" // Set base path for Super Admin context
+                baseEditPath="/admin/users"
             />
            )}
        </CardContent>

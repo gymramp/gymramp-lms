@@ -768,3 +768,21 @@ export async function handleGoogleSignIn(): Promise<void> {
     throw error;
   }
 }
+
+// --- Helper Functions ---
+function serializeUserDocumentData(data: any): any {
+    if (!data) return null;
+    const serialized = { ...data };
+    if (data.createdAt instanceof Timestamp) serialized.createdAt = data.createdAt.toDate().toISOString();
+    if (data.lastLogin instanceof Timestamp) serialized.lastLogin = data.lastLogin.toDate().toISOString();
+    if (data.deletedAt instanceof Timestamp) serialized.deletedAt = data.deletedAt.toDate().toISOString();
+    if (data.courseProgress) {
+        Object.keys(data.courseProgress).forEach(courseId => {
+            const progress = data.courseProgress[courseId];
+            if (progress && progress.lastUpdated instanceof Timestamp) {
+                serialized.courseProgress[courseId].lastUpdated = progress.lastUpdated.toDate().toISOString();
+            }
+        });
+    }
+    return serialized;
+}
