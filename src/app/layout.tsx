@@ -1,5 +1,6 @@
 
 import type { Metadata, Viewport } from 'next';
+import Image from 'next/image';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Footer } from '@/components/layout/Footer';
@@ -59,7 +60,15 @@ export default async function RootLayout({
                     {/* The new MobileSidebar component will render the SheetContent */}
                     <MobileSidebar />
                 </Sheet>
-                 <h1 className="flex-1 text-lg font-semibold truncate">Gymramp</h1>
+                 <div className="flex-1 flex justify-center">
+                    <Image
+                        src="/images/newlogo.png"
+                        alt="Gymramp Logo"
+                        width={120}
+                        height={30}
+                        className="max-h-[30px] w-auto"
+                    />
+                 </div>
             </header>
             <div className="flex-grow p-4 md:p-6 lg:p-8">
               {children}
