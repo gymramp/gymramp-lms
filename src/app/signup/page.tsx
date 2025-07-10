@@ -48,10 +48,10 @@ export default function SignupPage() {
         if (result.success) {
             toast({
                 title: "Account Created!",
-                description: "Welcome! Please log in to get started.",
+                description: "Welcome! Redirecting you to get started.",
                 duration: 7000,
             });
-            router.push('/'); // Redirect to login page
+            router.push('/onboarding'); // Redirect to onboarding page
         } else {
              toast({
                 title: "Signup Failed",
