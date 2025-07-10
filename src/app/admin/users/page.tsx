@@ -1,4 +1,3 @@
-
 // src/app/admin/users/page.tsx
 'use client';
 
@@ -190,7 +189,7 @@ export default function AdminUsersPage() {
   }
 
   const managerBrandNameForDisplay = currentUser?.role === 'Manager' && currentUser.companyId 
-    ? accessibleBrandsForFilter.find(b => b.id === currentUser.companyId)?.name || 'Loading brand...'
+    ? accessibleBrandsForFilter.find(b => b.id === currentUser.companyId)?.name || 'Loading account...'
     : '';
 
   return (
@@ -200,7 +199,7 @@ export default function AdminUsersPage() {
          <div className="flex items-center gap-2">
             <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90"
                 disabled={isLoadingFilters || !currentUser || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role) || (currentUser.role === 'Super Admin' && accessibleBrandsForFilter.length === 0 && (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter))}
-                title={ (currentUser?.role === 'Super Admin' && accessibleBrandsForFilter.length === 0 && (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter)) ? "Add a brand first" : ""} >
+                title={ (currentUser?.role === 'Super Admin' && accessibleBrandsForFilter.length === 0 && (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter)) ? "Add an account first" : ""} >
                 <Link href="/admin/users/new">
                     <PlusCircle className="mr-2 h-4 w-4" /> Add New User
                 </Link>
@@ -213,7 +212,7 @@ export default function AdminUsersPage() {
        <div className="flex flex-wrap items-end gap-4 mb-6 p-4 bg-secondary rounded-lg shadow-sm">
          <h2 className="text-lg font-semibold mr-4 self-center text-foreground">Filters:</h2>
            <div className="flex flex-col space-y-1">
-             <Label htmlFor="brand-filter-users">Brand:</Label>
+             <Label htmlFor="brand-filter-users">Account:</Label>
              {currentUser?.role === 'Manager' ? (
                 <Input
                     id="brand-filter-users-manager"
@@ -229,13 +228,13 @@ export default function AdminUsersPage() {
                   disabled={isLoadingFilters || (currentUser?.role === 'Super Admin' && accessibleBrandsForFilter.length === 0)}
                 >
                     <SelectTrigger id="brand-filter-users" className="w-[220px] bg-background h-10">
-                        <SelectValue placeholder="Select Brand" />
+                        <SelectValue placeholder="Select Account" />
                     </SelectTrigger>
-                  <SelectContent> <SelectItem value="placeholder-company" disabled>Select a brand...</SelectItem>
-                    {(currentUser?.role === 'Super Admin' || ((currentUser?.role === 'Admin' || currentUser?.role === 'Owner') && accessibleBrandsForFilter.length > 1)) && <SelectItem value="all">All Accessible Brands</SelectItem>}
+                  <SelectContent> <SelectItem value="placeholder-company" disabled>Select an account...</SelectItem>
+                    {(currentUser?.role === 'Super Admin' || ((currentUser?.role === 'Admin' || currentUser?.role === 'Owner') && accessibleBrandsForFilter.length > 1)) && <SelectItem value="all">All Accessible Accounts</SelectItem>}
                     {accessibleBrandsForFilter.map(brand => ( <SelectItem key={brand.id} value={brand.id}>{brand.name} {brand.parentBrandId ? "(Child)" : ""}</SelectItem> ))}
                     {accessibleBrandsForFilter.length === 0 && currentUser?.role === 'Super Admin' && (
-                        <SelectItem value="no-brands" disabled>No Brands Found</SelectItem>
+                        <SelectItem value="no-brands" disabled>No Accounts Found</SelectItem>
                     )}
                   </SelectContent>
                 </Select>
@@ -251,8 +250,8 @@ export default function AdminUsersPage() {
                     <SelectContent>
                         <SelectItem value="all">All Locations</SelectItem>
                         {locationsForLocationFilter.map(location => ( <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem> ))}
-                         {selectedBrandIdForFilter && selectedBrandIdForFilter !== 'all' && locationsForLocationFilter.length === 0 && ( <SelectItem value="no-locs" disabled>No locations in this brand</SelectItem> )}
-                         {(selectedBrandIdForFilter === 'all' && currentUser?.role !== 'Super Admin' && locationsForLocationFilter.length === 0) && (<SelectItem value="no-locs-all" disabled>No locations in accessible brands</SelectItem>)}
+                         {selectedBrandIdForFilter && selectedBrandIdForFilter !== 'all' && locationsForLocationFilter.length === 0 && ( <SelectItem value="no-locs" disabled>No locations in this account</SelectItem> )}
+                         {(selectedBrandIdForFilter === 'all' && currentUser?.role !== 'Super Admin' && locationsForLocationFilter.length === 0) && (<SelectItem value="no-locs-all" disabled>No locations in accessible accounts</SelectItem>)}
                          {(selectedBrandIdForFilter === 'all' && currentUser?.role === 'Super Admin' && allSystemLocations.length === 0) && (<SelectItem value="no-locs-sys" disabled>No locations in system</SelectItem>)}
                     </SelectContent>
                 </Select>

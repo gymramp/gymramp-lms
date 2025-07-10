@@ -34,7 +34,7 @@ const userFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email({ message: 'Please enter a valid email address.' }),
   role: z.string().min(1, { message: 'Please select a user role' }) as z.ZodType<UserRole>,
-  companyId: z.string().min(1, { message: 'Please select a brand.' }),
+  companyId: z.string().min(1, { message: 'Please select an account.' }),
   assignedLocationIds: z.array(z.string()).default([]),
 });
 
@@ -228,13 +228,13 @@ export default function AddNewUserPage() {
               
               <FormField control={form.control} name="companyId" render={({ field }) => (
                 <FormItem> 
-                  <FormLabel>Brand</FormLabel>
+                  <FormLabel>Account</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value} disabled={currentUser?.role !== 'Super Admin' && companies.length <= 1}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select an account" /></SelectTrigger></FormControl>
                     <SelectContent>{companies.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}</SelectContent>
                   </Select>
-                  <FormDescription>Assigns the user to a specific company or brand.</FormDescription>
-                  {isUserLimitReached && <p className="text-xs font-medium text-destructive mt-1">User limit reached for this brand.</p>}
+                  <FormDescription>Assigns the user to a specific customer account.</FormDescription>
+                  {isUserLimitReached && <p className="text-xs font-medium text-destructive mt-1">User limit reached for this account.</p>}
                   <FormMessage />
                 </FormItem>
               )} />
@@ -250,7 +250,7 @@ export default function AddNewUserPage() {
                             <FormItem className="flex items-center space-x-3"><FormControl><Checkbox checked={cbField.value?.includes(loc.id)} onCheckedChange={(checked) => checked ? cbField.onChange([...(cbField.value || []), loc.id]) : cbField.onChange((cbField.value || []).filter(v => v !== loc.id))} id={`loc-${loc.id}`} /></FormControl><FormLabel htmlFor={`loc-${loc.id}`} className="font-normal">{loc.name}</FormLabel></FormItem>
                           )}/>
                         ))}</div>
-                      ) : (<div className="text-sm text-muted-foreground italic h-full flex items-center justify-center">{selectedCompanyIdForm ? 'No locations for this brand.' : 'Select a brand first.'}</div>)}
+                      ) : (<div className="text-sm text-muted-foreground italic h-full flex items-center justify-center">{selectedCompanyIdForm ? 'No locations for this account.' : 'Select an account first.'}</div>)}
                     </ScrollArea>
                   </FormControl> 
                   <FormDescription>Determines which location-specific data the user can access or be associated with.</FormDescription>
@@ -270,7 +270,7 @@ export default function AddNewUserPage() {
                   </Select>
                    <FormDescription>
                       <ul className="list-disc pl-4 text-xs space-y-1 mt-2">
-                        <li><strong>Admin/Owner:</strong> Full control over their brand & child brands.</li>
+                        <li><strong>Admin/Owner:</strong> Full control over their account & child accounts.</li>
                         <li><strong>Manager:</strong> Manages users within their assigned locations.</li>
                         <li><strong>Staff:</strong> Standard user, can only access assigned learning content.</li>
                       </ul>

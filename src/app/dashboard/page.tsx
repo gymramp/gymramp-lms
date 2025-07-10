@@ -1,4 +1,3 @@
-
 // src/app/dashboard/page.tsx
 'use client';
 
@@ -244,8 +243,8 @@ export default function DashboardPage() {
     setActiveCurrentPage(1); setInactiveCurrentPage(1);
   };
 
-  const displayBrandNameForManager = userPrimaryBrand?.name || (isLoadingBrandDataForFilters ? 'Loading brand...' : 'Brand Not Found');
-  const displayBrandNameForTitle = selectedBrandIdForDashboard === 'all' || !selectedBrandIdForDashboard ? (currentUser?.role === 'Super Admin' ? 'All System Brands' : (viewableBrandsForFilter.length > 1 || (viewableBrandsForFilter.length === 0 && !userPrimaryBrand) ? 'All Accessible Brands' : (userPrimaryBrand?.name || 'Your Brand'))) : (viewableBrandsForFilter.find(b => b.id === selectedBrandIdForDashboard)?.name || userPrimaryBrand?.name || 'Selected Brand');
+  const managerBrandNameForDisplay = userPrimaryBrand?.name || (isLoadingBrandDataForFilters ? 'Loading account...' : 'Account Not Found');
+  const displayBrandNameForTitle = selectedBrandIdForDashboard === 'all' || !selectedBrandIdForDashboard ? (currentUser?.role === 'Super Admin' ? 'All System Accounts' : (viewableBrandsForFilter.length > 1 || (viewableBrandsForFilter.length === 0 && !userPrimaryBrand) ? 'All Accessible Accounts' : (userPrimaryBrand?.name || 'Your Account'))) : (viewableBrandsForFilter.find(b => b.id === selectedBrandIdForDashboard)?.name || userPrimaryBrand?.name || 'Selected Account');
   const displayLocationName = selectedLocationId === 'all' ? 'All Locations' : allSystemLocations.find(l => l.id === selectedLocationId)?.name || '';
   const pageIsLoading = isAuthLoading || isLoadingBrandDataForFilters;
 
@@ -255,14 +254,14 @@ export default function DashboardPage() {
       <CardContent><Skeleton className="h-8 w-1/2" /><Skeleton className="h-4 w-3/4 mt-1" /><Skeleton className="h-20 mt-4 w-full" /></CardContent>
     </Card>
   ))} </div> <div className="grid gap-4"> <Skeleton className="h-64" /> </div> </div> );
-  if (!userPrimaryBrand && currentUser.role !== 'Super Admin') return <div className="container mx-auto text-center">Error: User not associated with a primary brand.</div>;
+  if (!userPrimaryBrand && currentUser.role !== 'Super Admin') return <div className="container mx-auto text-center">Error: User not associated with a primary account.</div>;
 
   return (
     <div className="container mx-auto flex-1 space-y-4 pb-6">
       <div className="flex items-center justify-between space-y-2">
         <div> <h1 className="text-3xl font-bold text-primary">{displayBrandNameForTitle} Dashboard</h1> <p className="text-muted-foreground flex items-center gap-2"> <MapPin className="h-4 w-4" /> {displayLocationName ? `Viewing: ${displayLocationName}` : 'Overview'} </p> </div>
         <div className="flex items-center space-x-2"> {currentUser && ['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role) && ( 
-            <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={isLoadingEmployees || isLoadingBrandDataForFilters || (currentUser.role === 'Super Admin' && viewableBrandsForFilter.length === 0 && (selectedBrandIdForDashboard === 'all' || !selectedBrandIdForDashboard))} title={(currentUser.role === 'Super Admin' && viewableBrandsForFilter.length === 0 && (selectedBrandIdForDashboard === 'all' || !selectedBrandIdForDashboard)) ? "Add a brand first" : ""}> 
+            <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={isLoadingEmployees || isLoadingBrandDataForFilters || (currentUser.role === 'Super Admin' && viewableBrandsForFilter.length === 0 && (selectedBrandIdForDashboard === 'all' || !selectedBrandIdForDashboard))} title={(currentUser.role === 'Super Admin' && viewableBrandsForFilter.length === 0 && (selectedBrandIdForDashboard === 'all' || !selectedBrandIdForDashboard)) ? "Add an account first" : ""}> 
                 <Link href="/admin/users/new">
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Employee 
                 </Link>
@@ -271,20 +270,20 @@ export default function DashboardPage() {
       </div>
       <div className="flex flex-wrap items-end gap-4 mb-6 p-4 bg-secondary rounded-lg shadow-sm">
         <h2 className="text-lg font-semibold mr-4 self-center text-foreground">Filters:</h2>
-          <div className="flex flex-col space-y-1"> <Label htmlFor="brand-filter-dashboard" className="text-sm text-muted-foreground">Brand</Label>
-            {currentUser?.role === 'Manager' ? ( <Input id="brand-filter-dashboard-manager" value={displayBrandNameForManager} readOnly disabled className="w-[220px] bg-background/50 h-10" /> )
+          <div className="flex flex-col space-y-1"> <Label htmlFor="brand-filter-dashboard" className="text-sm text-muted-foreground">Account</Label>
+            {currentUser?.role === 'Manager' ? ( <Input id="brand-filter-dashboard-manager" value={managerBrandNameForDisplay} readOnly disabled className="w-[220px] bg-background/50 h-10" /> )
             : ( <Select value={selectedBrandIdForDashboard || 'placeholder-brand'} onValueChange={(value) => setSelectedBrandIdForDashboard(value === 'placeholder-brand' ? '' : value)} disabled={isLoadingEmployees || isLoadingBrandDataForFilters || (viewableBrandsForFilter.length === 0 && currentUser?.role === 'Super Admin')}>
-                  <SelectTrigger id="brand-filter-dashboard" className="w-[220px] bg-background h-10"> <SelectValue placeholder="Select Brand" /> </SelectTrigger>
-                  <SelectContent> <SelectItem value="placeholder-brand" disabled>Select a brand...</SelectItem>
-                    {(currentUser?.role === 'Super Admin' || ((currentUser?.role === 'Admin' || currentUser?.role === 'Owner') && viewableBrandsForFilter.length > 1)) && <SelectItem value="all">All Accessible Brands</SelectItem>}
+                  <SelectTrigger id="brand-filter-dashboard" className="w-[220px] bg-background h-10"> <SelectValue placeholder="Select Account" /> </SelectTrigger>
+                  <SelectContent> <SelectItem value="placeholder-brand" disabled>Select an account...</SelectItem>
+                    {(currentUser?.role === 'Super Admin' || ((currentUser?.role === 'Admin' || currentUser?.role === 'Owner') && viewableBrandsForFilter.length > 1)) && <SelectItem value="all">All Accessible Accounts</SelectItem>}
                     {viewableBrandsForFilter.map(brand => ( <SelectItem key={brand.id} value={brand.id}>{brand.name} {brand.parentBrandId ? "(Child)" : ""}</SelectItem> ))}
-                    {viewableBrandsForFilter.length === 0 && currentUser?.role === 'Super Admin' && <SelectItem value="no-brands" disabled>No Brands</SelectItem>}
+                    {viewableBrandsForFilter.length === 0 && currentUser?.role === 'Super Admin' && <SelectItem value="no-brands" disabled>No Accounts</SelectItem>}
                   </SelectContent> </Select> )}
           </div>
           <div className="flex flex-col space-y-1"> <Label htmlFor="location-filter-dashboard" className="text-sm text-muted-foreground">Location</Label>
             <Select value={selectedLocationId} onValueChange={setSelectedLocationId} disabled={isLoadingEmployees || isLoadingBrandDataForFilters || locationsForLocationFilter.length === 0} >
               <SelectTrigger id="location-filter-dashboard" className="w-[220px] bg-background h-10"> <SelectValue placeholder="All Locations" /> </SelectTrigger>
-              <SelectContent> <SelectItem value="all">All Locations</SelectItem> {locationsForLocationFilter.map(loc => ( <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem> ))} {selectedBrandIdForDashboard && selectedBrandIdForDashboard !== 'all' && locationsForLocationFilter.length === 0 && ( <SelectItem value="none" disabled>No locations in brand</SelectItem> )} </SelectContent>
+              <SelectContent> <SelectItem value="all">All Locations</SelectItem> {locationsForLocationFilter.map(loc => ( <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem> ))} {selectedBrandIdForDashboard && selectedBrandIdForDashboard !== 'all' && locationsForLocationFilter.length === 0 && ( <SelectItem value="none" disabled>No locations in account</SelectItem> )} </SelectContent>
             </Select>
           </div>
         <Button variant="outline" onClick={() => { setSelectedBrandIdForDashboard(userPrimaryBrand?.id || (currentUser?.role === 'Super Admin' ? 'all' : '')); setSelectedLocationId('all');}} className="h-10 self-end" disabled={isLoadingBrandDataForFilters}>Reset</Button>

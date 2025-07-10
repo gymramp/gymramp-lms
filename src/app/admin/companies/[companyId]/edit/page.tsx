@@ -1,4 +1,3 @@
-
 // src/app/admin/companies/[companyId]/edit/page.tsx
 'use client';
 
@@ -37,7 +36,7 @@ import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 
 // Removed white-labeling fields from schema
 const companyFormSchema = z.object({
-  name: z.string().min(2, "Brand name must be at least 2 characters."),
+  name: z.string().min(2, "Account name must be at least 2 characters."),
   shortDescription: z.string().max(150, { message: "Description can't exceed 150 characters." }).optional().or(z.literal('')).nullable(),
   logoUrl: z.string().url({ message: "Invalid URL for logo." }).optional().or(z.literal('')).nullable(),
   maxUsers: z.coerce.number({ invalid_type_error: "Must be a number" }).int().positive().min(1, "Min 1 user").optional().nullable(),
@@ -92,7 +91,7 @@ export default function EditCompanyPage() {
       setIsLoadingParentBrand(false);
       return;
     }
-    console.log('[EditBrand] Fetching data for brand ID:', companyId);
+    console.log('[EditAccount] Fetching data for account ID:', companyId);
     setIsLoading(true);
     setIsLoadingProgramData(true);
     setIsLoadingParentBrand(true);
@@ -100,7 +99,7 @@ export default function EditCompanyPage() {
     try {
       const companyData = await getCompanyById(companyId);
       if (!companyData) {
-        toast({ title: "Error", description: "Brand not found.", variant: "destructive" });
+        toast({ title: "Error", description: "Account not found.", variant: "destructive" });
         router.push('/admin/companies');
         return;
       }
@@ -115,7 +114,7 @@ export default function EditCompanyPage() {
       }
 
       if (!authorized) {
-        toast({ title: "Access Denied", description: "You do not have permission to edit this brand.", variant: "destructive" });
+        toast({ title: "Access Denied", description: "You do not have permission to edit this account.", variant: "destructive" });
         router.push(user.role === 'Super Admin' ? '/admin/companies' : '/dashboard');
         return;
       }
@@ -154,17 +153,17 @@ export default function EditCompanyPage() {
         setAllLibraryCourses(fetchedAllLibCoursesData);
         const details = programsDetailsPromises.filter(Boolean) as Program[];
         setAssignedProgramsDetails(details);
-        console.log('[EditBrand] Fetched companyData.assignedProgramIds:', companyData.assignedProgramIds);
-        console.log('[EditBrand] Fetched program details:', details);
+        console.log('[EditAccount] Fetched account.assignedProgramIds:', companyData.assignedProgramIds);
+        console.log('[EditAccount] Fetched program details:', details);
       } else {
         setAssignedProgramsDetails([]);
         setAllLibraryCourses([]);
-        console.log('[EditBrand] No assigned programs found for brand:', companyId);
+        console.log('[EditAccount] No assigned programs found for account:', companyId);
       }
 
     } catch (error: any) {
-      console.error("[EditBrand] Error fetching data:", error);
-      toast({ title: "Error", description: `Failed to load brand data: ${error.message}`, variant: "destructive" });
+      console.error("[EditAccount] Error fetching data:", error);
+      toast({ title: "Error", description: `Failed to load account data: ${error.message}`, variant: "destructive" });
     } finally {
       setIsLoading(false);
       setIsLoadingProgramData(false);
@@ -201,7 +200,7 @@ export default function EditCompanyPage() {
       const storagePath = `${STORAGE_PATHS.COMPANY_LOGOS}/${uniqueFileName}`;
       const downloadURL = await uploadImage(file, storagePath, setLogoUploadProgress);
       form.setValue('logoUrl', downloadURL, { shouldValidate: true });
-      toast({ title: "Logo Uploaded", description: "Brand logo uploaded successfully." });
+      toast({ title: "Logo Uploaded", description: "Account logo uploaded successfully." });
     } catch (error: any) {
       setLogoUploadError(error.message || "Upload failed.");
       toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
@@ -240,13 +239,13 @@ export default function EditCompanyPage() {
       if (updatedCompany) {
         setCompany(updatedCompany);
         await fetchCompanyData(currentUser); // Re-fetch all data
-        toast({ title: "Brand Updated", description: `"${updatedCompany.name}" updated successfully.` });
+        toast({ title: "Account Updated", description: `"${updatedCompany.name}" updated successfully.` });
       } else {
-        throw new Error("Failed to update brand details.");
+        throw new Error("Failed to update account details.");
       }
     } catch (error: any) {
-      console.error("[EditBrand] onSubmit error:", error);
-      toast({ title: "Error Updating Brand", description: error.message, variant: "destructive" });
+      console.error("[EditAccount] onSubmit error:", error);
+      toast({ title: "Error Updating Account", description: error.message, variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -266,7 +265,7 @@ export default function EditCompanyPage() {
   }
 
   if (!company) {
-    return <div className="container mx-auto text-center">Brand not found.</div>;
+    return <div className="container mx-auto text-center">Account not found.</div>;
   }
 
   const userCanEditBasicInfo = currentUser?.role === 'Super Admin' || (currentUser?.companyId === company.id && (currentUser?.role === 'Admin' || currentUser?.role === 'Owner')) || (company.parentBrandId === currentUser?.companyId && (currentUser?.role === 'Admin' || currentUser?.role === 'Owner'));
@@ -275,30 +274,30 @@ export default function EditCompanyPage() {
   return (
     <div className="container mx-auto">
       <Button variant="outline" onClick={() => router.push('/admin/companies')} className="mb-6">
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Brands
+        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Accounts
       </Button>
-      <h1 className="text-3xl font-bold tracking-tight text-primary mb-2"> Edit Brand: {company.name} </h1>
-      <p className="text-muted-foreground mb-8"> Manage settings for this brand. </p>
-      {company.parentBrandId && ( <Card className="mb-6 bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700"> <CardContent className="p-4"> <p className="text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2"> <Briefcase className="h-4 w-4" /> This is a Child Brand. Parent Brand: {isLoadingParentBrand ? <Loader2 className="h-4 w-4 animate-spin" /> : <strong>{parentBrandName || 'Loading...'}</strong>} </p> </CardContent> </Card> )}
+      <h1 className="text-3xl font-bold tracking-tight text-primary mb-2"> Edit Account: {company.name} </h1>
+      <p className="text-muted-foreground mb-8"> Manage settings for this account. </p>
+      {company.parentBrandId && ( <Card className="mb-6 bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700"> <CardContent className="p-4"> <p className="text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2"> <Briefcase className="h-4 w-4" /> This is a Child Account. Parent Account: {isLoadingParentBrand ? <Loader2 className="h-4 w-4 animate-spin" /> : <strong>{parentBrandName || 'Loading...'}</strong>} </p> </CardContent> </Card> )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
               <Card>
-                <CardHeader><CardTitle>Core Brand Information</CardTitle><CardDescription>Basic identification and descriptive details for the brand.</CardDescription></CardHeader>
+                <CardHeader><CardTitle>Core Account Information</CardTitle><CardDescription>Basic identification and descriptive details for the account.</CardDescription></CardHeader>
                 <CardContent className="space-y-4">
-                  <FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Brand Name</FormLabel><FormControl><Input placeholder="Brand Name" {...field} value={field.value ?? ''} disabled={!userCanEditBasicInfo} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Account Name</FormLabel><FormControl><Input placeholder="Account Name" {...field} value={field.value ?? ''} disabled={!userCanEditBasicInfo} /></FormControl><FormMessage /></FormItem>)} />
                   <FormField control={form.control} name="shortDescription" render={({ field }) => (<FormItem><FormLabel>Short Description (Optional)</FormLabel><FormControl><Textarea rows={3} placeholder="A brief description (max 150 chars)" {...field} value={field.value ?? ''} disabled={!userCanEditBasicInfo} /></FormControl><FormMessage /></FormItem>)} />
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader><CardTitle>Brand Logo</CardTitle><CardDescription>Upload or manage the brand's logo.</CardDescription></CardHeader>
+                <CardHeader><CardTitle>Account Logo</CardTitle><CardDescription>Upload or manage the account's logo.</CardDescription></CardHeader>
                 <CardContent>
                   <FormItem>
                     <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
-                      {logoUrlValue && !isLogoUploading ? ( <div className="relative w-32 h-32 mx-auto mb-2"> <Image src={logoUrlValue} alt="Brand logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" data-ai-hint="company logo" onError={() => { form.setValue('logoUrl', ''); toast({ title: "Image Load Error", description:"Could not load logo preview.", variant: "destructive" }); }} /> <Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6 opacity-80 hover:opacity-100 z-10" onClick={() => form.setValue('logoUrl', '')} disabled={!userCanEditBasicInfo || isLogoUploading}><Trash2 className="h-4 w-4" /></Button> </div>
+                      {logoUrlValue && !isLogoUploading ? ( <div className="relative w-32 h-32 mx-auto mb-2"> <Image src={logoUrlValue} alt="Account logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" data-ai-hint="company logo" onError={() => { form.setValue('logoUrl', ''); toast({ title: "Image Load Error", description:"Could not load logo preview.", variant: "destructive" }); }} /> <Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6 opacity-80 hover:opacity-100 z-10" onClick={() => form.setValue('logoUrl', '')} disabled={!userCanEditBasicInfo || isLogoUploading}><Trash2 className="h-4 w-4" /></Button> </div>
                       ) : isLogoUploading ? (
                         <div className="flex flex-col items-center justify-center h-full py-8"><Loader2 className="h-8 w-8 animate-spin text-primary mb-2" /><p className="text-sm text-muted-foreground mb-1">Uploading...</p><Progress value={logoUploadProgress} className="w-full max-w-xs h-2" />{logoUploadError && <p className="text-xs text-destructive mt-2">{logoUploadError}</p>}</div>
                       ) : (
@@ -367,7 +366,7 @@ export default function EditCompanyPage() {
                             <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                                 <div className="space-y-0.5">
                                 <FormLabel className="text-base">Enable Course Management</FormLabel>
-                                <FormDescription>Allow this brand's Admins/Owners to create and manage their own courses.</FormDescription>
+                                <FormDescription>Allow this account's Admins/Owners to create and manage their own courses.</FormDescription>
                                 </div>
                                 <FormControl>
                                   <div><Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} disabled={!isSuperAdmin} /></div>
@@ -419,7 +418,7 @@ export default function EditCompanyPage() {
                       </div>
                     ) : (
                       <>
-                        <p className="text-sm text-muted-foreground italic">No programs currently assigned to this brand.</p>
+                        <p className="text-sm text-muted-foreground italic">No programs currently assigned to this account.</p>
                         {currentUser?.role === 'Super Admin' && (
                           <Button variant="outline" size="sm" className="mt-4 w-full" asChild>
                             <Link href={`/admin/companies/${companyId}/manage-programs`}>Assign Programs</Link>

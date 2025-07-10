@@ -105,8 +105,8 @@ export default function AdminCompaniesPage() {
       setCompanies(companiesWithCounts);
       setFilteredCompanies(companiesWithCounts);
     } catch (error) {
-      console.error("Failed to fetch brands or programs:", error);
-      toast({ title: "Error", description: "Could not load brands or program data.", variant: "destructive" });
+      console.error("Failed to fetch accounts or programs:", error);
+      toast({ title: "Error", description: "Could not load accounts or program data.", variant: "destructive" });
       setCompanies([]);
       setFilteredCompanies([]);
     } finally {
@@ -158,7 +158,7 @@ export default function AdminCompaniesPage() {
         setCompanyToDelete(company);
         setIsDeleteDialogOpen(true);
      } else {
-        toast({ title: "Permission Denied", description: "You cannot delete this brand.", variant: "destructive" });
+        toast({ title: "Permission Denied", description: "You cannot delete this account.", variant: "destructive" });
      }
   };
 
@@ -170,15 +170,15 @@ export default function AdminCompaniesPage() {
       if (success) {
         await fetchCompanies(currentUser); 
         toast({
-          title: 'Brand Deleted',
-          description: `Brand "${companyToDelete.name}" and its direct associations (users, locations) have been marked as deleted. Child brands are not automatically deleted.`,
+          title: 'Account Deleted',
+          description: `Account "${companyToDelete.name}" and its direct associations (users, locations) have been marked as deleted. Child accounts are not automatically deleted.`,
         });
       } else {
         throw new Error('Delete operation returned false.');
       }
     } catch (error) {
-      console.error("Failed to delete brand:", error);
-      toast({ title: 'Error Deleting Brand', description: `Could not delete brand "${companyToDelete.name}".`, variant: 'destructive' });
+      console.error("Failed to delete account:", error);
+      toast({ title: 'Error Deleting Account', description: `Could not delete account "${companyToDelete.name}".`, variant: 'destructive' });
     } finally {
       setIsLoading(false);
       setIsDeleteDialogOpen(false);
@@ -193,29 +193,29 @@ export default function AdminCompaniesPage() {
   return (
     <div className="container mx-auto">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Brand Management</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-primary">Account Management</h1>
         <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90">
           <Link href="/admin/companies/new">
-            <PlusCircle className="mr-2 h-4 w-4" /> Add New Brand
+            <PlusCircle className="mr-2 h-4 w-4" /> Add New Account
           </Link>
         </Button>
       </div>
       <div className="mb-6 flex items-center gap-2">
         <Search className="h-5 w-5 text-muted-foreground" />
-        <Input type="text" placeholder="Search brands by name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="max-w-sm"/>
+        <Input type="text" placeholder="Search accounts by name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="max-w-sm"/>
       </div>
       <Card>
-        <CardHeader> <CardTitle>Brand List</CardTitle> <CardDescription>Manage brands, their locations, courses, and users.</CardDescription> </CardHeader>
+        <CardHeader> <CardTitle>Account List</CardTitle> <CardDescription>Manage customer accounts, their locations, courses, and users.</CardDescription> </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="space-y-4 py-4"> <Skeleton className="h-12 w-full" /> <Skeleton className="h-10 w-full" /> <Skeleton className="h-10 w-full" /> </div>
           ) : filteredCompanies.length === 0 ? (
-            <div className="text-center text-muted-foreground py-8"> {searchTerm ? `No brands found matching "${searchTerm}".` : "No brands found. Add one to get started."} </div>
+            <div className="text-center text-muted-foreground py-8"> {searchTerm ? `No accounts found matching "${searchTerm}".` : "No accounts found. Add one to get started."} </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Brand Name</TableHead>
+                  <TableHead>Account Name</TableHead>
                   <TableHead className="text-center">Type</TableHead>
                   <TableHead className="text-center">Locations</TableHead>
                   <TableHead className="text-center">Users (Active)</TableHead>
@@ -241,12 +241,12 @@ export default function AdminCompaniesPage() {
                         trialStatusDisplay = <span className="text-xs text-muted-foreground">Not a Trial</span>;
                     }
 
-                    const brandType = company.parentBrandId ? "Child Brand" : "Parent Brand";
+                    const accountType = company.parentBrandId ? "Child Account" : "Parent Account";
 
                     return (
                       <TableRow key={company.id}>
                         <TableCell className="font-medium"> <div className="flex items-center gap-3"> <Avatar className="h-8 w-8 border"> <AvatarImage src={company.logoUrl || undefined} alt={`${company.name} logo`} className="object-contain" /> <AvatarFallback className="text-xs"> {company.name.substring(0, 2).toUpperCase()} </AvatarFallback> </Avatar> <span>{company.name}</span> </div> </TableCell>
-                        <TableCell className="text-center"><Badge variant={company.parentBrandId ? "outline" : "default"}>{brandType}</Badge></TableCell>
+                        <TableCell className="text-center"><Badge variant={company.parentBrandId ? "outline" : "default"}>{accountType}</Badge></TableCell>
                         <TableCell className="text-center"> {isLoadingCounts ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : company.locationCount} </TableCell>
                         <TableCell className="text-center"> {isLoadingCounts ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : company.userCount} </TableCell>
                         <TableCell className="text-center"> {isLoadingCounts ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : company.maxUsers === null || company.maxUsers === undefined ? <Infinity className="h-4 w-4 mx-auto text-muted-foreground" title="Unlimited"/> : company.maxUsers} </TableCell>
@@ -271,7 +271,7 @@ export default function AdminCompaniesPage() {
                               <DropdownMenuItem asChild>
                                 <Link href={`/admin/companies/${company.id}/edit`}>
                                   <Edit className="mr-2 h-4 w-4" />
-                                  Edit Brand & Settings
+                                  Edit Account & Settings
                                 </Link>
                               </DropdownMenuItem>
                               <DropdownMenuItem asChild>
@@ -288,7 +288,7 @@ export default function AdminCompaniesPage() {
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => openDeleteConfirmation(company)}>
-                                  <Trash2 className="mr-2 h-4 w-4" /> Delete Brand
+                                  <Trash2 className="mr-2 h-4 w-4" /> Delete Account
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -303,8 +303,8 @@ export default function AdminCompaniesPage() {
       </Card>
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader> <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle> <AlertDialogDescription> This action cannot be undone. This will permanently mark the brand "{companyToDelete?.name}" as deleted. Associated users and locations will also be marked as deleted. Child brands (if any) will NOT be automatically deleted but will become orphaned. </AlertDialogDescription> </AlertDialogHeader>
-          <AlertDialogFooter> <AlertDialogCancel onClick={() => setCompanyToDelete(null)}>Cancel</AlertDialogCancel> <AlertDialogAction onClick={confirmDeleteCompany} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isLoading}> {isLoading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>) : 'Yes, delete brand'} </AlertDialogAction> </AlertDialogFooter>
+          <AlertDialogHeader> <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle> <AlertDialogDescription> This action cannot be undone. This will permanently mark the account "{companyToDelete?.name}" as deleted. Associated users and locations will also be marked as deleted. Child accounts (if any) will NOT be automatically deleted but will become orphaned. </AlertDialogDescription> </AlertDialogHeader>
+          <AlertDialogFooter> <AlertDialogCancel onClick={() => setCompanyToDelete(null)}>Cancel</AlertDialogCancel> <AlertDialogAction onClick={confirmDeleteCompany} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isLoading}> {isLoading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>) : 'Yes, delete account'} </AlertDialogAction> </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

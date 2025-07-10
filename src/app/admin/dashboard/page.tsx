@@ -216,9 +216,9 @@ export default function SuperAdminDashboardPage() {
           changeVariant="default"
         />
         <StatCard
-          title="Total Brands"
+          title="Total Accounts"
           value={totalCompanies}
-          description="Registered brands"
+          description="Registered customer accounts"
           icon={Building}
           chartData={generateChartData(totalCompanies)}
           chartColor="hsl(var(--chart-3))"
@@ -245,7 +245,7 @@ export default function SuperAdminDashboardPage() {
             </CardHeader>
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Button variant="outline" onClick={() => router.push('/admin/companies')} className="justify-start text-left h-auto whitespace-normal px-3 py-2">
-                    <Building className="mr-2 h-4 w-4 flex-shrink-0" /> Manage Brands
+                    <Building className="mr-2 h-4 w-4 flex-shrink-0" /> Manage Accounts
                 </Button>
                 <Button variant="outline" onClick={() => router.push('/admin/users')} className="justify-start text-left h-auto whitespace-normal px-3 py-2">
                     <Users className="mr-2 h-4 w-4 flex-shrink-0" /> Manage Users
@@ -274,11 +274,11 @@ export default function SuperAdminDashboardPage() {
          <Card className="card-lift-hover">
             <CardHeader>
                 <CardTitle>Recent Platform Additions</CardTitle>
-                <CardDescription>Latest brands and users added to the system.</CardDescription>
+                <CardDescription>Latest accounts and users added to the system.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
                 <div>
-                    <h3 className="text-md font-semibold mb-2 text-muted-foreground flex items-center"><Building className="mr-2 h-4 w-4"/>Recent Brands</h3>
+                    <h3 className="text-md font-semibold mb-2 text-muted-foreground flex items-center"><Building className="mr-2 h-4 w-4"/>Recent Accounts</h3>
                     {recentCompanies.length > 0 ? (
                         <ul className="space-y-2">
                             {recentCompanies.map(company => (
@@ -297,7 +297,7 @@ export default function SuperAdminDashboardPage() {
                             ))}
                         </ul>
                     ) : (
-                        <p className="text-sm text-muted-foreground italic">No new brands recently.</p>
+                        <p className="text-sm text-muted-foreground italic">No new accounts recently.</p>
                     )}
                 </div>
                 <div>
