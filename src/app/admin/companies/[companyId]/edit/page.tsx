@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Building, Users, Globe, Link as LinkIcon, Gift, AlertTriangle, Infinity } from 'lucide-react';
 import type { Company, User } from '@/types/user';
-import { getCompanyById } from '@/lib/company-data';
+import { getCompanyById, getChildBrandsByParentId } from '@/lib/company-data';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -26,23 +26,29 @@ export default function EditCompanyPage() {
   const { toast } = useToast();
 
   const [company, setCompany] = useState<Company | null>(null);
+  const [childBrands, setChildBrands] = useState<Company[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchCompanyData = useCallback(async (user: User | null) => {
-    if (!user || user.role !== 'Super Admin' || !companyId) {
+    if (!user || !['Super Admin', 'Admin', 'Owner'].includes(user.role) || !companyId) {
       setIsLoading(false);
       return;
     }
     setIsLoading(true);
     try {
-      const companyData = await getCompanyById(companyId);
-      if (!companyData) {
-        toast({ title: "Error", description: "Account not found.", variant: "destructive" });
+      const [companyData, childBrandsData] = await Promise.all([
+        getCompanyById(companyId),
+        getChildBrandsByParentId(companyId)
+      ]);
+
+      if (!companyData || (user.role !== 'Super Admin' && user.companyId !== companyData.id)) {
+        toast({ title: "Error", description: "Account not found or access denied.", variant: "destructive" });
         router.push('/admin/accounts');
         return;
       }
       setCompany(companyData);
+      setChildBrands(childBrandsData);
     } catch (error) {
       console.error("Failed to fetch company data:", error);
       toast({ title: "Error", description: "Could not load account details.", variant: "destructive" });
@@ -56,7 +62,7 @@ export default function EditCompanyPage() {
       if (firebaseUser?.email) {
         const userDetails = await getUserByEmail(firebaseUser.email);
         setCurrentUser(userDetails);
-        if (userDetails?.role === 'Super Admin') {
+        if (userDetails && ['Super Admin', 'Admin', 'Owner'].includes(userDetails.role)) {
           fetchCompanyData(userDetails);
         } else {
           toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
@@ -115,9 +121,8 @@ export default function EditCompanyPage() {
         <h1 className="text-3xl font-bold tracking-tight text-primary flex items-center gap-2">
           <Building className="h-7 w-7" /> Account Details
         </h1>
-        {/* Placeholder for future edit/action buttons */}
         <Button asChild>
-            <Link href={`/admin/companies/${companyId}/edit`}>Edit Account</Link>
+            <Link href={`/admin/companies/${companyId}/edit-form`}>Edit Account</Link>
         </Button>
       </div>
 
@@ -158,11 +163,25 @@ export default function EditCompanyPage() {
         </CardContent>
       </Card>
       
-      {/* Placeholder sections for future implementation */}
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
           <Card>
-            <CardHeader><CardTitle>Child Brands</CardTitle></CardHeader>
-            <CardContent><p className="text-muted-foreground">List of child brands will appear here.</p></CardContent>
+            <CardHeader><CardTitle>Brands</CardTitle></CardHeader>
+            <CardContent>
+              {childBrands.length > 0 ? (
+                <ul className="space-y-2">
+                  {childBrands.map(brand => (
+                    <li key={brand.id} className="text-sm p-2 border rounded-md flex justify-between items-center">
+                      <span>{brand.name}</span>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/admin/companies/${brand.id}/edit`}>Manage</Link>
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground">No child brands associated with this account.</p>
+              )}
+            </CardContent>
           </Card>
            <Card>
             <CardHeader><CardTitle>Users in this Account</CardTitle></CardHeader>

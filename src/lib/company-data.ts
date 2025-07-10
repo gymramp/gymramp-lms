@@ -158,6 +158,24 @@ export async function getCompanyById(companyId: string): Promise<Company | null>
     });
 }
 
+export async function getChildBrandsByParentId(parentId: string): Promise<Company[]> {
+    if (!parentId) return [];
+    return retryOperation(async () => {
+        const companiesRef = collection(db, COMPANIES_COLLECTION);
+        const q = query(
+            companiesRef,
+            where("parentBrandId", "==", parentId),
+            where("isDeleted", "==", false)
+        );
+        const querySnapshot = await getDocs(q);
+        const childBrands: Company[] = [];
+        querySnapshot.forEach((doc) => {
+            childBrands.push({ id: doc.id, ...serializeCompanyDocumentData(doc.data()) } as Company);
+        });
+        return childBrands;
+    });
+}
+
 export async function getCompanyBySubdomainSlug(slug: string): Promise<Company | null> {
     if (!slug) {
         console.warn("getCompanyBySubdomainSlug called with empty slug.");
