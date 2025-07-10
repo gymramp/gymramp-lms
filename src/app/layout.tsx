@@ -11,7 +11,7 @@ import { MobileSidebar } from '@/components/layout/MobileSidebar'; // Import the
 import { AiChatAssistant } from '@/components/layout/AiChatAssistant';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
-import { Sheet, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -45,7 +45,7 @@ export default async function RootLayout({
           <Sidebar />
           <main className="flex-1 overflow-y-auto bg-secondary/30 flex flex-col">
             {/* Mobile Header */}
-            <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b bg-background px-4 md:hidden">
+            <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-background px-4 py-2 md:hidden">
                 <Sheet>
                     <SheetTrigger asChild>
                          <Button
