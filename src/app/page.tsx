@@ -204,7 +204,7 @@ export default function LoginPage() {
         toast({ title: "Login Successful", description: `Welcome!` });
 
       } catch (error: any) {
-          console.error("Login failed details:", { code: error.code, message: error.message, fullError: error }); // Enhanced logging
+          console.error("Login failed details:", error); // Enhanced logging
           let errorMessage = "There was a problem logging in.";
           if (error.code === "auth/invalid-credential" || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
              errorMessage = "Invalid email or password.";
