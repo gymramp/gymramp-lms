@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,7 +33,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { PlusCircle, MoreHorizontal, Trash2, Edit, Users, MapPin, Loader2, Building, Search, Infinity, Gift, AlertTriangle, Layers, Settings } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Trash2, Edit, Users, MapPin, Loader2, Building, Search, Infinity, Gift, AlertTriangle, Layers, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Company, User, CompanyFormData } from '@/types/user';
 import type { Program } from '@/types/course';
@@ -48,8 +48,11 @@ import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Timestamp } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; 
+import { Label } from "@/components/ui/label"; 
 
 type CompanyWithCounts = Company & { locationCount: number; userCount: number; assignedCourseCount: number };
+const DEFAULT_ROWS_PER_PAGE = 10; 
 
 export default function AdminCompaniesPage() {
   const [companies, setCompanies] = useState<CompanyWithCounts[]>([]);
@@ -60,6 +63,8 @@ export default function AdminCompaniesPage() {
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState<number | 'all'>(DEFAULT_ROWS_PER_PAGE);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -141,7 +146,16 @@ export default function AdminCompaniesPage() {
       company.name.toLowerCase().includes(lowercasedFilter)
     );
     setFilteredCompanies(filtered);
+    setCurrentPage(1); 
   }, [searchTerm, companies]);
+
+  const rowsToShow = rowsPerPage === 'all' ? Infinity : rowsPerPage;
+  const totalPages = rowsPerPage === 'all' ? 1 : Math.ceil(filteredCompanies.length / rowsToShow);
+  const paginatedCompanies = useMemo(() => {
+      if (rowsPerPage === 'all') return filteredCompanies;
+      const startIndex = (currentPage - 1) * rowsPerPage;
+      return filteredCompanies.slice(startIndex, startIndex + rowsPerPage);
+  }, [filteredCompanies, currentPage, rowsPerPage]);
 
   const openDeleteConfirmation = (company: Company) => {
      if (!currentUser) return;
@@ -186,6 +200,16 @@ export default function AdminCompaniesPage() {
     }
   };
 
+  const handleRowsPerPageChange = (value: string) => {
+    if (value === 'all') {
+        setRowsPerPage('all');
+    } else {
+        setRowsPerPage(parseInt(value, 10));
+    }
+    setCurrentPage(1); 
+  };
+
+
    if (!currentUser || !(currentUser.role === 'Super Admin' || currentUser.role === 'Admin' || currentUser.role === 'Owner')) {
      return <div className="container mx-auto text-center">Loading or Access Denied...</div>;
    }
@@ -214,6 +238,7 @@ export default function AdminCompaniesPage() {
           ) : filteredCompanies.length === 0 ? (
             <div className="text-center text-muted-foreground py-8"> {searchTerm ? `No brands found matching "${searchTerm}".` : "No brands found. Add one to get started."} </div>
           ) : (
+            <>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -228,7 +253,7 @@ export default function AdminCompaniesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredCompanies.map((company) => {
+                {paginatedCompanies.map((company) => {
                     let trialStatusDisplay;
                     if (company.isTrial && company.trialEndsAt) {
                         const endsAt = new Date(company.trialEndsAt as string); 
@@ -300,6 +325,47 @@ export default function AdminCompaniesPage() {
                 })}
               </TableBody>
             </Table>
+            <div className="flex items-center justify-between space-x-2 py-4 mt-4 border-t">
+                <div className="flex-1 text-sm text-muted-foreground">
+                    Page {currentPage} of {totalPages} ({filteredCompanies.length} total brands)
+                </div>
+                <div className="flex items-center space-x-2">
+                    <Label htmlFor="rows-per-page" className="text-sm">Rows per page:</Label>
+                     <Select
+                        value={rowsPerPage === 'all' ? 'all' : String(rowsPerPage)}
+                        onValueChange={handleRowsPerPageChange}
+                     >
+                        <SelectTrigger id="rows-per-page" className="w-[80px] h-9">
+                             <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                            <SelectItem value="all">All</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1 || totalPages === 0}
+                    >
+                        <ChevronLeft className="h-4 w-4" /> Previous
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages || totalPages === 0}
+                    >
+                        Next <ChevronRight className="h-4 w-4" />
+                    </Button>
+                </div>
+             </div>
+             </>
           )}
         </CardContent>
       </Card>
