@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { PlusCircle, Search, Building, Users, MoreHorizontal, Edit } from 'lucide-react';
+import { PlusCircle, Search, Building, Users, MoreHorizontal, Edit, Briefcase } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Company, User } from '@/types/user';
 import { getParentAccounts } from '@/lib/account-data';
@@ -87,7 +87,9 @@ export default function AdminAccountsPage() {
   return (
     <div className="container mx-auto">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Account Management</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-primary flex items-center gap-2">
+          <Briefcase className="h-7 w-7" /> Account Management
+        </h1>
         <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90">
           <Link href="/admin/companies/new">
             <PlusCircle className="mr-2 h-4 w-4" /> Add New Account
@@ -118,7 +120,7 @@ export default function AdminAccountsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Account Name</TableHead>
-                  <TableHead className="text-center">Child Brands</TableHead>
+                  <TableHead className="text-center">Brands</TableHead>
                   <TableHead className="text-center">Users (Total)</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -136,7 +138,7 @@ export default function AdminAccountsPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
-                        <Badge variant="outline">N/A</Badge>
+                        <Badge variant="outline">{account.childBrandCount ?? 0}</Badge>
                     </TableCell>
                     <TableCell className="text-center">
                         <Badge variant="outline">{account.userCount || 'N/A'}</Badge>

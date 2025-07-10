@@ -5,6 +5,7 @@ import {
     query,
     where,
     getDocs,
+    getCountFromServer,
 } from 'firebase/firestore';
 import type { Company } from '@/types/user';
 
@@ -12,7 +13,8 @@ const COMPANIES_COLLECTION = 'companies';
 
 /**
  * Fetches all companies that are parent accounts (do not have a parentBrandId).
- * @returns {Promise<Company[]>} A promise that resolves to an array of parent companies.
+ * Also fetches the count of their child brands.
+ * @returns {Promise<Company[]>} A promise that resolves to an array of parent companies with child counts.
  */
 export async function getParentAccounts(): Promise<Company[]> {
     try {
@@ -24,12 +26,27 @@ export async function getParentAccounts(): Promise<Company[]> {
         );
 
         const querySnapshot = await getDocs(q);
-        const accounts: Company[] = [];
-        querySnapshot.forEach((doc) => {
-            accounts.push({ id: doc.id, ...doc.data() } as Company);
+        const accountsWithCountsPromises = querySnapshot.docs.map(async (doc) => {
+            const companyData = { id: doc.id, ...doc.data() } as Company;
+            
+            // Query for child brands count
+            const childBrandsQuery = query(
+                companiesRef,
+                where("parentBrandId", "==", doc.id),
+                where("isDeleted", "==", false)
+            );
+            const childBrandsSnapshot = await getCountFromServer(childBrandsQuery);
+            const childBrandCount = childBrandsSnapshot.data().count;
+
+            return {
+                ...companyData,
+                childBrandCount: childBrandCount,
+            };
         });
 
-        console.log(`Fetched ${accounts.length} parent accounts.`);
+        const accounts = await Promise.all(accountsWithCountsPromises);
+
+        console.log(`Fetched ${accounts.length} parent accounts with their child counts.`);
         return accounts;
     } catch (error) {
         console.error("Error fetching parent accounts: ", error);

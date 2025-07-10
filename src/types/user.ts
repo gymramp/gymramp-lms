@@ -70,10 +70,11 @@ export interface Company { // Conceptually "Brand"
   parentBrandId?: string | null; // ID of the parent brand, if this is a child brand
   createdByUserId?: string | null; // ID of the user (likely Admin/Owner of parent) who created this brand
   userCount?: number; // Denormalized for UI display
+  childBrandCount?: number; // Denormalized for UI display
 }
 
 // Type for the form data when adding/editing a company (now Brand)
-export type CompanyFormData = Omit<Company, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'userCount'> & {
+export type CompanyFormData = Omit<Company, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'userCount' | 'childBrandCount'> & {
   revenueSharePartners?: RevenueSharePartner[];
   // parentBrandId and createdByUserId will be handled implicitly or passed directly in addCompany
 };
