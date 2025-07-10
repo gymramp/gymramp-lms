@@ -42,7 +42,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; 
 import { Label } from "@/components/ui/label"; 
 
-const DEFAULT_ROWS_PER_PAGE = 5; 
+const DEFAULT_ROWS_PER_PAGE = 10; 
 
 export default function AdminLessonsPage() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -263,9 +263,9 @@ export default function AdminLessonsPage() {
                              <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="5">5</SelectItem>
                             <SelectItem value="10">10</SelectItem>
-                            <SelectItem value="15">15</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
                             <SelectItem value="all">All</SelectItem>
                         </SelectContent>
                     </Select>
@@ -324,5 +324,3 @@ export default function AdminLessonsPage() {
     </div>
   );
 }
-
-    

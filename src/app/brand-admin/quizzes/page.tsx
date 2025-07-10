@@ -196,15 +196,15 @@ export default function BrandAdminQuizzesPage() {
               <div className="flex items-center justify-between space-x-2 py-4 mt-4 border-t">
                 <div className="flex-1 text-sm text-muted-foreground">Page {currentPage} of {totalPages} ({filteredQuizzes.length} total quizzes)</div>
                 <div className="flex items-center space-x-2">
-                  <Label htmlFor="rows-per-page" className="text-sm">Rows:</Label>
+                  <Label htmlFor="rows-per-page" className="text-sm">Rows per page:</Label>
                   <Select value={rowsPerPage === 'all' ? 'all' : String(rowsPerPage)} onValueChange={handleRowsPerPageChange}>
                     <SelectTrigger id="rows-per-page" className="w-[80px] h-9"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="5">5</SelectItem><SelectItem value="10">10</SelectItem><SelectItem value="15">15</SelectItem><SelectItem value="all">All</SelectItem></SelectContent>
+                    <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="20">20</SelectItem><SelectItem value="50">50</SelectItem><SelectItem value="all">All</SelectItem></SelectContent>
                   </Select>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}>Prev</Button>
-                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>Next</Button>
+                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1 || totalPages === 0}>Prev</Button>
+                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages || totalPages === 0}>Next</Button>
                 </div>
               </div>
             </>

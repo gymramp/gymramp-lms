@@ -249,7 +249,7 @@ export default function BrandAdminLessonsPage() {
                   <Label htmlFor="rows-per-page" className="text-sm">Rows per page:</Label>
                   <Select value={rowsPerPage === 'all' ? 'all' : String(rowsPerPage)} onValueChange={handleRowsPerPageChange}>
                     <SelectTrigger id="rows-per-page" className="w-[80px] h-9"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="5">5</SelectItem><SelectItem value="10">10</SelectItem><SelectItem value="15">15</SelectItem><SelectItem value="all">All</SelectItem></SelectContent>
+                    <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="20">20</SelectItem><SelectItem value="50">50</SelectItem><SelectItem value="all">All</SelectItem></SelectContent>
                   </Select>
                 </div>
                 <div className="flex items-center space-x-2">
