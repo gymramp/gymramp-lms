@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Building, Users, Globe, Link as LinkIcon, Gift, AlertTriangle, Infinity } from 'lucide-react';
+import { ArrowLeft, Building, Users, Globe, Link as LinkIcon, Gift, AlertTriangle, Infinity, PlusCircle } from 'lucide-react';
 import type { Company, User } from '@/types/user';
 import { getCompanyById, getChildBrandsByParentId } from '@/lib/company-data';
 import { getUserByEmail, getUsersByCompanyId } from '@/lib/user-data'; // Import getUsersByCompanyId
@@ -124,17 +124,19 @@ export default function EditCompanyPage() {
         <h1 className="text-3xl font-bold tracking-tight text-primary flex items-center gap-2">
           <Building className="h-7 w-7" /> Account Details
         </h1>
-        <Button asChild>
-            <Link href={`/admin/companies/${companyId}/edit-form`}>Edit Account</Link>
-        </Button>
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>{company.name}</CardTitle>
-          <CardDescription>
-            This page shows read-only information for the parent brand/account.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>{company.name}</CardTitle>
+            <CardDescription>
+              This page shows read-only information for the parent brand/account.
+            </CardDescription>
+          </div>
+           <Button asChild>
+              <Link href={`/admin/companies/${companyId}/edit-form`}>Edit Account</Link>
+          </Button>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8 pt-6">
           <div className="space-y-1">
@@ -168,7 +170,14 @@ export default function EditCompanyPage() {
       
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
           <Card>
-            <CardHeader><CardTitle>Brands</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Brands</CardTitle>
+                <Button asChild variant="outline" size="sm">
+                   <Link href={`/admin/companies/new?parent=${company.id}`}>
+                      <PlusCircle className="mr-2 h-4 w-4" /> Add Brand
+                   </Link>
+                </Button>
+            </CardHeader>
             <CardContent>
               {childBrands.length > 0 ? (
                 <ul className="space-y-2">
@@ -187,7 +196,14 @@ export default function EditCompanyPage() {
             </CardContent>
           </Card>
            <Card>
-            <CardHeader><CardTitle>Users in this Account</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Users in this Account</CardTitle>
+                <Button asChild variant="outline" size="sm">
+                    <Link href={`/admin/users/new?companyId=${company.id}`}>
+                        <PlusCircle className="mr-2 h-4 w-4" /> Add User
+                    </Link>
+                </Button>
+            </CardHeader>
             <CardContent>
               {users.length > 0 ? (
                 <ul className="space-y-2">
