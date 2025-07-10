@@ -196,7 +196,9 @@ export default function AdminCompaniesPage() {
         <h1 className="text-3xl font-bold tracking-tight text-primary">Brand Management</h1>
         <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90">
           <Link href="/admin/companies/new">
-            <PlusCircle className="mr-2 h-4 w-4" /> Add New Brand
+            <span className="flex items-center">
+              <PlusCircle className="mr-2 h-4 w-4" /> Add New Brand
+            </span>
           </Link>
         </Button>
       </div>
