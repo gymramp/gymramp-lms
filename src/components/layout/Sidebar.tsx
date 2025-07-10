@@ -130,13 +130,13 @@ export function Sidebar() {
   return (
     <aside className="hidden md:flex flex-col w-64 border-r bg-background h-full">
       <div className="p-4 border-b h-20 flex items-center shrink-0">
-        <Link href={currentUser.role === 'Staff' ? "/courses/my-courses" : "/dashboard"} className="flex items-center w-full">
+        <Link href={currentUser.role === 'Staff' ? "/courses/my-courses" : "/dashboard"} className="flex items-center w-full text-center">
            <Image
             src="/images/newlogo.png"
             alt={`${currentBrandName} Logo`}
             width={150}
             height={45}
-            className="max-h-[45px] w-auto"
+            className="max-h-[45px] w-auto m-auto"
           />
         </Link>
       </div>
