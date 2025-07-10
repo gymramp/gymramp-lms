@@ -5,11 +5,11 @@ import './globals.css';
 import { Footer } from '@/components/layout/Footer';
 import { Toaster } from "@/components/ui/toaster";
 import { cn } from '@/lib/utils';
-import { Sidebar, SidebarTrigger } from '@/components/layout/Sidebar';
+import { Sidebar } from '@/components/layout/Sidebar';
 import { AiChatAssistant } from '@/components/layout/AiChatAssistant';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -56,6 +56,10 @@ export default async function RootLayout({
                           </Button>
                     </SheetTrigger>
                     <SheetContent side="left" className="w-[280px] p-0">
+                         <SheetHeader className="sr-only">
+                           <SheetTitle>Navigation Menu</SheetTitle>
+                           <SheetDescription>Main application navigation links and user menu.</SheetDescription>
+                         </SheetHeader>
                          {/* We can re-render the sidebar content here for mobile */}
                          <Sidebar />
                     </SheetContent>
