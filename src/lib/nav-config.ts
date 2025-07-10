@@ -3,7 +3,7 @@ import type { User, UserRole, Company } from '@/types/user';
 import {
     BarChartBig, Building, Layers, CreditCard, BookOpen, FileText,
     ListChecks, UserPlus, ShoppingCart, Gift,
-    TestTube2, Percent, HelpCircle, LayoutDashboard, Users, MapPin, Settings, Award, Cog, Package, Handshake
+    TestTube2, Percent, HelpCircle, LayoutDashboard, Users, MapPin, Settings, Award, Cog, Package, Handshake, KeyRound
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { getCompanyById } from '@/lib/company-data';
@@ -36,6 +36,7 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
   if (user.role === 'Super Admin') {
     roleSpecificItems.push(
       { href: '/admin/dashboard', label: 'Dashboard', icon: BarChartBig },
+      { href: '/admin/accounts', label: 'Accounts', icon: Building },
       { href: '/admin/companies', label: 'Brands', icon: Building },
       { href: '/admin/users', label: 'Users', icon: Users },
       { href: '/admin/partners', label: 'Partners', icon: Handshake },
@@ -58,7 +59,6 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
         subItems: [
           { href: '/admin/checkout', label: 'Paid Checkout', icon: ShoppingCart },
           { href: '/admin/free-trial-checkout', label: 'Free Trial', icon: Gift },
-          // { href: '/admin/test-checkout', label: 'Test Checkout', icon: TestTube2 }, // Removed Test Checkout
         ],
       },
       { href: '/admin/revenue-share-report', label: 'Rev Share Report', icon: Percent }
@@ -109,7 +109,6 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
              if (subItem.requiresCanManageCourses && !(userCompanyDetails?.canManageCourses === true)) return false;
              return true;
         });
-        // Hide dropdown if all its sub-items are filtered out due to permissions
         if (item.isDropdown && item.subItems.length === 0 && (item.requiresCanManageCourses || item.requiresCompanyId)) return false;
     }
     return true;
@@ -141,27 +140,23 @@ export async function getQuickAddItems(user: User | null): Promise<NavItemType[]
 
   const items: NavItemType[] = [];
 
-  // Super Admin can always add users and brands
   if (user.role === 'Super Admin') {
     items.push({ href: '/admin/users/new', label: 'New User', icon: UserPlus });
     items.push({ href: '/admin/companies/new', label: 'New Brand', icon: Building });
   } 
-  // Admin/Owner/Manager can add users
   else if (user.role === 'Admin' || user.role === 'Owner' || user.role === 'Manager') {
     items.push({ href: '/admin/users/new', label: 'New User', icon: UserPlus });
   }
 
-  // Admin/Owner can add child brands
   if (user.role === 'Admin' || user.role === 'Owner') {
     items.push({ href: '/admin/companies/new', label: 'New Brand', icon: Building });
   }
 
-  // Check for brand-specific content creation
   if (user.companyId) {
     const company = await getCompanyById(user.companyId);
     if (company?.canManageCourses) {
-      if (items.length > 0) { // Add a separator if other items exist
-        items.push({ label: 'Separator' }); // This will be handled as a separator in the UI
+      if (items.length > 0) { 
+        items.push({ label: 'Separator' }); 
       }
       items.push({ href: '/brand-admin/courses', label: 'New Course', icon: BookOpen });
       items.push({ href: '/brand-admin/lessons', label: 'New Lesson', icon: FileText });
