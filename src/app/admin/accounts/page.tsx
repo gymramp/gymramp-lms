@@ -92,7 +92,7 @@ export default function AdminAccountsPage() {
         </h1>
         <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90">
           <Link href="/admin/companies/new">
-            <PlusCircle className="mr-2 h-4 w-4" /> Add New Account
+            <PlusCircle className="mr-2 h-4 w-4" /> Add New Brand
           </Link>
         </Button>
       </div>
@@ -103,7 +103,7 @@ export default function AdminAccountsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Parent Accounts</CardTitle>
-          <CardDescription>This list shows all parent accounts. Each account can have multiple child brands.</CardDescription>
+          <CardDescription>This list shows all parent accounts. Each account can have multiple brands.</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -141,7 +141,7 @@ export default function AdminAccountsPage() {
                         <Badge variant="outline">{account.childBrandCount ?? 0}</Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                        <Badge variant="outline">{account.userCount || 'N/A'}</Badge>
+                        <Badge variant="outline">{account.userCount === undefined ? 'N/A' : account.userCount}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
                        <DropdownMenu>
@@ -159,7 +159,7 @@ export default function AdminAccountsPage() {
                                 </DropdownMenuItem>
                                 <DropdownMenuItem asChild>
                                     <Link href={`/admin/companies?parent=${account.id}`}>
-                                        <Building className="mr-2 h-4 w-4" /> View Child Brands
+                                        <Building className="mr-2 h-4 w-4" /> View Brands
                                     </Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem asChild>

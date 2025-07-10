@@ -8,13 +8,14 @@ import {
     getCountFromServer,
 } from 'firebase/firestore';
 import type { Company } from '@/types/user';
+import { getUserCountByCompanyId } from './user-data'; // Import user count function
 
 const COMPANIES_COLLECTION = 'companies';
 
 /**
  * Fetches all companies that are parent accounts (do not have a parentBrandId).
- * Also fetches the count of their child brands.
- * @returns {Promise<Company[]>} A promise that resolves to an array of parent companies with child counts.
+ * Also fetches the count of their child brands and total users across all child brands and the parent.
+ * @returns {Promise<Company[]>} A promise that resolves to an array of parent companies with aggregated counts.
  */
 export async function getParentAccounts(): Promise<Company[]> {
     try {
@@ -29,24 +30,34 @@ export async function getParentAccounts(): Promise<Company[]> {
         const accountsWithCountsPromises = querySnapshot.docs.map(async (doc) => {
             const companyData = { id: doc.id, ...doc.data() } as Company;
             
-            // Query for child brands count
+            // Query for child brands
             const childBrandsQuery = query(
                 companiesRef,
                 where("parentBrandId", "==", doc.id),
                 where("isDeleted", "==", false)
             );
-            const childBrandsSnapshot = await getCountFromServer(childBrandsQuery);
-            const childBrandCount = childBrandsSnapshot.data().count;
+            const childBrandsSnapshot = await getDocs(childBrandsQuery);
+            const childBrandCount = childBrandsSnapshot.size;
+            const childBrandIds = childBrandsSnapshot.docs.map(d => d.id);
+
+            // Calculate total users
+            const allBrandIdsForUserCount = [doc.id, ...childBrandIds];
+            let totalUserCount = 0;
+            for (const brandId of allBrandIdsForUserCount) {
+                const userCount = await getUserCountByCompanyId(brandId);
+                totalUserCount += userCount;
+            }
 
             return {
                 ...companyData,
                 childBrandCount: childBrandCount + 1, // Add 1 to include the parent brand itself
+                userCount: totalUserCount, // Set the aggregated user count
             };
         });
 
         const accounts = await Promise.all(accountsWithCountsPromises);
 
-        console.log(`Fetched ${accounts.length} parent accounts with their child counts.`);
+        console.log(`Fetched ${accounts.length} parent accounts with their child and user counts.`);
         return accounts;
     } catch (error) {
         console.error("Error fetching parent accounts: ", error);
