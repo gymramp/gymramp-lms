@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,26 +10,22 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Loader2, CreditCard, Layers, User, Building } from 'lucide-react';
-import type { Program } from '@/types/course';
-import { getAllPrograms } from '@/lib/firestore-data';
+import { Eye, EyeOff, Loader2, User, Building } from 'lucide-react';
 import Image from 'next/image';
+import { processPublicSignup } from '@/actions/signup';
+import Link from 'next/link';
 
 const signupFormSchema = z.object({
   customerName: z.string().min(2, { message: "Your full name is required." }),
   companyName: z.string().min(2, { message: "Your company or brand name is required." }),
   adminEmail: z.string().email({ message: "Please enter a valid email address." }),
   password: z.string().min(8, { message: "Password must be at least 8 characters long." }),
-  selectedProgramId: z.string().min(1, "Please select a program to purchase."),
 });
 
 type SignupFormValues = z.infer<typeof signupFormSchema>;
 
 export default function SignupPage() {
-  const [programs, setPrograms] = useState<Program[]>([]);
-  const [isLoadingPrograms, setIsLoadingPrograms] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
@@ -42,47 +38,36 @@ export default function SignupPage() {
       companyName: '',
       adminEmail: '',
       password: '',
-      selectedProgramId: '',
     },
   });
 
-  const selectedProgramId = form.watch('selectedProgramId');
-  const selectedProgram = programs.find(p => p.id === selectedProgramId);
-  const totalAmount = selectedProgram ? parseFloat(selectedProgram.price.replace(/[$,/mo]/gi, '')) : 0;
-
-  useEffect(() => {
-    async function fetchPrograms() {
-      setIsLoadingPrograms(true);
-      try {
-        const programsData = await getAllPrograms();
-        setPrograms(programsData);
-        if (programsData.length === 1) {
-            form.setValue('selectedProgramId', programsData[0].id);
-        }
-      } catch (error) {
-        toast({ title: "Error", description: "Could not load available programs.", variant: "destructive" });
-      } finally {
-        setIsLoadingPrograms(false);
-      }
-    }
-    fetchPrograms();
-  }, [toast, form]);
-
-  const onSubmit = (data: SignupFormValues) => {
+  const onSubmit = async (data: SignupFormValues) => {
     setIsSubmitting(true);
-    // For now, we'll just log the data. The next step will be to pass this to a checkout/payment page.
-    console.log("Signup form submitted:", { ...data, totalAmount });
-    toast({
-      title: "Form Submitted!",
-      description: "Next step: Onboarding wizard and payment processing.",
-    });
-    // Placeholder for redirection to next step
-    // router.push(`/onboarding?data=${encodeURIComponent(JSON.stringify(data))}`);
-    
-    // Simulate end of process for now
-    setTimeout(() => {
-      setIsSubmitting(false);
-    }, 2000);
+    try {
+        const result = await processPublicSignup(data);
+        if (result.success) {
+            toast({
+                title: "Account Created!",
+                description: "Welcome! Please log in to get started.",
+                duration: 7000,
+            });
+            router.push('/'); // Redirect to login page
+        } else {
+             toast({
+                title: "Signup Failed",
+                description: result.error || "An unknown error occurred. Please try again.",
+                variant: "destructive",
+            });
+        }
+    } catch (error: any) {
+        toast({
+            title: "An Error Occurred",
+            description: error.message || "Something went wrong during signup.",
+            variant: "destructive",
+        });
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   return (
@@ -164,42 +149,15 @@ export default function SignupPage() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="selectedProgramId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><Layers className="mr-2 h-4 w-4" /> Select Your Program</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={isLoadingPrograms}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={isLoadingPrograms ? "Loading programs..." : "Choose a program..."} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {programs.map((program) => (
-                          <SelectItem key={program.id} value={program.id}>
-                            {program.title} ({program.price})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {selectedProgram && (
-                <div className="text-center p-3 bg-secondary rounded-md">
-                    <p className="text-sm text-muted-foreground">Total Amount</p>
-                    <p className="text-2xl font-bold text-primary">${totalAmount.toFixed(2)}</p>
-                </div>
-              )}
             </CardContent>
-            <CardFooter>
-              <Button type="submit" className="w-full" disabled={isSubmitting || isLoadingPrograms}>
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
-                {isSubmitting ? 'Processing...' : 'Proceed to Onboarding'}
+            <CardFooter className="flex flex-col gap-4">
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {isSubmitting ? 'Creating Account...' : 'Create Account'}
               </Button>
+               <p className="text-xs text-muted-foreground text-center">
+                 Already have an account? <Link href="/" className="underline hover:text-primary">Log in here</Link>.
+               </p>
             </CardFooter>
           </form>
         </Form>
