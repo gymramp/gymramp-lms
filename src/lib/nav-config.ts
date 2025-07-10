@@ -4,7 +4,7 @@ import type { User, UserRole, Company } from '@/types/user';
 import {
     BarChartBig, Building, Layers, CreditCard, BookOpen, FileText,
     ListChecks, UserPlus, ShoppingCart, Gift,
-    TestTube2, Percent, HelpCircle, LayoutDashboard, Users, MapPin, Settings, Award, Cog, Package, Handshake, KeyRound
+    TestTube2, Percent, HelpCircle, LayoutDashboard, Users, MapPin, Settings, Award, Cog, Package, Handshake, KeyRound, Briefcase
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { getCompanyById } from '@/lib/company-data';
@@ -37,7 +37,7 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
   if (user.role === 'Super Admin') {
     roleSpecificItems.push(
       { href: '/admin/dashboard', label: 'Dashboard', icon: BarChartBig },
-      { href: '/admin/accounts', label: 'Accounts', icon: Users },
+      { href: '/admin/accounts', label: 'Accounts', icon: Briefcase },
       { href: '/admin/companies', label: 'Brands', icon: Building },
       { href: '/admin/users', label: 'Users', icon: Users },
       { href: '/admin/partners', label: 'Partners', icon: Handshake },
