@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Building, Users, Globe, Link as LinkIcon, Gift, AlertTriangle, Infinity } from 'lucide-react';
 import type { Company, User } from '@/types/user';
 import { getCompanyById, getChildBrandsByParentId } from '@/lib/company-data';
-import { getUserByEmail } from '@/lib/user-data';
+import { getUserByEmail, getUsersByCompanyId } from '@/lib/user-data'; // Import getUsersByCompanyId
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
@@ -27,6 +27,7 @@ export default function EditCompanyPage() {
 
   const [company, setCompany] = useState<Company | null>(null);
   const [childBrands, setChildBrands] = useState<Company[]>([]);
+  const [users, setUsers] = useState<User[]>([]); // State for users
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -37,9 +38,10 @@ export default function EditCompanyPage() {
     }
     setIsLoading(true);
     try {
-      const [companyData, childBrandsData] = await Promise.all([
+      const [companyData, childBrandsData, usersData] = await Promise.all([
         getCompanyById(companyId),
-        getChildBrandsByParentId(companyId)
+        getChildBrandsByParentId(companyId),
+        getUsersByCompanyId(companyId) // Fetch users for the parent company
       ]);
 
       if (!companyData || (user.role !== 'Super Admin' && user.companyId !== companyData.id)) {
@@ -49,6 +51,7 @@ export default function EditCompanyPage() {
       }
       setCompany(companyData);
       setChildBrands(childBrandsData);
+      setUsers(usersData); // Set the users state
     } catch (error) {
       console.error("Failed to fetch company data:", error);
       toast({ title: "Error", description: "Could not load account details.", variant: "destructive" });
@@ -185,7 +188,23 @@ export default function EditCompanyPage() {
           </Card>
            <Card>
             <CardHeader><CardTitle>Users in this Account</CardTitle></CardHeader>
-            <CardContent><p className="text-muted-foreground">List of users directly assigned to this parent account will appear here.</p></CardContent>
+            <CardContent>
+              {users.length > 0 ? (
+                <ul className="space-y-2">
+                  {users.map(user => (
+                    <li key={user.id} className="text-sm p-2 border rounded-md flex justify-between items-center">
+                      <div>
+                        <p className="font-medium">{user.name}</p>
+                        <p className="text-xs text-muted-foreground">{user.email}</p>
+                      </div>
+                      <Badge variant="secondary">{user.role}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground">No users are directly assigned to this parent account.</p>
+              )}
+            </CardContent>
           </Card>
       </div>
 
