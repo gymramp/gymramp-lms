@@ -33,12 +33,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { PlusCircle, MoreHorizontal, Trash2, Edit, Users, MapPin, Loader2, Building, Search, Infinity, Gift, AlertTriangle, Layers } from 'lucide-react'; // Added Layers
+import { PlusCircle, MoreHorizontal, Trash2, Edit, Users, MapPin, Loader2, Building, Search, Infinity, Gift, AlertTriangle, Layers, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Company, User, CompanyFormData } from '@/types/user';
-import type { Program } from '@/types/course'; // Import Program type
+import type { Program } from '@/types/course';
 import { getAllCompanies, deleteCompany, getLocationsByCompanyId } from '@/lib/company-data';
-import { getAllPrograms } from '@/lib/firestore-data'; // Import getAllPrograms
+import { getAllPrograms } from '@/lib/firestore-data';
 import { getUserCountByCompanyId } from '@/lib/user-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getUserByEmail } from '@/lib/user-data';
@@ -55,7 +55,7 @@ export default function AdminCompaniesPage() {
   const [companies, setCompanies] = useState<CompanyWithCounts[]>([]);
   const [filteredCompanies, setFilteredCompanies] = useState<CompanyWithCounts[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingCounts, setIsLoadingCounts] = useState(true); // Retain for user/location counts if fetched separately initially
+  const [isLoadingCounts, setIsLoadingCounts] = useState(true);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -241,7 +241,7 @@ export default function AdminCompaniesPage() {
                         trialStatusDisplay = <span className="text-xs text-muted-foreground">Not a Trial</span>;
                     }
 
-                    const accountType = company.parentBrandId ? "Child Brand" : "Parent Brand";
+                    const accountType = company.parentBrandId ? "Child Brand" : "Parent Account";
 
                     return (
                       <TableRow key={company.id}>
@@ -270,8 +270,8 @@ export default function AdminCompaniesPage() {
                               <DropdownMenuLabel>Manage {company.name}</DropdownMenuLabel>
                               <DropdownMenuItem asChild>
                                 <Link href={`/admin/companies/${company.id}/edit`}>
-                                  <Edit className="mr-2 h-4 w-4" />
-                                  Edit Brand & Settings
+                                  <Settings className="mr-2 h-4 w-4" />
+                                  Details & Settings
                                 </Link>
                               </DropdownMenuItem>
                               <DropdownMenuItem asChild>

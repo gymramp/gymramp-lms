@@ -22,11 +22,11 @@ import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2, Info, ArrowLeft, Building, Upload, ImageIcon, Trash2, Globe, Link as LinkIcon, Users, GitBranch } from 'lucide-react';
+import { Loader2, Info, ArrowLeft, Building, Upload, ImageIcon, Trash2, Globe, Link as LinkIcon, Users, GitBranch, Briefcase } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const companyFormSchema = z.object({
-  name: z.string().min(2, { message: 'Brand name must be at least 2 characters.' }),
+  name: z.string().min(2, { message: 'Account name must be at least 2 characters.' }),
   parentBrandId: z.string().optional().nullable(),
   subdomainSlug: z.string()
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug can only contain lowercase letters, numbers, and hyphens, and cannot start/end with a hyphen.' })
@@ -67,7 +67,7 @@ export default function AddNewCompanyPage() {
         const userDetails = await getUserByEmail(firebaseUser.email);
         setCurrentUser(userDetails);
         if (!userDetails || !['Super Admin', 'Admin', 'Owner'].includes(userDetails.role)) {
-          toast({ title: "Access Denied", description: "You don't have permission to create new brands.", variant: "destructive" });
+          toast({ title: "Access Denied", description: "You don't have permission to create new accounts.", variant: "destructive" });
           router.push('/dashboard');
           setIsLoading(false);
           return;
@@ -80,7 +80,7 @@ export default function AddNewCompanyPage() {
             const parents = allCompanies.filter(c => !c.parentBrandId);
             setParentBrands(parents);
           } catch (error) {
-             toast({ title: "Error", description: "Could not load parent brands.", variant: "destructive" });
+             toast({ title: "Error", description: "Could not load parent accounts.", variant: "destructive" });
           }
         }
         setIsLoading(false);
@@ -106,10 +106,10 @@ export default function AddNewCompanyPage() {
            const storagePath = `${STORAGE_PATHS.COMPANY_LOGOS}/${uniqueFileName}`;
            const downloadURL = await uploadImage(file, storagePath, setUploadProgress);
            form.setValue('logoUrl', downloadURL, { shouldValidate: true });
-           toast({ title: "Logo Uploaded", description: "Brand logo successfully uploaded." });
+           toast({ title: "Logo Uploaded", description: "Logo successfully uploaded." });
        } catch (error: any) {
            setUploadError(error.message || "Failed to upload logo.");
-           toast({ title: "Upload Failed", description: error.message || "Could not upload the brand logo.", variant: "destructive" });
+           toast({ title: "Upload Failed", description: error.message || "Could not upload the logo.", variant: "destructive" });
        } finally {
            setIsUploading(false);
        }
@@ -143,10 +143,11 @@ export default function AddNewCompanyPage() {
       const newCompany = await addCompany(formData, currentUser.id, parentBrandIdForChild);
       
       if (newCompany) {
-        toast({ title: "Brand Created", description: `Successfully created the brand "${newCompany.name}".` });
+        const entityType = parentBrandIdForChild ? "Brand" : "Account";
+        toast({ title: `${entityType} Created`, description: `Successfully created the ${entityType.toLowerCase()} "${newCompany.name}".` });
         router.push(`/admin/companies/${newCompany.id}/edit`);
       } else {
-        toast({ title: 'Brand Creation Failed', description: 'An unexpected error occurred.', variant: 'destructive' });
+        toast({ title: 'Creation Failed', description: 'An unexpected error occurred.', variant: 'destructive' });
       }
     });
   };
@@ -163,19 +164,19 @@ export default function AddNewCompanyPage() {
 
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8">
-      <Button variant="outline" onClick={() => router.push('/admin/companies')} className="mb-6">
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Brands
+      <Button variant="outline" onClick={() => router.push('/admin/accounts')} className="mb-6">
+        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Accounts
       </Button>
 
       <Card className="max-w-3xl mx-auto">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-2xl"><Building className="h-6 w-6"/> Add New Brand</CardTitle>
-          <CardDescription>Fill out the form below to create a new customer brand. This will create a Parent Brand if you are a Super Admin, or a Child Brand if you are an Admin/Owner.</CardDescription>
+          <CardTitle className="flex items-center gap-2 text-2xl"><Briefcase className="h-6 w-6"/> Add New Account</CardTitle>
+          <CardDescription>Fill out the form below to create a new customer account. This creates a Parent Account. To create a Child Brand, assign a parent below.</CardDescription>
         </CardHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <CardContent className="space-y-6">
-                <FormField control={form.control} name="name" render={({ field }) => ( <FormItem> <FormLabel>Brand Name</FormLabel> <FormControl><Input placeholder="e.g., Global Fitness Inc." {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+                <FormField control={form.control} name="name" render={({ field }) => ( <FormItem> <FormLabel>Account Name</FormLabel> <FormControl><Input placeholder="e.g., Global Fitness Inc." {...field} /></FormControl> <FormMessage /> </FormItem> )} />
                 
                 {currentUser.role === 'Super Admin' && (
                   <FormField
@@ -183,31 +184,31 @@ export default function AddNewCompanyPage() {
                     name="parentBrandId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="flex items-center gap-1"><GitBranch className="h-4 w-4" /> Parent Brand (Optional)</FormLabel>
+                        <FormLabel className="flex items-center gap-1"><GitBranch className="h-4 w-4" /> Parent Account (Optional)</FormLabel>
                         <Select
                           onValueChange={(value) => field.onChange(value === "none" ? null : value)}
                           value={field.value || "none"}
                         >
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Select a parent brand to create a child brand..." />
+                              <SelectValue placeholder="Select a parent to create a child brand..." />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                             <SelectItem value="none">None (Create as Parent Brand)</SelectItem>
+                             <SelectItem value="none">None (Create as Parent Account)</SelectItem>
                             {parentBrands.map(brand => (
                               <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
-                        <FormDescription className="text-xs">Assigning a parent brand makes this a "Child Brand". Leave blank to create a "Parent Brand".</FormDescription>
+                        <FormDescription className="text-xs">Assigning a parent makes this a "Child Brand" instead of a Parent Account.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 )}
 
-                <FormField control={form.control} name="shortDescription" render={({ field }) => ( <FormItem> <FormLabel>Short Description (Optional)</FormLabel> <FormControl><Textarea rows={3} placeholder="A brief description of the brand (max 150 characters)" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} />
+                <FormField control={form.control} name="shortDescription" render={({ field }) => ( <FormItem> <FormLabel>Short Description (Optional)</FormLabel> <FormControl><Textarea rows={3} placeholder="A brief description of the account (max 150 characters)" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} />
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField control={form.control} name="subdomainSlug" render={({ field }) => ( <FormItem> <FormLabel className="flex items-center gap-1"><Globe className="h-4 w-4" /> Subdomain (Optional)</FormLabel> <FormControl><Input placeholder="e.g., global-fitness" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value.toLowerCase())} /></FormControl> <FormDescription className="text-xs">Lowercase letters, numbers, hyphens.</FormDescription> <FormMessage /> </FormItem> )} />
@@ -217,7 +218,7 @@ export default function AddNewCompanyPage() {
                 <FormField control={form.control} name="maxUsers" render={({ field }) => ( <FormItem> <FormLabel className="flex items-center gap-1"><Users className="h-4 w-4" /> Max Users</FormLabel> <FormControl><Input type="number" min="1" placeholder="Leave blank for unlimited" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl> <FormMessage /> </FormItem> )} />
 
                 <FormItem>
-                    <FormLabel>Brand Logo (Optional)</FormLabel>
+                    <FormLabel>Logo (Optional)</FormLabel>
                     <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
                         {logoUrlValue && !isUploading ? (
                             <div className="relative w-32 h-32 mx-auto mb-2"><Image src={logoUrlValue} alt="Logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" onError={() => form.setValue('logoUrl', null)} /><Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6" onClick={() => form.setValue('logoUrl', null)}><Trash2 className="h-4 w-4" /></Button></div>
@@ -232,7 +233,7 @@ export default function AddNewCompanyPage() {
             <CardFooter>
               <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isPending || isUploading}>
                 {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {isPending ? 'Creating Brand...' : 'Create Brand'}
+                {isPending ? 'Creating Account...' : 'Create Account'}
               </Button>
             </CardFooter>
           </form>

@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { PlusCircle, Search, Building, Users, MoreHorizontal, Edit, Briefcase } from 'lucide-react';
+import { PlusCircle, Search, Building, Users, MoreHorizontal, Edit, Briefcase, ExternalLink, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Company, User } from '@/types/user';
 import { getParentAccounts } from '@/lib/account-data';
@@ -92,7 +92,7 @@ export default function AdminAccountsPage() {
         </h1>
         <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90">
           <Link href="/admin/companies/new">
-            <PlusCircle className="mr-2 h-4 w-4" /> Add New Brand
+            <PlusCircle className="mr-2 h-4 w-4" /> Add New Account
           </Link>
         </Button>
       </div>
@@ -154,7 +154,7 @@ export default function AdminAccountsPage() {
                             <DropdownMenuContent align="end">
                                 <DropdownMenuItem asChild>
                                     <Link href={`/admin/companies/${account.id}/edit`}>
-                                        <Edit className="mr-2 h-4 w-4" /> Edit Account
+                                        <Settings className="mr-2 h-4 w-4" /> Account Details
                                     </Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem asChild>
