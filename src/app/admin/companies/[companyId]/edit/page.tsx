@@ -1,3 +1,4 @@
+
 // src/app/admin/companies/[companyId]/edit/page.tsx
 'use client';
 
