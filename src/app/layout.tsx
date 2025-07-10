@@ -56,11 +56,11 @@ export default async function RootLayout({
                           </Button>
                     </SheetTrigger>
                     <SheetContent side="left" className="w-[280px] p-0">
+                         {/* Correctly place SheetHeader inside SheetContent */}
                          <SheetHeader className="sr-only">
                            <SheetTitle>Navigation Menu</SheetTitle>
                            <SheetDescription>Main application navigation links and user menu.</SheetDescription>
                          </SheetHeader>
-                         {/* We can re-render the sidebar content here for mobile */}
                          <Sidebar />
                     </SheetContent>
                 </Sheet>
