@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useEffect, useTransition, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -244,7 +244,7 @@ export default function EditCompanyFormPage() {
             <CardFooter>
               <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isPending || isUploading}>
                 {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {isPending ? 'Saving...' : 'Save Changes'}
+                <span>{isPending ? 'Saving...' : 'Save Changes'}</span>
               </Button>
             </CardFooter>
           </form>
