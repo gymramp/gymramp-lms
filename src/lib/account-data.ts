@@ -40,7 +40,7 @@ export async function getParentAccounts(): Promise<Company[]> {
 
             return {
                 ...companyData,
-                childBrandCount: childBrandCount,
+                childBrandCount: childBrandCount + 1, // Add 1 to include the parent brand itself
             };
         });
 
