@@ -125,6 +125,7 @@ export default function BrandAdminCoursesPage() {
   const rowsToShow = rowsPerPage === 'all' ? Infinity : rowsPerPage;
   const totalPages = rowsPerPage === 'all' ? 1 : Math.ceil(filteredCourses.length / rowsToShow);
   const paginatedCourses = useMemo(() => {
+    if (!filteredCourses) return [];
     if (rowsPerPage === 'all') return filteredCourses;
     const startIndex = (currentPage - 1) * rowsPerPage;
     return filteredCourses.slice(startIndex, startIndex + rowsPerPage);

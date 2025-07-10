@@ -110,6 +110,7 @@ export default function BrandAdminQuizzesPage() {
   const rowsToShow = rowsPerPage === 'all' ? Infinity : rowsPerPage;
   const totalPages = rowsPerPage === 'all' ? 1 : Math.ceil(filteredQuizzes.length / rowsToShow);
   const paginatedQuizzes = useMemo(() => {
+    if (!filteredQuizzes) return [];
     if (rowsPerPage === 'all') return filteredQuizzes;
     const startIndex = (currentPage - 1) * rowsPerPage;
     return filteredQuizzes.slice(startIndex, startIndex + rowsPerPage);

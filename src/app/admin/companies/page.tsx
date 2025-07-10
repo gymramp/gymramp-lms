@@ -152,6 +152,7 @@ export default function AdminCompaniesPage() {
   const rowsToShow = rowsPerPage === 'all' ? Infinity : rowsPerPage;
   const totalPages = rowsPerPage === 'all' ? 1 : Math.ceil(filteredCompanies.length / rowsToShow);
   const paginatedCompanies = useMemo(() => {
+      if (!filteredCompanies) return [];
       if (rowsPerPage === 'all') return filteredCompanies;
       const startIndex = (currentPage - 1) * rowsPerPage;
       return filteredCompanies.slice(startIndex, startIndex + rowsPerPage);

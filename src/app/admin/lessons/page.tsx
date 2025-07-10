@@ -92,6 +92,7 @@ export default function AdminLessonsPage() {
   const rowsToShow = rowsPerPage === 'all' ? Infinity : rowsPerPage;
   const totalPages = rowsPerPage === 'all' ? 1 : Math.ceil(filteredLessons.length / rowsToShow);
   const paginatedLessons = useMemo(() => {
+      if (!filteredLessons) return [];
       if (rowsPerPage === 'all') return filteredLessons;
       const startIndex = (currentPage - 1) * rowsPerPage;
       return filteredLessons.slice(startIndex, startIndex + rowsPerPage);
