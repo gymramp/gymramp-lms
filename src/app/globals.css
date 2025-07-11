@@ -114,6 +114,17 @@
   .card-lift-hover {
     @apply transition-all duration-300 ease-in-out hover:shadow-2xl hover:-translate-y-2 dark:hover:shadow-primary/10;
   }
+
+  /* Style for the active account navigation link */
+  .active-account-nav-link::after {
+    content: '';
+    position: absolute;
+    bottom: -8px; /* Adjust based on desired spacing from text */
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: hsl(var(--primary));
+  }
 }
 
 
