@@ -107,7 +107,7 @@ export async function addCourse(courseData: CourseFormData): Promise<Course | nu
     });
 }
 
-export async function updateCourseMetadata(courseId: string, courseData: CourseFormData): Promise<Course | null> {
+export async function updateCourseMetadata(courseId: string, courseData: Partial<CourseFormData>): Promise<Course | null> {
      if (!courseId) return null;
     return retryOperation(async () => {
         const courseRef = doc(db, COURSES_COLLECTION, courseId);
@@ -120,8 +120,8 @@ export async function updateCourseMetadata(courseId: string, courseData: CourseF
             title: courseData.title,
             description: courseData.description,
             longDescription: courseData.longDescription,
-            imageUrl: courseData.imageUrl || `https://placehold.co/600x350.png?text=${encodeURIComponent(courseData.title)}`,
-            featuredImageUrl: courseData.featuredImageUrl || null,
+            imageUrl: courseData.imageUrl || `https://placehold.co/600x350.png?text=${encodeURIComponent(courseData.title || currentDocSnap.data().title)}`,
+            featuredImageUrl: courseData.featuredImageUrl === '' ? null : courseData.featuredImageUrl,
             level: courseData.level,
             duration: courseData.duration,
             certificateTemplateId: courseData.certificateTemplateId === '' ? null : courseData.certificateTemplateId, // Handle empty string from form
