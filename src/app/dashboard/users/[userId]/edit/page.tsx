@@ -87,7 +87,7 @@ export default function DashboardEditUserPage() {
     try {
       const targetUser = await getUserById(userId);
       if (!targetUser) {
-        toast({ title: "User not found", variant: "destructive" });
+        toast({ title: "Team member not found", variant: "destructive" });
         router.push('/dashboard'); return;
       }
 
@@ -116,7 +116,7 @@ export default function DashboardEditUserPage() {
 
 
       if (!canEdit) {
-        toast({ title: "Permission Denied", description: "You cannot edit this user.", variant: "destructive" });
+        toast({ title: "Permission Denied", description: "You cannot edit this team member.", variant: "destructive" });
         router.push('/dashboard'); return;
       }
 
@@ -225,11 +225,11 @@ export default function DashboardEditUserPage() {
 
       const updatedUser = await updateUser(userToEdit.id, updatePayload);
       if (updatedUser) {
-        toast({ title: "User Updated", description: `${updatedUser.name}'s details have been updated.` });
+        toast({ title: "Team Member Updated", description: `${updatedUser.name}'s details have been updated.` });
         setUserToEdit(updatedUser);
         fetchData();
       } else {
-        throw new Error("Failed to update user.");
+        throw new Error("Failed to update team member.");
       }
     } catch (error: any) {
       toast({ title: "Update Failed", description: error.message, variant: "destructive" });
@@ -289,16 +289,16 @@ export default function DashboardEditUserPage() {
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
       </Button>
       <h1 className="text-3xl font-bold tracking-tight text-primary mb-2 flex items-center gap-2">
-        <UserIcon className="h-7 w-7" /> Edit Employee: {userToEdit.name}
+        <UserIcon className="h-7 w-7" /> Edit Team Member: {userToEdit.name}
       </h1>
-      <p className="text-muted-foreground mb-8">Manage employee details and course assignments.</p>
+      <p className="text-muted-foreground mb-8">Manage team member details and course assignments.</p>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <Card>
-                <CardHeader><CardTitle>Employee Details</CardTitle></CardHeader>
+                <CardHeader><CardTitle>Team Member Details</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                   <FormItem><FormLabel>Email</FormLabel><Input value={userToEdit.email} disabled className="opacity-70" /></FormItem>
@@ -312,7 +312,7 @@ export default function DashboardEditUserPage() {
                           {assignableRolesForDropdown.filter(r => r !== userToEdit.role).map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      {(!canChangeRole && userToEdit.role !== 'Super Admin') && <p className="text-xs text-muted-foreground">Your role does not permit changing this user's role.</p>}
+                      {(!canChangeRole && userToEdit.role !== 'Super Admin') && <p className="text-xs text-muted-foreground">Your role does not permit changing this team member's role.</p>}
                        {userToEdit.role === 'Super Admin' && <p className="text-xs text-muted-foreground">Super Admin role cannot be changed by others.</p>}
                       <FormMessage />
                     </FormItem>
@@ -327,7 +327,7 @@ export default function DashboardEditUserPage() {
                               <Checkbox checked={field.value?.includes(loc.id)} onCheckedChange={c => field.onChange(c ? [...(field.value || []), loc.id] : (field.value || []).filter(v => v !== loc.id))} />
                             </FormControl><FormLabel className="font-normal">{loc.name}</FormLabel></FormItem>
                           )}/>))
-                         : <p className="text-sm text-muted-foreground italic">{userToEdit.companyId ? 'No locations for this brand or your access.' : 'User not assigned to a brand.'}</p>
+                         : <p className="text-sm text-muted-foreground italic">{userToEdit.companyId ? 'No locations for this brand or your access.' : 'Team member not assigned to a brand.'}</p>
                         }
                       </ScrollArea><FormMessage />
                     </FormItem>
@@ -362,7 +362,7 @@ export default function DashboardEditUserPage() {
                           }
                           title={
                             currentUserSession.role === 'Manager' && !(currentUserSession.assignedLocationIds || []).some(locId => (userToEdit.assignedLocationIds || []).includes(locId)) && userToEdit.id !== currentUserSession.id
-                              ? "Managers can only assign courses to users in their own locations."
+                              ? "Managers can only assign courses to team members in their own locations."
                               : ""
                           }
                         />
@@ -375,7 +375,7 @@ export default function DashboardEditUserPage() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" /> User Statistics</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" /> Team Member Statistics</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               {userToEdit.assignedCourseIds && userToEdit.assignedCourseIds.length > 0 ? (
                 <ScrollArea className="h-64">
@@ -407,7 +407,7 @@ export default function DashboardEditUserPage() {
                   </div>
                 </ScrollArea>
               ) : (
-                <p className="text-sm text-muted-foreground italic">No courses assigned to this user to show statistics for.</p>
+                <p className="text-sm text-muted-foreground italic">No courses assigned to this team member to show statistics for.</p>
               )}
                <Alert variant="default" className="bg-blue-50 border-blue-200 mt-4">
                 <AlertCircle className="h-4 w-4 text-blue-600" />
@@ -423,4 +423,3 @@ export default function DashboardEditUserPage() {
     </div>
   );
 }
-

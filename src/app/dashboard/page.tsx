@@ -156,7 +156,7 @@ export default function DashboardPage() {
       const employeesWithProgressPromises = usersToProcess.map(async (user) => ({ ...user, overallProgress: await getUserOverallProgress(user.id), overallStatus: "Not Started" as const }));
       setEmployees(await Promise.all(employeesWithProgressPromises));
     } catch (error) {
-      toast({ title: "Error Fetching Employees", variant: "destructive" });
+      toast({ title: "Error Fetching Team Members", variant: "destructive" });
       setEmployees([]);
     } finally {
       setIsLoadingEmployees(false);
@@ -201,7 +201,7 @@ export default function DashboardPage() {
     }
     const targetUser = employees.find(u => u.id === userId);
     if (!targetUser) {
-         toast({ title: "Error", description: "User not found.", variant: "destructive"}); return;
+         toast({ title: "Error", description: "Team member not found.", variant: "destructive"}); return;
     }
     let canToggle = false;
     if (currentUser.role === 'Super Admin') canToggle = true;
@@ -214,7 +214,7 @@ export default function DashboardPage() {
     const updatedUser = await toggleUserStatus(userId);
     if (updatedUser) {
       fetchEmployeesAndAssignableCourses();
-      toast({ title: currentIsActive ? "User Deactivated" : "User Reactivated", variant: currentIsActive ? "destructive" : "default" });
+      toast({ title: currentIsActive ? "Team Member Deactivated" : "Team Member Reactivated", variant: currentIsActive ? "destructive" : "default" });
     } else {
         toast({ title: "Error", variant: "destructive" });
     }
@@ -285,7 +285,7 @@ export default function DashboardPage() {
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Active Employees"
+          title="Active Team Members"
           value={isLoadingEmployees ? <Loader2 className="h-6 w-6 animate-spin"/> : totalActiveFiltered}
           description={`${inactiveEmployees.length} inactive`}
           icon={UserCheck}
@@ -297,7 +297,7 @@ export default function DashboardPage() {
         <StatCard
           title="Avg. Completion"
           value={isLoadingEmployees ? <Loader2 className="h-6 w-6 animate-spin"/> : `${avgCompletion}%`}
-          description="Overall for active users"
+          description="Overall for active team members"
           icon={TrendingUp}
           chartData={generateChartData(avgCompletion, 100)}
           chartColor="hsl(var(--chart-2))"
@@ -330,7 +330,7 @@ export default function DashboardPage() {
           <CardContent> <Tabs defaultValue="active" className="w-full"> <TabsList className="grid w-full grid-cols-2 mb-4"> <TabsTrigger value="active">Active ({activeEmployees.length})</TabsTrigger> <TabsTrigger value="inactive">Inactive ({inactiveEmployees.length})</TabsTrigger> </TabsList>
               <TabsContent value="active"> <CardDescription className="mb-4 text-foreground">Active team members.</CardDescription> {isLoadingEmployees ? <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin mx-auto"/></div> : <EmployeeTable employees={paginatedActiveEmployees} onToggleEmployeeStatus={handleToggleUserStatus} currentUser={currentUser} locations={allSystemLocations} companies={viewableBrandsForFilter} baseEditPath="/dashboard/users" />}
                 <div className="flex items-center justify-end gap-2 py-4"> <div className="flex-1 text-sm text-muted-foreground"> Page {activeCurrentPage}/{totalActivePages} </div> <Button variant="outline" size="sm" onClick={() => setActiveCurrentPage(p=>Math.max(p-1,1))} disabled={activeCurrentPage===1}>Prev</Button> <Button variant="outline" size="sm" onClick={() => setActiveCurrentPage(p=>Math.min(p+1,totalActivePages))} disabled={activeCurrentPage===totalActivePages}>Next</Button> </div> </TabsContent>
-              <TabsContent value="inactive"> <CardDescription className="mb-4 text-foreground">Deactivated employees.</CardDescription> {isLoadingEmployees ? <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin mx-auto"/></div> : <EmployeeTable employees={paginatedInactiveEmployees} onToggleEmployeeStatus={handleToggleUserStatus} currentUser={currentUser} locations={allSystemLocations} companies={viewableBrandsForFilter} baseEditPath="/dashboard/users" />}
+              <TabsContent value="inactive"> <CardDescription className="mb-4 text-foreground">Deactivated team members.</CardDescription> {isLoadingEmployees ? <div className="text-center p-4"><Loader2 className="h-6 w-6 animate-spin mx-auto"/></div> : <EmployeeTable employees={paginatedInactiveEmployees} onToggleEmployeeStatus={handleToggleUserStatus} currentUser={currentUser} locations={allSystemLocations} companies={viewableBrandsForFilter} baseEditPath="/dashboard/users" />}
                 <div className="flex items-center justify-end gap-2 py-4"> <div className="flex-1 text-sm text-muted-foreground"> Page {inactiveCurrentPage}/{totalInactivePages} </div> <Button variant="outline" size="sm" onClick={() => setInactiveCurrentPage(p=>Math.max(p-1,1))} disabled={inactiveCurrentPage===1}>Prev</Button> <Button variant="outline" size="sm" onClick={() => setInactiveCurrentPage(p=>Math.min(p+1,totalInactivePages))} disabled={inactiveCurrentPage===totalInactivePages}>Next</Button> </div> </TabsContent>
             </Tabs>
             <div className="flex items-center justify-end gap-2 pt-4 border-t mt-4"> <Label htmlFor="rows-per-page">Rows:</Label> <Select value={rowsPerPage === 'all' ? 'all' : String(rowsPerPage)} onValueChange={handleRowsPerPageChange}> <SelectTrigger id="rows-per-page" className="w-[80px]"> <SelectValue /> </SelectTrigger> <SelectContent> <SelectItem value="5">5</SelectItem> <SelectItem value="10">10</SelectItem> <SelectItem value="15">15</SelectItem> <SelectItem value="all">All</SelectItem> </SelectContent> </Select> </div>

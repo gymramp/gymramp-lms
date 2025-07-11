@@ -1,3 +1,4 @@
+
 // src/app/admin/dashboard/page.tsx
 'use client';
 
@@ -196,9 +197,9 @@ export default function SuperAdminDashboardPage() {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Total Users"
+          title="Total Team Members"
           value={totalUsers}
-          description="All registered users"
+          description="All registered team members"
           icon={Users}
           chartData={generateChartData(totalUsers)}
           chartColor="hsl(var(--chart-1))"
@@ -248,7 +249,7 @@ export default function SuperAdminDashboardPage() {
                     <Building className="mr-2 h-4 w-4 flex-shrink-0" /> Manage Accounts
                 </Button>
                 <Button variant="outline" onClick={() => router.push('/admin/users')} className="justify-start text-left h-auto whitespace-normal px-3 py-2">
-                    <Users className="mr-2 h-4 w-4 flex-shrink-0" /> Manage Users
+                    <Users className="mr-2 h-4 w-4 flex-shrink-0" /> Manage Team
                 </Button>
                  <Button variant="outline" onClick={() => router.push('/admin/programs')} className="justify-start text-left h-auto whitespace-normal px-3 py-2">
                     <Layers className="mr-2 h-4 w-4 flex-shrink-0" /> Manage Programs
@@ -274,7 +275,7 @@ export default function SuperAdminDashboardPage() {
          <Card className="card-lift-hover">
             <CardHeader>
                 <CardTitle>Recent Platform Additions</CardTitle>
-                <CardDescription>Latest accounts and users added to the system.</CardDescription>
+                <CardDescription>Latest accounts and team members added to the system.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
                 <div>
@@ -301,7 +302,7 @@ export default function SuperAdminDashboardPage() {
                     )}
                 </div>
                 <div>
-                    <h3 className="text-md font-semibold mb-2 text-muted-foreground flex items-center"><Users className="mr-2 h-4 w-4"/>Recent Users</h3>
+                    <h3 className="text-md font-semibold mb-2 text-muted-foreground flex items-center"><Users className="mr-2 h-4 w-4"/>Recent Team Members</h3>
                     {recentUsers.length > 0 ? (
                         <ul className="space-y-2">
                             {recentUsers.map(user => (
@@ -316,7 +317,7 @@ export default function SuperAdminDashboardPage() {
                             ))}
                         </ul>
                     ) : (
-                        <p className="text-sm text-muted-foreground italic">No new users recently.</p>
+                        <p className="text-sm text-muted-foreground italic">No new team members recently.</p>
                     )}
                 </div>
             </CardContent>
