@@ -147,7 +147,7 @@ export function AddEditPartnerDialog({ isOpen, setIsOpen, initialData, onSave }:
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit Partner' : 'Add New Partner'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Partner' : 'Add Partner'}</DialogTitle>
           <DialogDescription>
             {isEditing ? 'Update details.' : 'Enter details.'}
           </DialogDescription>

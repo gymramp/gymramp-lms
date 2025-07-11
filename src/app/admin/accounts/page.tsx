@@ -92,7 +92,7 @@ export default function AdminAccountsPage() {
         </h1>
         <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90">
           <Link href="/admin/companies/new">
-            <PlusCircle className="mr-2 h-4 w-4" /> Add New Account
+            <PlusCircle className="mr-2 h-4 w-4" /> Add Account
           </Link>
         </Button>
       </div>

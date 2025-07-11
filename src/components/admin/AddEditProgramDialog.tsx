@@ -142,7 +142,7 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit Program' : 'Add New Program'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Program' : 'Add Program'}</DialogTitle>
           <DialogDescription>
             {isEditing ? 'Update the details of this program.' : 'Enter the details for the new program.'}
           </DialogDescription>

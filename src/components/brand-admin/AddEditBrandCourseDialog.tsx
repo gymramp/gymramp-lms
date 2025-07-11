@@ -213,7 +213,7 @@ export function AddEditBrandCourseDialog({ isOpen, setIsOpen, brandId, onCourseS
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit My Course' : 'Add New Course'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit My Course' : 'Add Course'}</DialogTitle>
           <DialogDescription>
             {isEditing ? 'Update the details of this course.' : 'Fill in the details for the new course.'}
           </DialogDescription>

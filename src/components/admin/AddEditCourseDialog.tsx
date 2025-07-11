@@ -220,7 +220,7 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit Course' : 'Add New Course'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Course' : 'Add Course'}</DialogTitle>
           <DialogDescription>
             {isEditing ? 'Update the details of this course.' : 'Fill in the details for the new course.'}
           </DialogDescription>

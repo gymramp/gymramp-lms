@@ -131,7 +131,7 @@ export default function AdminPartnersPage() {
     <div className="container mx-auto">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-primary flex items-center gap-2"><Handshake className="h-7 w-7" /> Partner Management</h1>
-        <Button onClick={handleAddPartnerClick} className="bg-accent text-accent-foreground hover:bg-accent/90"><PlusCircle className="mr-2 h-4 w-4" /> Add New Partner</Button>
+        <Button onClick={handleAddPartnerClick} className="bg-accent text-accent-foreground hover:bg-accent/90"><PlusCircle className="mr-2 h-4 w-4" /> Add Partner</Button>
       </div>
       <div className="mb-6 flex items-center gap-2">
         <Search className="h-5 w-5 text-muted-foreground" />

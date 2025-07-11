@@ -159,7 +159,7 @@ export default function AdminProgramsPage() {
           <Layers className="h-7 w-7" /> Program Management
         </h1>
         <Button onClick={handleAddProgramClick} className="bg-accent text-accent-foreground hover:bg-accent/90">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add New Program
+          <PlusCircle className="mr-2 h-4 w-4" /> Add Program
         </Button>
       </div>
       <div className="mb-6 flex items-center gap-2">
@@ -290,5 +290,3 @@ export default function AdminProgramsPage() {
     </div>
   );
 }
-
-    

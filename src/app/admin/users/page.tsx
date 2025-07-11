@@ -191,7 +191,7 @@ export default function AdminUsersPage() {
                 disabled={isLoadingFilters || !currentUser || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role) || (currentUser.role === 'Super Admin' && accessibleBrandsForFilter.length === 0 && (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter))}
                 title={ (currentUser?.role === 'Super Admin' && accessibleBrandsForFilter.length === 0 && (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter)) ? "Add an account first" : ""} >
                 <Link href="/admin/users/new">
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add New Team Member
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add Team Member
                 </Link>
             </Button>
          </div>

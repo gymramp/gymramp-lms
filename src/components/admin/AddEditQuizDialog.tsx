@@ -119,7 +119,7 @@ export function AddEditQuizDialog({
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit Quiz Title' : 'Create New Quiz'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Quiz Title' : 'Add Quiz'}</DialogTitle>
           <DialogDescription>
             {isEditing ? 'Update the title of this quiz.' : 'Enter the title for the new standalone quiz. Questions can be added later.'}
           </DialogDescription>

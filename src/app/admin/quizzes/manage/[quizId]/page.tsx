@@ -140,7 +140,7 @@ export default function ManageQuizQuestionsPage() {
           <p className="text-muted-foreground">Manage Quiz Questions</p>
         </div>
          <Button onClick={handleAddQuestionClick} className="bg-accent text-accent-foreground hover:bg-accent/90">
-            <PlusCircle className="mr-2 h-4 w-4" /> Add New Question
+            <PlusCircle className="mr-2 h-4 w-4" /> Add Question
          </Button>
       </div>
 
@@ -242,5 +242,3 @@ export default function ManageQuizQuestionsPage() {
     </div>
   );
 }
-
-    

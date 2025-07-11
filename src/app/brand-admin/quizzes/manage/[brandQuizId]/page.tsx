@@ -127,7 +127,7 @@ export default function ManageBrandQuizQuestionsPage() {
           <p className="text-muted-foreground">Manage Questions for My Quiz</p>
         </div>
         <Button onClick={handleAddQuestionClick} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add New Question
+          <PlusCircle className="mr-2 h-4 w-4" /> Add Question
         </Button>
       </div>
 

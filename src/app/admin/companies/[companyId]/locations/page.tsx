@@ -254,7 +254,7 @@ export default function AdminCompanyLocationsPage() {
           <p className="text-muted-foreground">For initial context: <span className="font-semibold text-foreground">{brandForPageTitle.name}</span></p>
         </div>
         <Button onClick={handleAddLocationClick} className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={!selectedBrandIdInFilter}>
-          <PlusCircle className="mr-2 h-4 w-4" /> Add New Location
+          <PlusCircle className="mr-2 h-4 w-4" /> Add Location
         </Button>
       </div>
 
@@ -340,5 +340,3 @@ export default function AdminCompanyLocationsPage() {
     </div>
   );
 }
-
-    

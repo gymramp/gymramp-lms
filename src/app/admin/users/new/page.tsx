@@ -195,7 +195,7 @@ export default function AddNewUserPage() {
 
       <Card className="max-w-2xl mx-auto">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-2xl"><UserPlus className="h-6 w-6"/> Add New Team Member</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-2xl"><UserPlus className="h-6 w-6"/> Add Team Member</CardTitle>
           <CardDescription>Fill out the form below to create a new team member account.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -282,7 +282,7 @@ export default function AddNewUserPage() {
               <CardFooter className="p-0 pt-6">
                 <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isPending || isUserLimitReached}>
                   {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  {isPending ? 'Creating Team Member...' : 'Create Team Member'}
+                  {isPending ? 'Adding Team Member...' : 'Add Team Member'}
                 </Button>
               </CardFooter>
             </form>

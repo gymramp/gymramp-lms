@@ -222,7 +222,7 @@ export default function AdminCompaniesPage() {
         <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90">
           <Link href="/admin/companies/new">
             <span className="flex items-center">
-              <PlusCircle className="mr-2 h-4 w-4" /> Add New Brand
+              <PlusCircle className="mr-2 h-4 w-4" /> Add Brand
             </span>
           </Link>
         </Button>

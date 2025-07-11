@@ -148,7 +148,7 @@ export default function BrandAdminQuizzesPage() {
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-primary">My Quizzes</h1>
         <Button onClick={handleAddQuiz} className="bg-accent text-accent-foreground hover:bg-accent/90">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add New Quiz
+          <PlusCircle className="mr-2 h-4 w-4" /> Add Quiz
         </Button>
       </div>
 

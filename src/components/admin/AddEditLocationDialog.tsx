@@ -106,7 +106,7 @@ export function AddEditLocationDialog({ isOpen, setIsOpen, onSave, initialData }
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit Location' : 'Add New Location'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Location' : 'Add Location'}</DialogTitle>
           <DialogDescription>
             {isEditing ? 'Update the name of this location.' : 'Enter the name for the new location.'}
           </DialogDescription>

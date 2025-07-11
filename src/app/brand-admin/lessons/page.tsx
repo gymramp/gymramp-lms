@@ -190,7 +190,7 @@ export default function BrandAdminLessonsPage() {
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-primary">My Lessons</h1>
         <Button onClick={handleAddLesson} className="bg-accent text-accent-foreground hover:bg-accent/90">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add New Lesson
+          <PlusCircle className="mr-2 h-4 w-4" /> Add Lesson
         </Button>
       </div>
 
