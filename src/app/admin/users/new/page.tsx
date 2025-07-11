@@ -125,7 +125,7 @@ export default function AddNewUserPage() {
 
   const onSubmit = async (data: UserFormValues) => {
     startTransition(async () => {
-      if (!currentUser) { toast({ title: "Error", description: "Current team member not found.", variant: "destructive" }); return; }
+      if (!currentUser) { toast({ title: "Error", description: "Current user not found.", variant: "destructive" }); return; }
 
       const permissionError = checkPermissions(currentUser, data.role);
       if (permissionError) {
@@ -144,10 +144,10 @@ export default function AddNewUserPage() {
       const result = await createUserAndSendWelcomeEmail(userDataToSend);
 
       if (result.success && result.user) {
-        toast({ title: 'Team Member Added & Email Sent', description: `${result.user.name} successfully added. Welcome email initiated. Temp Password: ${result.tempPassword}`, duration: 10000 });
+        toast({ title: 'User Added & Email Sent', description: `${result.user.name} successfully added. Welcome email initiated. Temp Password: ${result.tempPassword}`, duration: 10000 });
         router.push('/admin/users');
       } else {
-        toast({ title: 'Team Member Creation Error', description: result.error || 'An unknown error occurred.', variant: 'destructive' });
+        toast({ title: 'User Creation Error', description: result.error || 'An unknown error occurred.', variant: 'destructive' });
       }
     });
   };
@@ -155,13 +155,13 @@ export default function AddNewUserPage() {
   const checkPermissions = (currentUser: User, targetRole: UserRole): string | null => {
     if (currentUser.role === 'Super Admin') return null;
     if (ROLE_HIERARCHY[currentUser.role] < ROLE_HIERARCHY[targetRole]) {
-      return "You cannot create a team member with a role higher than your own.";
+      return "You cannot create a user with a role higher than your own.";
     }
     if (currentUser.role === 'Manager' && !(targetRole === 'Staff' || targetRole === 'Manager')) {
       return "Managers can only create Staff or other Manager users.";
     }
     if ((currentUser.role === 'Admin' || currentUser.role === 'Owner') && ROLE_HIERARCHY[currentUser.role] <= ROLE_HIERARCHY[targetRole]) {
-      return "You cannot create a team member with a role equal to or higher than your own.";
+      return "You cannot create a user with a role equal to or higher than your own.";
     }
     return null;
   };
@@ -195,8 +195,8 @@ export default function AddNewUserPage() {
 
       <Card className="max-w-2xl mx-auto">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-2xl"><UserPlus className="h-6 w-6"/> Add Team Member</CardTitle>
-          <CardDescription>Fill out the form below to create a new team member account.</CardDescription>
+          <CardTitle className="flex items-center gap-2 text-2xl"><UserPlus className="h-6 w-6"/> Add User</CardTitle>
+          <CardDescription>Fill out the form below to create a new user account.</CardDescription>
         </CardHeader>
         <CardContent>
            <Alert variant="default" className="mb-6 border-blue-300 bg-blue-50 dark:bg-blue-900/30">
@@ -213,7 +213,7 @@ export default function AddNewUserPage() {
                 <FormItem> 
                   <FormLabel>Full Name</FormLabel> 
                   <FormControl><Input placeholder="John Doe" {...field} /></FormControl>
-                  <FormDescription>The team member's full name for certificates and display.</FormDescription>
+                  <FormDescription>The user's full name for certificates and display.</FormDescription>
                   <FormMessage /> 
                 </FormItem> 
               )} />
@@ -221,7 +221,7 @@ export default function AddNewUserPage() {
                 <FormItem> 
                   <FormLabel>Email Address</FormLabel> 
                   <FormControl><Input type="email" placeholder="john.doe@example.com" {...field} /></FormControl> 
-                  <FormDescription>The email address the team member will use to log in.</FormDescription>
+                  <FormDescription>The email address the user will use to log in.</FormDescription>
                   <FormMessage /> 
                 </FormItem> 
               )} />
@@ -233,8 +233,8 @@ export default function AddNewUserPage() {
                     <FormControl><SelectTrigger><SelectValue placeholder="Select an account" /></SelectTrigger></FormControl>
                     <SelectContent>{companies.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}</SelectContent>
                   </Select>
-                  <FormDescription>Assigns the team member to a specific customer account.</FormDescription>
-                  {isUserLimitReached && <p className="text-xs font-medium text-destructive mt-1">Team member limit reached for this account.</p>}
+                  <FormDescription>Assigns the user to a specific customer account.</FormDescription>
+                  {isUserLimitReached && <p className="text-xs font-medium text-destructive mt-1">User limit reached for this account.</p>}
                   <FormMessage />
                 </FormItem>
               )} />
@@ -253,7 +253,7 @@ export default function AddNewUserPage() {
                       ) : (<div className="text-sm text-muted-foreground italic h-full flex items-center justify-center">{selectedCompanyIdForm ? 'No locations for this account.' : 'Select an account first.'}</div>)}
                     </ScrollArea>
                   </FormControl> 
-                  <FormDescription>Determines which location-specific data the team member can access or be associated with.</FormDescription>
+                  <FormDescription>Determines which location-specific data the user can access or be associated with.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -282,7 +282,7 @@ export default function AddNewUserPage() {
               <CardFooter className="p-0 pt-6">
                 <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isPending || isUserLimitReached}>
                   {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  {isPending ? 'Adding Team Member...' : 'Add Team Member'}
+                  {isPending ? 'Adding User...' : 'Add User'}
                 </Button>
               </CardFooter>
             </form>

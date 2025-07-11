@@ -39,7 +39,7 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
       { href: '/admin/dashboard', label: 'Dashboard', icon: BarChartBig },
       { href: '/admin/accounts', label: 'Accounts', icon: Briefcase },
       { href: '/admin/companies', label: 'Brands', icon: Building },
-      { href: '/admin/users', label: 'Team', icon: Users },
+      { href: '/admin/users', label: 'Users', icon: Users },
       { href: '/admin/partners', label: 'Partners', icon: Handshake },
       { href: '/admin/programs', label: 'Programs', icon: Layers },
       { href: '/admin/customers', label: 'Customers', icon: CreditCard },
@@ -143,11 +143,11 @@ export async function getQuickAddItems(user: User | null): Promise<NavItemType[]
   const items: NavItemType[] = [];
 
   if (user.role === 'Super Admin') {
-    items.push({ href: '/admin/users/new', label: 'New Team Member', icon: UserPlus });
+    items.push({ href: '/admin/users/new', label: 'New User', icon: UserPlus });
     items.push({ href: '/admin/companies/new', label: 'New Brand', icon: Building });
   } 
   else if (user.role === 'Admin' || user.role === 'Owner' || user.role === 'Manager') {
-    items.push({ href: '/admin/users/new', label: 'New Team Member', icon: UserPlus });
+    items.push({ href: '/admin/users/new', label: 'New User', icon: UserPlus });
   }
 
   if (user.role === 'Admin' || user.role === 'Owner') {

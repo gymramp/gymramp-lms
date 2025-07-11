@@ -109,7 +109,7 @@ export default function AdminUsersPage() {
       }));
       setUsers(await Promise.all(usersWithProgressPromises));
     } catch (error) {
-      toast({ title: "Error", description: "Could not load team members.", variant: "destructive" });
+      toast({ title: "Error", description: "Could not load users.", variant: "destructive" });
       setUsers([]);
     } finally {
       setIsLoading(false);
@@ -152,12 +152,12 @@ export default function AdminUsersPage() {
     }
     const targetUser = users.find(u => u.id === userId);
     if (!targetUser) {
-         toast({ title: "Error", description: "Team member not found.", variant: "destructive"}); return;
+         toast({ title: "Error", description: "User not found.", variant: "destructive"}); return;
     }
     const updatedUser = await toggleUserStatus(userId);
     if (updatedUser) {
       fetchUsersForCurrentFilters();
-      toast({ title: currentIsActive ? "Team Member Deactivated" : "Team Member Reactivated", variant: currentIsActive ? "destructive" : "default" });
+      toast({ title: currentIsActive ? "User Deactivated" : "User Reactivated", variant: currentIsActive ? "destructive" : "default" });
     } else {
         toast({ title: "Error", description: `Failed to update status for ${userName}.`, variant: "destructive" });
     }
@@ -172,7 +172,7 @@ export default function AdminUsersPage() {
   };
 
   if (isLoadingFilters && !currentUser) {
-    return ( <div className="container mx-auto"> <h1 className="text-3xl font-bold mb-8">Team Management</h1> <div className="flex flex-wrap items-center gap-4 mb-6 p-4"> <Skeleton className="h-8 w-24" /> <Skeleton className="h-10 w-48" /> <Skeleton className="h-10 w-48" /> <Skeleton className="h-10 w-32" /> </div> <Card><CardHeader><Skeleton className="h-8 w-1/4" /><Skeleton className="h-4 w-1/2 mt-2" /></CardHeader><CardContent><div className="space-y-4 py-4"> <Skeleton className="h-12 w-full" /> <Skeleton className="h-10 w-full" /> </div></CardContent></Card> </div> );
+    return ( <div className="container mx-auto"> <h1 className="text-3xl font-bold mb-8">User Management</h1> <div className="flex flex-wrap items-center gap-4 mb-6 p-4"> <Skeleton className="h-8 w-24" /> <Skeleton className="h-10 w-48" /> <Skeleton className="h-10 w-48" /> <Skeleton className="h-10 w-32" /> </div> <Card><CardHeader><Skeleton className="h-8 w-1/4" /><Skeleton className="h-4 w-1/2 mt-2" /></CardHeader><CardContent><div className="space-y-4 py-4"> <Skeleton className="h-12 w-full" /> <Skeleton className="h-10 w-full" /> </div></CardContent></Card> </div> );
   }
   if (!currentUser || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role)) {
      return <div className="container mx-auto text-center">Access Denied.</div>;
@@ -185,13 +185,13 @@ export default function AdminUsersPage() {
   return (
     <div className="container mx-auto">
        <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Team Management</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-primary">User Management</h1>
          <div className="flex items-center gap-2">
             <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90"
                 disabled={isLoadingFilters || !currentUser || !['Super Admin', 'Admin', 'Owner', 'Manager'].includes(currentUser.role) || (currentUser.role === 'Super Admin' && accessibleBrandsForFilter.length === 0 && (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter))}
                 title={ (currentUser?.role === 'Super Admin' && accessibleBrandsForFilter.length === 0 && (selectedBrandIdForFilter === 'all' || !selectedBrandIdForFilter)) ? "Add an account first" : ""} >
                 <Link href="/admin/users/new">
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add Team Member
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add User
                 </Link>
             </Button>
          </div>
@@ -248,7 +248,7 @@ export default function AdminUsersPage() {
         </div>
 
       <Card>
-        <CardHeader> <CardTitle>Team Member List</CardTitle> <CardDescription>Manage team member accounts, roles, and status.</CardDescription> </CardHeader>
+        <CardHeader> <CardTitle>User List</CardTitle> <CardDescription>Manage user accounts, roles, and status.</CardDescription> </CardHeader>
         <CardContent>
           {isLoading ? ( <div className="space-y-4 py-4"> <Skeleton className="h-12 w-full" /> <Skeleton className="h-10 w-full" /> </div>
            ) : (
