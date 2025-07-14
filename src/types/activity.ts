@@ -18,3 +18,15 @@ export interface ActivityLog {
     status?: string; // e.g., "Completed", "In Progress"
   };
 }
+
+export interface Notification {
+  id: string;
+  recipientId: string;
+  senderId: string; // 'SYSTEM' or a userId
+  senderName: string; // 'System' or the sender's name
+  type: 'message' | 'reminder' | 'badge' | 'announcement';
+  content: string;
+  isRead: boolean;
+  href?: string; // Optional link to navigate to, e.g., a course page
+  createdAt: Timestamp;
+}

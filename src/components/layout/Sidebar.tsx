@@ -19,6 +19,7 @@ import type { User } from '@/types/user';
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from '@/components/ui/skeleton';
 import { LogOut, PlusCircle, MoreVertical } from 'lucide-react';
+import { Notifications } from '@/components/layout/Notifications';
 
 export function Sidebar() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -200,6 +201,7 @@ export function Sidebar() {
               <p className="text-xs text-muted-foreground truncate">{currentUser.email}</p>
             </div>
           </div>
+          <Notifications user={currentUser} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
