@@ -27,13 +27,12 @@ export async function getNotificationsForUser(userId: string, count: number = 20
   if (!userId) return [];
   try {
     const notificationsRef = collection(db, NOTIFICATIONS_COLLECTION);
-    // Note: A composite index on (recipientId, createdAt desc) is required for optimal sorting.
-    // For now, we sort by recipientId to avoid build errors without the index.
-    // The limit will still retrieve recent documents, but they may not be perfectly ordered.
+    // Note: A composite index on (recipientId asc, createdAt desc) is required for this query to work.
+    // The Firebase console will provide a link to create this index if it's missing.
     const q = query(
       notificationsRef,
       where('recipientId', '==', userId),
-      orderBy('createdAt', 'desc'), // This should be fine now that the index should exist from previous failures
+      orderBy('createdAt', 'desc'),
       limit(count)
     );
     const querySnapshot = await getDocs(q);
@@ -49,8 +48,8 @@ export async function getNotificationsForUser(userId: string, count: number = 20
     return notifications;
   } catch (error) {
     console.error(`Error fetching notifications for user ${userId}:`, error);
-    // Changed to not re-throw the error, which was causing a crash on the client.
-    // Instead, we log it and return an empty array, so the UI can handle the empty state gracefully.
+    // Instead of throwing an error which crashes the client, we return an empty array.
+    // The error log in the console will contain the link to create the necessary Firestore index.
     return [];
   }
 }
