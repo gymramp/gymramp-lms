@@ -11,11 +11,33 @@ import {
   updateDoc,
   serverTimestamp,
   writeBatch,
+  addDoc,
 } from 'firebase/firestore';
-import type { User, Notification } from '@/types/activity';
+import type { User, Notification, NotificationFormData } from '@/types/activity';
 import type { Timestamp } from 'firebase/firestore';
 
 const NOTIFICATIONS_COLLECTION = 'notifications';
+
+/**
+ * Creates a new notification for a user.
+ * @param notificationData - The data for the notification to be created.
+ * @returns A promise that resolves to true if successful, false otherwise.
+ */
+export async function createNotification(notificationData: NotificationFormData): Promise<boolean> {
+  try {
+    const notificationsRef = collection(db, NOTIFICATIONS_COLLECTION);
+    await addDoc(notificationsRef, {
+      ...notificationData,
+      isRead: false,
+      createdAt: serverTimestamp(),
+    });
+    console.log(`Notification created for recipient ${notificationData.recipientId}`);
+    return true;
+  } catch (error) {
+    console.error("Error creating notification:", error);
+    return false;
+  }
+}
 
 /**
  * Fetches notifications for a specific user, ordered by most recent.

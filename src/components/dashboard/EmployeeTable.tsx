@@ -23,7 +23,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Edit, Archive, Undo, BookCopy, MapPin, Loader2, ShieldCheck, MoreHorizontal, Trash2 } from "lucide-react";
+import { Edit, Archive, Undo, BookCopy, MapPin, Loader2, ShieldCheck, MoreHorizontal, Trash2, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { User, UserRole, Location, Company } from '@/types/user';
 import type { Course, BrandCourse } from '@/types/course';
@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { getCourseById as fetchGlobalCourseById } from '@/lib/firestore-data';
 import { getBrandCourseById } from '@/lib/brand-content-data';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { SendNotificationDialog } from './SendNotificationDialog'; // Import the new dialog
 
 
 const ROLE_HIERARCHY_TABLE: Record<UserRole, number> = {
@@ -61,6 +62,8 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, currentUser, 
     const [isLoadingTitles, setIsLoadingTitles] = useState(false);
     const [isAlertOpen, setIsAlertOpen] = useState(false);
     const [userToToggle, setUserToToggle] = useState<User | null>(null);
+    const [isNotificationDialogOpen, setIsNotificationDialogOpen] = useState(false);
+    const [notificationRecipient, setNotificationRecipient] = useState<User | null>(null);
 
     useEffect(() => {
         let isMounted = true;
@@ -133,6 +136,15 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, currentUser, 
         }
         setIsAlertOpen(false);
         setUserToToggle(null);
+    };
+
+    const handleSendMessageClick = (employee: User) => {
+        if (!canPerformGeneralAction(employee)) {
+            toast({ title: "Permission Denied", description: "You cannot send messages to this user.", variant: "destructive" });
+            return;
+        }
+        setNotificationRecipient(employee);
+        setIsNotificationDialogOpen(true);
     };
 
     const canEditTargetUser = (targetUser: User): boolean => {
@@ -254,6 +266,9 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, currentUser, 
                                 <Edit className="mr-2 h-4 w-4" /> Edit User
                             </Link>
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleSendMessageClick(employee)} disabled={!canPerformGeneralAction(employee)}>
+                            <Send className="mr-2 h-4 w-4" /> Send Message
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                             onClick={() => handleToggleClick(employee)}
@@ -288,6 +303,12 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, currentUser, 
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
+    <SendNotificationDialog
+        isOpen={isNotificationDialogOpen}
+        setIsOpen={setIsNotificationDialogOpen}
+        recipient={notificationRecipient}
+        sender={currentUser}
+    />
     </>
   );
 }

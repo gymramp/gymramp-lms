@@ -27,6 +27,7 @@ import { createDefaultCompany, getCompanyById as getCompanyDataById, getCompanyB
 import { getCourseById } from './firestore-data';
 import { getBrandCourseById } from './brand-content-data'; // Import for brand courses
 import type { Course, BrandCourse } from '@/types/course'; // Import BrandCourse type
+import { createNotification } from './notifications-data'; // Import createNotification
 
 const USERS_COLLECTION = 'users';
 
@@ -607,6 +608,16 @@ export const updateEmployeeProgress = async (userId: string, courseId: string, c
         const currentTimeSpent = currentProgressData?.timeSpentSeconds || 0;
         const currentQuizAttempts = currentProgressData?.quizAttempts || {};
 
+        if (newStatus === "Completed" && currentProgressData?.status !== "Completed") {
+            createNotification({
+                recipientId: userId,
+                senderId: 'SYSTEM',
+                senderName: 'Gymramp',
+                type: 'course_completion',
+                content: `Congratulations! You've completed the course: ${course.title}.`,
+                href: `/certificates` // Link to certificates page
+            });
+        }
 
         await updateDoc(userRef, {
             [`${progressFieldPath}.completedItems`]: updatedCompletedItems,

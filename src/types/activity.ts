@@ -19,14 +19,19 @@ export interface ActivityLog {
   };
 }
 
+export type NotificationType = 'message' | 'reminder' | 'badge' | 'announcement' | 'course_completion';
+
 export interface Notification {
   id: string;
   recipientId: string;
   senderId: string; // 'SYSTEM' or a userId
   senderName: string; // 'System' or the sender's name
-  type: 'message' | 'reminder' | 'badge' | 'announcement';
+  type: NotificationType;
   content: string;
   isRead: boolean;
   href?: string; // Optional link to navigate to, e.g., a course page
   createdAt: Timestamp;
 }
+
+// Data required when creating a new notification
+export type NotificationFormData = Omit<Notification, 'id' | 'isRead' | 'createdAt'>;
