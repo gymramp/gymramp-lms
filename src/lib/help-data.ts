@@ -4,7 +4,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
     BarChartBig, Building, Layers, CreditCard, BookOpen, FileText,
     ListChecks, UserPlus, ShoppingCart, Gift,
-    TestTube2, Percent, HelpCircle, LayoutDashboard, Users, MapPin, Settings, Award, Cog, Package, Handshake, KeyRound
+    TestTube2, Percent, HelpCircle, LayoutDashboard, Users, MapPin, Settings, Award, Cog, Package, Handshake, KeyRound, Bell
 } from 'lucide-react';
 
 export interface HelpTopic {
@@ -83,6 +83,17 @@ Configure system-wide settings.
       `,
     },
     {
+        title: "Using Notifications",
+        icon: Bell,
+        content: `
+The notification system allows you to communicate with any user and receive system updates.
+
+*   **Viewing Notifications:** Click the **bell icon** in the sidebar to open your notification panel. Unread notifications are indicated by a badge on the icon.
+*   **Sending Notifications:** From the main [**Users**](/admin/users) page, click the action menu (...) for any user and select **'Send Message'**. This will open a dialog where you can type and send a notification directly to that user.
+*   **System Notifications:** The system will automatically send notifications to users for key events, such as when they complete a course.
+        `
+    },
+    {
       title: "Resetting User Passwords",
       icon: KeyRound,
       content: `
@@ -123,6 +134,16 @@ If course management is enabled for your Brand, you will see a **My Content** se
 *   [**My Lessons**](/brand-admin/lessons): Create and manage lessons unique to your brand.
 *   [**My Quizzes**](/brand-admin/quizzes): Develop quizzes and manage their questions.
       `,
+    },
+    {
+        title: "Sending & Receiving Notifications",
+        icon: Bell,
+        content: `
+You can communicate with your team members and receive important system updates through the notification system.
+
+*   **Viewing Notifications:** Click the **bell icon** in the sidebar to view your notifications.
+*   **Sending Messages:** From your [**Dashboard**](/dashboard), find a user in the Team Management table. Click the action menu (...) for that user and select **'Send Message'** to send them a direct notification.
+        `
     },
     {
       title: "Viewing My Certificates",
@@ -167,6 +188,16 @@ If course management is enabled for your Brand, you will see a **My Content** se
       `,
     },
     {
+        title: "Sending & Receiving Notifications",
+        icon: Bell,
+        content: `
+You can communicate with your team members and receive important system updates through the notification system.
+
+*   **Viewing Notifications:** Click the **bell icon** in the sidebar to view your notifications.
+*   **Sending Messages:** From your [**Dashboard**](/dashboard), find a user in the Team Management table. Click the action menu (...) for that user and select **'Send Message'** to send them a direct notification.
+        `
+    },
+    {
       title: "Viewing My Certificates",
       icon: Award,
       content: "Once you successfully complete a course, you'll earn a certificate. You can view all your earned certificates by navigating to [**My Certificates**](/certificates) from your sidebar or user dropdown menu.",
@@ -193,6 +224,16 @@ Currently, only Super Admins can manually set temporary passwords for users.
       content: "You can manage Staff and other Manager users within your brand and specifically within the locations you are assigned to. From the [**Dashboard**](/dashboard), you can add new staff/managers, edit their details, and manage their account status.",
     },
     {
+        title: "Sending & Receiving Notifications",
+        icon: Bell,
+        content: `
+You can communicate with your team members and receive important system updates through the notification system.
+
+*   **Viewing Notifications:** Click the **bell icon** in the sidebar to view your notifications.
+*   **Sending Messages:** From your [**Dashboard**](/dashboard), find a user in the Team Management table. Click the action menu (...) for that user and select **'Send Message'** to send them a direct notification. You can only message users you are permitted to manage.
+        `
+    },
+    {
       title: "Viewing My Learning & Certificates",
       icon: Award,
       content: "You can take courses just like your staff. Go to [**My Learning**](/courses/my-courses) to see your assigned courses. When you complete a course, your certificate will appear in [**My Certificates**](/certificates).",
@@ -212,6 +253,16 @@ Currently, only Super Admins can manually set temporary passwords for users.
       title: "Accessing My Learning",
       icon: BookOpen,
       content: "Navigate to [**My Learning**](/courses/my-courses) from your sidebar. This page lists all courses assigned to you. Click on a course to start or continue your learning journey. Your progress is saved automatically.",
+    },
+    {
+        title: "Receiving Notifications",
+        icon: Bell,
+        content: `
+You will receive notifications from your managers and from the system. 
+
+*   Click the **bell icon** in the sidebar to view your notifications for reminders, messages, or course completion alerts. 
+*   An indicator will appear on the icon when you have unread notifications.
+        `
     },
     {
       title: "Viewing My Certificates",
