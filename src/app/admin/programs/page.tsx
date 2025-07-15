@@ -32,7 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { PlusCircle, MoreHorizontal, Trash2, Edit, BookOpen, Search, Layers, Loader2, DollarSign, Package } from 'lucide-react'; // Added Package
+import { PlusCircle, MoreHorizontal, Trash2, Edit, BookOpen, Search, Layers, Loader2, DollarSign, Package, Star } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Program } from '@/types/course';
 import type { User } from '@/types/user';
@@ -193,13 +193,10 @@ export default function AdminProgramsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Title</TableHead>
-                  <TableHead>Description</TableHead>
+                  <TableHead>Pricing Model</TableHead>
                   <TableHead className="text-center">Courses</TableHead>
-                  <TableHead><DollarSign className="inline h-4 w-4 mr-1" />Base Price</TableHead>
-                  <TableHead><DollarSign className="inline h-4 w-4 mr-1" />Sub (M4-12)</TableHead>
-                  <TableHead>Stripe M4-12 ID</TableHead>
-                  <TableHead><DollarSign className="inline h-4 w-4 mr-1" />Sub (M13+)</TableHead>
-                  <TableHead>Stripe M13+ ID</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>Stripe IDs</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -207,17 +204,29 @@ export default function AdminProgramsPage() {
                 {filteredPrograms.map((program) => (
                   <TableRow key={program.id}>
                     <TableCell className="font-medium">{program.title}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
-                      {program.description}
+                    <TableCell>
+                      <Badge variant={program.isStandardSubscription ? "default" : "secondary"}>
+                        {program.isStandardSubscription ? 
+                          <span className="flex items-center gap-1"><Star className="h-3 w-3"/> Standard Sub</span> : 
+                          <span className="flex items-center gap-1"><DollarSign className="h-3 w-3"/> One-Time + Tiered</span>}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="secondary">{program.courseIds?.length || 0}</Badge>
+                      <Badge variant="outline">{program.courseIds?.length || 0}</Badge>
                     </TableCell>
-                    <TableCell>{program.price}</TableCell>
-                    <TableCell>{program.firstSubscriptionPrice || 'N/A'}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{program.stripeFirstPriceId || 'N/A'}</TableCell>
-                    <TableCell>{program.secondSubscriptionPrice || 'N/A'}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{program.stripeSecondPriceId || 'N/A'}</TableCell>
+                    <TableCell>
+                        {program.isStandardSubscription ? program.standardSubscriptionPrice : program.price}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">
+                        {program.isStandardSubscription ? 
+                            (program.stripeStandardPriceId || 'N/A') :
+                            ( <>
+                                {program.stripeFirstPriceId && <div>M4-12: {program.stripeFirstPriceId}</div>}
+                                {program.stripeSecondPriceId && <div>M13+: {program.stripeSecondPriceId}</div>}
+                              </>
+                            )
+                        }
+                    </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

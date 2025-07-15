@@ -115,7 +115,12 @@ export interface Program {
   title: string;
   description: string;
   courseIds: string[];
-  price: string;
+  isStandardSubscription?: boolean; // New field to differentiate pricing model
+  // For standard monthly subscription model
+  standardSubscriptionPrice?: string | null;
+  stripeStandardPriceId?: string | null;
+  // For one-time + tiered subscription model
+  price?: string;
   firstSubscriptionPrice?: string | null;
   stripeFirstPriceId?: string | null;
   secondSubscriptionPrice?: string | null;
@@ -128,7 +133,10 @@ export interface Program {
 
 // Type for form data when adding/editing a Program
 export type ProgramFormData = Omit<Program, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'courseIds'> & {
-  price: string; // One-time base price
+  isStandardSubscription?: boolean;
+  standardSubscriptionPrice?: string | null;
+  stripeStandardPriceId?: string | null;
+  price?: string; // One-time base price
   firstSubscriptionPrice?: string | null;
   stripeFirstPriceId?: string | null;
   secondSubscriptionPrice?: string | null;

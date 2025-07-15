@@ -482,7 +482,10 @@ export async function createProgram(programData: ProgramFormData): Promise<Progr
         const newProgramDoc = {
             title: programData.title,
             description: programData.description,
-            price: programData.price,
+            isStandardSubscription: programData.isStandardSubscription ?? false,
+            standardSubscriptionPrice: programData.standardSubscriptionPrice || null,
+            stripeStandardPriceId: programData.stripeStandardPriceId || null,
+            price: programData.price || null,
             firstSubscriptionPrice: programData.firstSubscriptionPrice || null,
             stripeFirstPriceId: programData.stripeFirstPriceId || null,
             secondSubscriptionPrice: programData.secondSubscriptionPrice || null,
@@ -536,28 +539,17 @@ export async function updateProgram(programId: string, programData: Partial<Prog
         const programSnap = await getDoc(programRef);
         if (!programSnap.exists() || programSnap.data().isDeleted === true) return null;
 
-        const dataToUpdate: Partial<ProgramFormData & {updatedAt: Timestamp}> = {updatedAt: serverTimestamp() as Timestamp};
-        if (programData.title !== undefined) dataToUpdate.title = programData.title;
-        if (programData.description !== undefined) dataToUpdate.description = programData.description;
-        if (programData.price !== undefined) dataToUpdate.price = programData.price;
+        const dataToUpdate: Partial<ProgramFormData & {updatedAt: Timestamp}> = { ...programData, updatedAt: serverTimestamp() as Timestamp };
 
-        if (programData.firstSubscriptionPrice !== undefined) dataToUpdate.firstSubscriptionPrice = programData.firstSubscriptionPrice || null;
-        if (programData.stripeFirstPriceId !== undefined) dataToUpdate.stripeFirstPriceId = programData.stripeFirstPriceId || null;
-        if (programData.secondSubscriptionPrice !== undefined) dataToUpdate.secondSubscriptionPrice = programData.secondSubscriptionPrice || null;
-        if (programData.stripeSecondPriceId !== undefined) dataToUpdate.stripeSecondPriceId = programData.stripeSecondPriceId || null;
-
-        if (Object.keys(dataToUpdate).length <= 1 &&
-            !dataToUpdate.title &&
-            !dataToUpdate.description &&
-            !dataToUpdate.price &&
-            dataToUpdate.firstSubscriptionPrice === undefined &&
-            dataToUpdate.stripeFirstPriceId === undefined &&
-            dataToUpdate.secondSubscriptionPrice === undefined &&
-            dataToUpdate.stripeSecondPriceId === undefined
-        ) {
-            const currentDoc = await getDoc(programRef);
-            return currentDoc.exists() ? {id: currentDoc.id, ...currentDoc.data()} as Program : null;
-        }
+        // Ensure nulls are set correctly if fields are cleared
+        if ('isStandardSubscription' in programData) dataToUpdate.isStandardSubscription = programData.isStandardSubscription ?? false;
+        if ('standardSubscriptionPrice' in programData) dataToUpdate.standardSubscriptionPrice = programData.standardSubscriptionPrice || null;
+        if ('stripeStandardPriceId' in programData) dataToUpdate.stripeStandardPriceId = programData.stripeStandardPriceId || null;
+        if ('price' in programData) dataToUpdate.price = programData.price || null;
+        if ('firstSubscriptionPrice' in programData) dataToUpdate.firstSubscriptionPrice = programData.firstSubscriptionPrice || null;
+        if ('stripeFirstPriceId' in programData) dataToUpdate.stripeFirstPriceId = programData.stripeFirstPriceId || null;
+        if ('secondSubscriptionPrice' in programData) dataToUpdate.secondSubscriptionPrice = programData.secondSubscriptionPrice || null;
+        if ('stripeSecondPriceId' in programData) dataToUpdate.stripeSecondPriceId = programData.stripeSecondPriceId || null;
 
         await updateDoc(programRef, dataToUpdate);
         const updatedDocSnap = await getDoc(programRef);
