@@ -9,6 +9,8 @@ export interface Partner {
   companyName?: string | null;
   percentage: number;
   logoUrl?: string | null; // Added logoUrl
+  couponCode?: string | null; // Added for discounts
+  discountPercentage?: number | null; // Added for discount amount
   isDeleted?: boolean;
   deletedAt?: Timestamp | null;
   createdAt?: Timestamp;

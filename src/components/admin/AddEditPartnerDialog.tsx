@@ -28,7 +28,7 @@ import {
 import type { Partner, PartnerFormData } from '@/types/partner';
 import { useToast } from '@/hooks/use-toast';
 import { addPartner, updatePartner } from '@/lib/partner-data';
-import { Loader2, Upload, ImageIcon as ImageIconLucide, Trash2 } from 'lucide-react';
+import { Loader2, Upload, ImageIcon as ImageIconLucide, Trash2, Percent, Tag } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Label } from '@/components/ui/label';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
@@ -42,6 +42,8 @@ const partnerFormSchema = z.object({
     .min(0.01, "Percentage must be greater than 0.")
     .max(100, "Percentage cannot exceed 100."),
   logoUrl: z.string().url().optional().or(z.literal('')),
+  couponCode: z.string().optional().or(z.literal('')),
+  discountPercentage: z.coerce.number().min(0).max(100).optional().nullable(),
 });
 
 type PartnerFormValues = z.infer<typeof partnerFormSchema>;
@@ -63,7 +65,7 @@ export function AddEditPartnerDialog({ isOpen, setIsOpen, initialData, onSave }:
 
   const form = useForm<PartnerFormValues>({
     resolver: zodResolver(partnerFormSchema),
-    defaultValues: { name: '', email: '', companyName: '', percentage: 0, logoUrl: '' },
+    defaultValues: { name: '', email: '', companyName: '', percentage: 0, logoUrl: '', couponCode: '', discountPercentage: null },
   });
   
   const logoUrlValue = form.watch('logoUrl');
@@ -77,9 +79,11 @@ export function AddEditPartnerDialog({ isOpen, setIsOpen, initialData, onSave }:
           companyName: initialData.companyName || '',
           percentage: initialData.percentage || 0,
           logoUrl: initialData.logoUrl || '',
+          couponCode: initialData.couponCode || '',
+          discountPercentage: initialData.discountPercentage ?? null,
         });
       } else {
-        form.reset({ name: '', email: '', companyName: '', percentage: 0, logoUrl: '' });
+        form.reset({ name: '', email: '', companyName: '', percentage: 0, logoUrl: '', couponCode: '', discountPercentage: null });
       }
       setIsUploading(false);
       setUploadProgress(0);
@@ -119,6 +123,8 @@ export function AddEditPartnerDialog({ isOpen, setIsOpen, initialData, onSave }:
         companyName: data.companyName || null,
         percentage: data.percentage,
         logoUrl: data.logoUrl || null,
+        couponCode: data.couponCode || null,
+        discountPercentage: data.discountPercentage ?? null,
       };
 
       if (isEditing && initialData) {
@@ -145,7 +151,7 @@ export function AddEditPartnerDialog({ isOpen, setIsOpen, initialData, onSave }:
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Partner' : 'Add Partner'}</DialogTitle>
           <DialogDescription>
@@ -158,6 +164,12 @@ export function AddEditPartnerDialog({ isOpen, setIsOpen, initialData, onSave }:
             <FormField control={form.control} name="email" render={({ field }) => ( <FormItem> <FormLabel>Contact Email</FormLabel> <FormControl><Input type="email" placeholder="partner@example.com" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
             <FormField control={form.control} name="companyName" render={({ field }) => ( <FormItem> <FormLabel>Company Name (Optional)</FormLabel> <FormControl><Input placeholder="Partner Co." {...field} /></FormControl> <FormMessage /> </FormItem> )} />
             <FormField control={form.control} name="percentage" render={({ field }) => ( <FormItem> <FormLabel>Revenue Share Percentage (%)</FormLabel> <FormControl><Input type="number" min="0.01" max="100" step="0.01" placeholder="e.g., 10" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+            
+            <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="couponCode" render={({ field }) => ( <FormItem> <FormLabel className='flex items-center gap-1'><Tag className='h-4 w-4'/>Coupon Code</FormLabel> <FormControl><Input placeholder="e.g., PARTNER10" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} />
+                <FormField control={form.control} name="discountPercentage" render={({ field }) => ( <FormItem> <FormLabel className='flex items-center gap-1'><Percent className='h-4 w-4'/>Discount %</FormLabel> <FormControl><Input type="number" min="0" max="100" placeholder="e.g., 10" {...field} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} />
+            </div>
+
             <FormItem>
               <Label>Partner Logo (Optional)</Label>
               <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">

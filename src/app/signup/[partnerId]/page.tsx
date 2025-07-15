@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, Layers, BookOpen, Handshake, CreditCard, ShieldCheck } from 'lucide-react';
+import { Loader2, Layers, BookOpen, Handshake, CreditCard, ShieldCheck, Tag } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -33,27 +33,48 @@ const partnerSignupFormSchema = z.object({
   companyName: z.string().min(2, { message: 'Your brand/company name is required.' }),
   adminEmail: z.string().email({ message: 'Please enter a valid email address.' }),
   selectedProgramId: z.string().min(1, "Please select a Program to purchase."),
+  couponCode: z.string().optional(),
 });
 type PartnerSignupFormValues = z.infer<typeof partnerSignupFormSchema>;
 
-function PartnerCheckoutForm({ partner, programs }: { partner: Partner, programs: Program[] }) {
+function PartnerCheckoutForm({ partner, programs, clientSecret }: { partner: Partner, programs: Program[], clientSecret: string | null }) {
   const { toast } = useToast();
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentErrorMessage, setPaymentErrorMessage] = useState<string | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [finalTotal, setFinalTotal] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState(0);
 
   const form = useForm<PartnerSignupFormValues>({
     resolver: zodResolver(partnerSignupFormSchema),
     defaultValues: {
       customerName: '', companyName: '', adminEmail: '',
       selectedProgramId: programs.length === 1 ? programs[0].id : '',
+      couponCode: '',
     },
   });
 
   const selectedProgramId = form.watch('selectedProgramId');
+  const couponCodeInput = form.watch('couponCode');
   const selectedProgram = programs.find(p => p.id === selectedProgramId);
-  const totalAmount = selectedProgram ? parseFloat(selectedProgram.price.replace(/[$,/mo]/gi, '')) : 0;
+  const basePrice = selectedProgram ? parseFloat(selectedProgram.price.replace(/[$,/mo]/gi, '')) : 0;
+
+  useEffect(() => {
+    let newFinalTotal = basePrice;
+    let newDiscountAmount = 0;
+    if (partner.couponCode && couponCodeInput?.toLowerCase() === partner.couponCode.toLowerCase() && partner.discountPercentage) {
+      newDiscountAmount = (basePrice * partner.discountPercentage) / 100;
+      newFinalTotal = basePrice - newDiscountAmount;
+      setAppliedCoupon(partner.couponCode);
+    } else {
+      setAppliedCoupon(null);
+    }
+    setFinalTotal(newFinalTotal);
+    setDiscountAmount(newDiscountAmount);
+  }, [basePrice, couponCodeInput, partner]);
+
 
   const handleSignupSubmit = async (data: PartnerSignupFormValues) => {
     setIsProcessing(true);
@@ -88,7 +109,10 @@ function PartnerCheckoutForm({ partner, programs }: { partner: Partner, programs
       const result = await processCheckout({
         ...data,
         paymentIntentId: paymentIntent.id,
-        finalTotalAmount: totalAmount,
+        subtotalAmount: basePrice,
+        appliedDiscountPercent: appliedCoupon ? partner.discountPercentage : 0,
+        appliedDiscountAmount: discountAmount,
+        finalTotalAmount: finalTotal,
         partnerId: partner.id,
         revenueSharePartners: [revenueSharePartner],
       });
@@ -99,10 +123,7 @@ function PartnerCheckoutForm({ partner, programs }: { partner: Partner, programs
           description: "Your account is ready. You will receive a welcome email with your temporary password shortly.",
           duration: 10000,
         });
-        // Optionally redirect to a success page or login
-        // For now, we can just reset the form and show a message.
         form.reset();
-        // Maybe show the password here or just say check email.
       } else {
         setPaymentErrorMessage(`Account setup failed after payment: ${result.error}. Please contact support.`);
       }
@@ -146,21 +167,40 @@ function PartnerCheckoutForm({ partner, programs }: { partner: Partner, programs
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl><SelectTrigger><SelectValue placeholder="Choose a Program..." /></SelectTrigger></FormControl>
                   <SelectContent>
-                    {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.title} - {p.price}</SelectItem>)}
+                    {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.title} - ${parseFloat(p.price.replace(/[$,/mo]/gi, '')).toFixed(2)}</SelectItem>)}
                   </SelectContent>
                 </Select><FormMessage />
               </FormItem>
             )} />
 
+             {partner.couponCode && (
+              <FormField control={form.control} name="couponCode" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-1"><Tag className="h-4 w-4"/>Coupon Code (Optional)</FormLabel>
+                  <FormControl><Input {...field} placeholder="Enter partner coupon code" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            )}
+
             {selectedProgram && (
               <Alert>
                 <Layers className="h-4 w-4" />
-                <AlertTitle>Program Total</AlertTitle>
-                <AlertDescription className="font-bold text-lg">${totalAmount.toFixed(2)} (One-time payment)</AlertDescription>
+                <AlertTitle>Order Summary</AlertTitle>
+                <div className="space-y-1 mt-2 text-sm">
+                  <div className="flex justify-between"><span>Base Price:</span> <span>${basePrice.toFixed(2)}</span></div>
+                  {appliedCoupon && (
+                    <div className="flex justify-between text-green-600">
+                      <span>Discount ({partner.discountPercentage}%):</span>
+                      <span>-${discountAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-bold text-lg pt-2 border-t mt-2"><span>Total:</span> <span>${finalTotal.toFixed(2)}</span></div>
+                </div>
               </Alert>
             )}
 
-            {elements && (
+            {clientSecret && elements && (
                 <div>
                     <Label className="text-base font-semibold">Payment Details</Label>
                     <PaymentElement id="payment-element" options={{ layout: "tabs" }} className="mt-2" />
@@ -171,7 +211,7 @@ function PartnerCheckoutForm({ partner, programs }: { partner: Partner, programs
           <CardFooter>
             <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isProcessing || !stripe || !elements}>
               {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
-              {isProcessing ? 'Processing Payment...' : `Sign Up & Pay $${totalAmount.toFixed(2)}`}
+              {isProcessing ? 'Processing Payment...' : `Sign Up & Pay $${finalTotal.toFixed(2)}`}
             </Button>
           </CardFooter>
         </form>
@@ -188,6 +228,20 @@ export default function PartnerSignupPage() {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const createAndSetPaymentIntent = useCallback(async (programsData: Program[]) => {
+    const firstPricedProgram = programsData.find(p => parseFloat(p.price.replace(/[$,/mo]/gi, '')) > 0);
+    if (!firstPricedProgram) {
+        throw new Error("No programs with a valid price found.");
+    }
+    const amountInCents = Math.round(parseFloat(firstPricedProgram.price.replace(/[$,/mo]/gi, '')) * 100);
+    const piResult = await createPaymentIntent(amountInCents);
+    if (piResult.clientSecret) {
+        setClientSecret(piResult.clientSecret);
+    } else {
+        throw new Error(piResult.error || "Failed to initialize payment.");
+    }
+  }, []);
 
   useEffect(() => {
     async function fetchData() {
@@ -207,24 +261,8 @@ export default function PartnerSignupPage() {
         setPartner(partnerData);
         setPrograms(programsData);
         
-        // Use the price of the first available program to initialize PaymentIntent
-        const initialAmount = parseFloat(programsData[0].price.replace(/[$,/mo]/gi, ''));
-        if (isNaN(initialAmount) || initialAmount <= 0) {
-            // Find first program with valid price
-            const firstPricedProgram = programsData.find(p => parseFloat(p.price.replace(/[$,/mo]/gi, '')) > 0);
-            if(firstPricedProgram){
-                const firstPrice = parseFloat(firstPricedProgram.price.replace(/[$,/mo]/gi, ''));
-                 const piResult = await createPaymentIntent(Math.round(firstPrice * 100));
-                 if (piResult.clientSecret) setClientSecret(piResult.clientSecret);
-                 else throw new Error(piResult.error || "Failed to initialize payment.");
-            } else {
-                 throw new Error("No programs with a valid price found.");
-            }
-        } else {
-             const piResult = await createPaymentIntent(Math.round(initialAmount * 100));
-             if (piResult.clientSecret) setClientSecret(piResult.clientSecret);
-             else throw new Error(piResult.error || "Failed to initialize payment.");
-        }
+        await createAndSetPaymentIntent(programsData);
+
       } catch (e: any) {
         setError(e.message);
       } finally {
@@ -232,7 +270,7 @@ export default function PartnerSignupPage() {
       }
     }
     fetchData();
-  }, [partnerId]);
+  }, [partnerId, createAndSetPaymentIntent]);
 
   if (isLoading) {
     return <div className="container mx-auto text-center py-20"><Loader2 className="h-12 w-12 animate-spin mx-auto" /></div>;
@@ -240,14 +278,16 @@ export default function PartnerSignupPage() {
   if (error) {
     return <div className="container mx-auto text-center py-20"><Alert variant="destructive"><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert></div>;
   }
-  if (!partner) return null;
+  if (!partner || !clientSecret) {
+      return <div className="container mx-auto text-center py-20"><Alert variant="destructive"><AlertTitle>Initialization Error</AlertTitle><AlertDescription>Could not initialize the checkout page. Please try again later.</AlertDescription></Alert></div>;
+  }
 
-  const stripeElementsOptions: StripeElementsOptions = { clientSecret: clientSecret || '', appearance: { theme: 'stripe' } };
+  const stripeElementsOptions: StripeElementsOptions = { clientSecret, appearance: { theme: 'stripe' } };
 
   return (
     <div className="container mx-auto py-12">
       <Elements stripe={stripePromise} options={stripeElementsOptions} key={clientSecret}>
-        <PartnerCheckoutForm partner={partner} programs={programs} />
+        <PartnerCheckoutForm partner={partner} programs={programs} clientSecret={clientSecret}/>
       </Elements>
     </div>
   );

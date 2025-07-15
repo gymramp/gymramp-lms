@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { PlusCircle, MoreHorizontal, Trash2, Edit, Search, Loader2, Handshake, ExternalLink, Copy, Users } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Trash2, Edit, Search, Loader2, Handshake, ExternalLink, Copy, Users, Tag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Partner } from '@/types/partner';
 import type { User } from '@/types/user';
@@ -144,7 +144,7 @@ export default function AdminPartnersPage() {
             <div className="text-center py-8">{searchTerm ? "No partners found." : "No partners created yet."}</div>
           ) : (
             <Table>
-              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Company</TableHead><TableHead>Email</TableHead><TableHead>Rev. Share %</TableHead><TableHead>Signup Link</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Coupon</TableHead><TableHead>Rev. Share %</TableHead><TableHead>Signup Link</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
               <TableBody>
                 {filteredPartners.map((partner) => {
                   const signupUrl = `${window.location.origin}/signup/${partner.id}`;
@@ -156,12 +156,21 @@ export default function AdminPartnersPage() {
                                <AvatarImage src={partner.logoUrl || undefined} alt={`${partner.name} logo`} className="object-contain" />
                                <AvatarFallback className="text-xs">{partner.name.substring(0, 2).toUpperCase()}</AvatarFallback>
                             </Avatar>
-                            <span>{partner.name}</span>
+                            <div className='flex flex-col'>
+                                <span>{partner.name}</span>
+                                <span className="text-xs text-muted-foreground">{partner.companyName || 'N/A'}</span>
+                            </div>
                         </div>
                       </TableCell>
-                      <TableCell>{partner.companyName || 'N/A'}</TableCell>
                       <TableCell>{partner.email}</TableCell>
-                      <TableCell><Badge variant="outline">{partner.percentage}%</Badge></TableCell>
+                      <TableCell>
+                        {partner.couponCode ? (
+                            <Badge variant="outline" className='flex gap-1 items-center'>
+                                <Tag className='h-3 w-3'/> {partner.couponCode} ({partner.discountPercentage || 0}%)
+                            </Badge>
+                        ) : 'N/A'}
+                      </TableCell>
+                      <TableCell><Badge variant="secondary">{partner.percentage}%</Badge></TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Input value={signupUrl} readOnly className="h-8 text-xs" />
