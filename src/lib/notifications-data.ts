@@ -1,3 +1,4 @@
+
 // src/lib/notifications-data.ts
 import { db } from './firebase';
 import {
@@ -68,10 +69,18 @@ export async function getNotificationsForUser(userId: string, count: number = 20
       } as unknown as Notification);
     });
     return notifications;
-  } catch (error) {
-    console.error(`Error fetching notifications for user ${userId}:`, error);
-    // Instead of throwing an error which crashes the client, we return an empty array.
-    // The error log in the console will contain the link to create the necessary Firestore index.
+  } catch (error: any) {
+    if (error.code === 'failed-precondition') {
+      console.warn(
+        `[Firestore Query Error] The query for user notifications requires a composite index. ` +
+        `This is expected if the index has not been created yet. ` +
+        `Please create the index in your Firebase console. The error contains the direct link. ` +
+        `Original error:`, error
+      );
+    } else {
+      console.error(`Error fetching notifications for user ${userId}:`, error);
+    }
+    // Return an empty array to prevent the UI from crashing.
     return [];
   }
 }
