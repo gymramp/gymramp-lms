@@ -10,17 +10,22 @@ import { adminApp } from '@/lib/firebase-admin'; // Import server-side admin app
 import { getAuth as getClientAuth, createUserWithEmailAndPassword, type Auth } from 'firebase/auth';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { CompanyFormData } from '@/types/user';
+import type { CompanyFormData, RevenueSharePartner } from '@/types/user'; // Import RevenueSharePartner
 import { addCompany, createDefaultLocation } from '@/lib/company-data';
 import { addUser } from '@/lib/user-data';
 import { sendNewUserWelcomeEmail } from '@/lib/email';
 import * as z from 'zod';
+import { getPartnerByCouponCode } from '@/lib/partner-data'; // Import new function
+import { addCustomerPurchaseRecord } from '@/lib/customer-data';
+import type { CustomerPurchaseRecordFormData } from '@/types/customer';
+
 
 const signupFormSchema = z.object({
   customerName: z.string().min(2),
   companyName: z.string().min(2),
   adminEmail: z.string().email(),
   password: z.string().min(8),
+  couponCode: z.string().optional(), // Add coupon code to schema
 });
 
 type SignupFormValues = z.infer<typeof signupFormSchema>;
@@ -76,7 +81,26 @@ export async function processPublicSignup(data: SignupFormValues): Promise<Signu
     if (!validatedData.success) {
       throw new Error("Invalid signup data provided.");
     }
-    const { customerName, companyName, adminEmail, password } = validatedData.data;
+    const { customerName, companyName, adminEmail, password, couponCode } = validatedData.data;
+
+    let partnerId: string | null = null;
+    let partnerRevShare: RevenueSharePartner[] | null = null;
+    if (couponCode) {
+        const partner = await getPartnerByCouponCode(couponCode);
+        if (partner) {
+            partnerId = partner.id;
+            partnerRevShare = [{
+                name: partner.name,
+                companyName: partner.companyName || null,
+                percentage: partner.percentage,
+                shareBasis: 'coursePrice' // Default share basis for signups
+            }];
+            console.log(`[processPublicSignup] Partner found for coupon "${couponCode}": ${partner.name} (ID: ${partner.id})`);
+        } else {
+             console.log(`[processPublicSignup] Coupon code "${couponCode}" was provided but did not match any partner.`);
+        }
+    }
+
 
     const newCompanyData: CompanyFormData = {
         name: companyName,
@@ -85,7 +109,7 @@ export async function processPublicSignup(data: SignupFormValues): Promise<Signu
         assignedProgramIds: [],
         maxUsers: 5, 
         saleAmount: 0,
-        revenueSharePartners: null,
+        revenueSharePartners: partnerRevShare, // Use partner's rev share
         whiteLabelEnabled: false,
         primaryColor: null,
         secondaryColor: null,
@@ -153,6 +177,23 @@ export async function processPublicSignup(data: SignupFormValues): Promise<Signu
     }
 
     console.log(`[processPublicSignup] Admin user "${newAdminUser.name}" created in Firestore with ID: ${newAdminUser.id}`);
+
+    // Create a purchase record for tracking, even for free signups
+    const customerPurchaseData: CustomerPurchaseRecordFormData = {
+        brandId: newCompany.id,
+        brandName: newCompany.name,
+        adminUserId: newAdminUser.id,
+        adminUserEmail: newAdminUser.email,
+        totalAmountPaid: 0,
+        paymentIntentId: 'public_signup_no_charge',
+        selectedProgramId: 'N/A', // No program selected in this flow
+        selectedCourseIds: [],
+        revenueSharePartners: partnerRevShare,
+        maxUsersConfigured: 5,
+        partnerId: partnerId,
+    };
+    await addCustomerPurchaseRecord(customerPurchaseData);
+    console.log(`[processPublicSignup] Customer purchase record created for tracking referral for brand ${newCompany.id}`);
 
     try {
         await sendNewUserWelcomeEmail(newAdminUser.email, newAdminUser.name, password);

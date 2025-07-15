@@ -10,7 +10,8 @@ import {
     query,
     where,
     serverTimestamp,
-    Timestamp
+    Timestamp,
+    limit
 } from 'firebase/firestore';
 import type { Partner, PartnerFormData } from '@/types/partner';
 
@@ -60,6 +61,25 @@ export async function getPartnerById(partnerId: string): Promise<Partner | null>
             return { id: docSnap.id, ...docSnap.data() } as Partner;
         }
         return null;
+    });
+}
+
+export async function getPartnerByCouponCode(couponCode: string): Promise<Partner | null> {
+    if (!couponCode) return null;
+    return retryOperation(async () => {
+        const partnersRef = collection(db, PARTNERS_COLLECTION);
+        const q = query(
+            partnersRef,
+            where("couponCode", "==", couponCode),
+            where("isDeleted", "==", false),
+            limit(1)
+        );
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) {
+            return null;
+        }
+        const docSnap = querySnapshot.docs[0];
+        return { id: docSnap.id, ...docSnap.data() } as Partner;
     });
 }
 

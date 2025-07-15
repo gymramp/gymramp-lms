@@ -28,12 +28,12 @@ import Image from 'next/image';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
+// Schema without the coupon code, as it's not used for discounts here.
 const partnerSignupFormSchema = z.object({
   customerName: z.string().min(2, { message: 'Your name is required.' }),
   companyName: z.string().min(2, { message: 'Your brand/company name is required.' }),
   adminEmail: z.string().email({ message: 'Please enter a valid email address.' }),
   selectedProgramId: z.string().min(1, "Please select a Program to purchase."),
-  couponCode: z.string().optional(),
 });
 type PartnerSignupFormValues = z.infer<typeof partnerSignupFormSchema>;
 
@@ -43,38 +43,18 @@ function PartnerCheckoutForm({ partner, programs, clientSecret }: { partner: Par
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentErrorMessage, setPaymentErrorMessage] = useState<string | null>(null);
-  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
-  const [finalTotal, setFinalTotal] = useState(0);
-  const [discountAmount, setDiscountAmount] = useState(0);
 
   const form = useForm<PartnerSignupFormValues>({
     resolver: zodResolver(partnerSignupFormSchema),
     defaultValues: {
       customerName: '', companyName: '', adminEmail: '',
       selectedProgramId: programs.length === 1 ? programs[0].id : '',
-      couponCode: '',
     },
   });
 
   const selectedProgramId = form.watch('selectedProgramId');
-  const couponCodeInput = form.watch('couponCode');
   const selectedProgram = programs.find(p => p.id === selectedProgramId);
-  const basePrice = selectedProgram ? parseFloat(selectedProgram.price.replace(/[$,/mo]/gi, '')) : 0;
-
-  useEffect(() => {
-    let newFinalTotal = basePrice;
-    let newDiscountAmount = 0;
-    if (partner.couponCode && couponCodeInput?.toLowerCase() === partner.couponCode.toLowerCase() && partner.discountPercentage) {
-      newDiscountAmount = (basePrice * partner.discountPercentage) / 100;
-      newFinalTotal = basePrice - newDiscountAmount;
-      setAppliedCoupon(partner.couponCode);
-    } else {
-      setAppliedCoupon(null);
-    }
-    setFinalTotal(newFinalTotal);
-    setDiscountAmount(newDiscountAmount);
-  }, [basePrice, couponCodeInput, partner]);
-
+  const finalTotal = selectedProgram ? parseFloat(selectedProgram.price.replace(/[$,/mo]/gi, '')) : 0;
 
   const handleSignupSubmit = async (data: PartnerSignupFormValues) => {
     setIsProcessing(true);
@@ -109,9 +89,9 @@ function PartnerCheckoutForm({ partner, programs, clientSecret }: { partner: Par
       const result = await processCheckout({
         ...data,
         paymentIntentId: paymentIntent.id,
-        subtotalAmount: basePrice,
-        appliedDiscountPercent: appliedCoupon ? partner.discountPercentage : 0,
-        appliedDiscountAmount: discountAmount,
+        subtotalAmount: finalTotal,
+        appliedDiscountPercent: 0, // No discount in this flow
+        appliedDiscountAmount: 0,
         finalTotalAmount: finalTotal,
         partnerId: partner.id,
         revenueSharePartners: [revenueSharePartner],
@@ -173,28 +153,11 @@ function PartnerCheckoutForm({ partner, programs, clientSecret }: { partner: Par
               </FormItem>
             )} />
 
-             {partner.couponCode && (
-              <FormField control={form.control} name="couponCode" render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="flex items-center gap-1"><Tag className="h-4 w-4"/>Coupon Code (Optional)</FormLabel>
-                  <FormControl><Input {...field} placeholder="Enter partner coupon code" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-            )}
-
             {selectedProgram && (
               <Alert>
                 <Layers className="h-4 w-4" />
                 <AlertTitle>Order Summary</AlertTitle>
                 <div className="space-y-1 mt-2 text-sm">
-                  <div className="flex justify-between"><span>Base Price:</span> <span>${basePrice.toFixed(2)}</span></div>
-                  {appliedCoupon && (
-                    <div className="flex justify-between text-green-600">
-                      <span>Discount ({partner.discountPercentage}%):</span>
-                      <span>-${discountAmount.toFixed(2)}</span>
-                    </div>
-                  )}
                   <div className="flex justify-between font-bold text-lg pt-2 border-t mt-2"><span>Total:</span> <span>${finalTotal.toFixed(2)}</span></div>
                 </div>
               </Alert>
