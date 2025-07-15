@@ -183,11 +183,11 @@ export function AddEditProgramDialog({ isOpen, setIsOpen, initialData, onSave }:
                       className="flex flex-col sm:flex-row gap-4"
                     >
                       <FormItem className="flex items-center space-x-3 space-y-0 flex-1">
-                        <FormControl><RadioGroupItem value="false" id="model-onetime" /></FormControl>
+                        <RadioGroupItem value="false" id="model-onetime" />
                         <FormLabel htmlFor="model-onetime" className="font-normal flex items-center gap-1"><DollarSign className="h-4 w-4"/>One-Time + Tiered Sub</FormLabel>
                       </FormItem>
                       <FormItem className="flex items-center space-x-3 space-y-0 flex-1">
-                        <FormControl><RadioGroupItem value="true" id="model-standard" /></FormControl>
+                        <RadioGroupItem value="true" id="model-standard" />
                         <FormLabel htmlFor="model-standard" className="font-normal flex items-center gap-1"><Star className="h-4 w-4"/>Standard Subscription</FormLabel>
                       </FormItem>
                     </RadioGroup>
