@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Loader2, User, Building, Tag } from 'lucide-react'; // Added Tag icon
+import { Eye, EyeOff, Loader2, User, Building } from 'lucide-react';
 import Image from 'next/image';
 import { processPublicSignup } from '@/actions/signup';
 import Link from 'next/link';
@@ -23,7 +23,6 @@ const signupFormSchema = z.object({
   companyName: z.string().min(2, { message: "Your company or brand name is required." }),
   adminEmail: z.string().email({ message: "Please enter a valid email address." }),
   password: z.string().min(8, { message: "Password must be at least 8 characters long." }),
-  couponCode: z.string().optional(), // Added coupon code field
 });
 
 type SignupFormValues = z.infer<typeof signupFormSchema>;
@@ -41,7 +40,6 @@ export default function SignupPage() {
       companyName: '',
       adminEmail: '',
       password: '',
-      couponCode: '', // Initialize coupon code
     },
   });
 
@@ -153,17 +151,6 @@ export default function SignupPage() {
                           {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </Button>
                       </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                 <FormField
-                  control={form.control}
-                  name="couponCode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center"><Tag className="mr-2 h-4 w-4" /> Partner Code (Optional)</FormLabel>
-                      <FormControl><Input placeholder="Enter code if you have one" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

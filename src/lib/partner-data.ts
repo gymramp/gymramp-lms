@@ -10,8 +10,7 @@ import {
     query,
     where,
     serverTimestamp,
-    Timestamp,
-    limit
+    Timestamp
 } from 'firebase/firestore';
 import type { Partner, PartnerFormData } from '@/types/partner';
 
@@ -26,12 +25,12 @@ async function retryOperation<T>(operation: () => Promise<T>): Promise<T> {
         try {
             return await operation();
         } catch (error: any) {
-            if (attempt === MAX_RETRIES) {
+            if (attempt === maxRetries) {
                 console.error(`Max retries (${maxRetries}) for partner-data op. Failed: ${error.message}`);
                 throw error;
             }
             const delay = Math.pow(2, attempt) * BASE_DELAY_MS;
-            console.warn(`Partner-data op failed (attempt ${attempt}/${MAX_RETRIES}). Retrying in ${delay}ms...`);
+            console.warn(`Partner-data op failed (attempt ${attempt}/${maxRetries}). Retrying in ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
             attempt++;
         }
@@ -61,25 +60,6 @@ export async function getPartnerById(partnerId: string): Promise<Partner | null>
             return { id: docSnap.id, ...docSnap.data() } as Partner;
         }
         return null;
-    });
-}
-
-export async function getPartnerByCouponCode(couponCode: string): Promise<Partner | null> {
-    if (!couponCode) return null;
-    return retryOperation(async () => {
-        const partnersRef = collection(db, PARTNERS_COLLECTION);
-        const q = query(
-            partnersRef,
-            where("couponCode", "==", couponCode),
-            where("isDeleted", "==", false),
-            limit(1)
-        );
-        const querySnapshot = await getDocs(q);
-        if (querySnapshot.empty) {
-            return null;
-        }
-        const docSnap = querySnapshot.docs[0];
-        return { id: docSnap.id, ...docSnap.data() } as Partner;
     });
 }
 

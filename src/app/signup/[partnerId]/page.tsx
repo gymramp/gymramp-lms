@@ -28,12 +28,12 @@ import Image from 'next/image';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
-// Schema without the coupon code, as it's not used for discounts here.
 const partnerSignupFormSchema = z.object({
   customerName: z.string().min(2, { message: 'Your name is required.' }),
   companyName: z.string().min(2, { message: 'Your brand/company name is required.' }),
   adminEmail: z.string().email({ message: 'Please enter a valid email address.' }),
   selectedProgramId: z.string().min(1, "Please select a Program to purchase."),
+  couponCode: z.string().optional(),
 });
 type PartnerSignupFormValues = z.infer<typeof partnerSignupFormSchema>;
 
@@ -49,12 +49,21 @@ function PartnerCheckoutForm({ partner, programs, clientSecret }: { partner: Par
     defaultValues: {
       customerName: '', companyName: '', adminEmail: '',
       selectedProgramId: programs.length === 1 ? programs[0].id : '',
+      couponCode: ''
     },
   });
 
   const selectedProgramId = form.watch('selectedProgramId');
+  const enteredCouponCode = form.watch('couponCode');
   const selectedProgram = programs.find(p => p.id === selectedProgramId);
-  const finalTotal = selectedProgram ? parseFloat(selectedProgram.price.replace(/[$,/mo]/gi, '')) : 0;
+  
+  const discountPercentage = (partner.couponCode && partner.couponCode.toLowerCase() === enteredCouponCode?.toLowerCase())
+    ? partner.discountPercentage ?? 0
+    : 0;
+
+  const subtotal = selectedProgram ? parseFloat(selectedProgram.price.replace(/[$,/mo]/gi, '')) : 0;
+  const discountAmount = (subtotal * discountPercentage) / 100;
+  const finalTotal = subtotal - discountAmount;
 
   const handleSignupSubmit = async (data: PartnerSignupFormValues) => {
     setIsProcessing(true);
@@ -89,9 +98,9 @@ function PartnerCheckoutForm({ partner, programs, clientSecret }: { partner: Par
       const result = await processCheckout({
         ...data,
         paymentIntentId: paymentIntent.id,
-        subtotalAmount: finalTotal,
-        appliedDiscountPercent: 0, // No discount in this flow
-        appliedDiscountAmount: 0,
+        subtotalAmount: subtotal,
+        appliedDiscountPercent: discountPercentage,
+        appliedDiscountAmount: discountAmount,
         finalTotalAmount: finalTotal,
         partnerId: partner.id,
         revenueSharePartners: [revenueSharePartner],
@@ -153,11 +162,15 @@ function PartnerCheckoutForm({ partner, programs, clientSecret }: { partner: Par
               </FormItem>
             )} />
 
+             <FormField control={form.control} name="couponCode" render={({ field }) => ( <FormItem><FormLabel className="flex items-center gap-1"><Tag className="h-4 w-4"/>Coupon Code (Optional)</FormLabel><FormControl><Input {...field} placeholder="Enter coupon code" /></FormControl><FormMessage /></FormItem> )} />
+
             {selectedProgram && (
               <Alert>
                 <Layers className="h-4 w-4" />
                 <AlertTitle>Order Summary</AlertTitle>
                 <div className="space-y-1 mt-2 text-sm">
+                  <div className="flex justify-between"><span>Program Price:</span> <span>${subtotal.toFixed(2)}</span></div>
+                  {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Discount ({discountPercentage}%):</span> <span>-${discountAmount.toFixed(2)}</span></div>}
                   <div className="flex justify-between font-bold text-lg pt-2 border-t mt-2"><span>Total:</span> <span>${finalTotal.toFixed(2)}</span></div>
                 </div>
               </Alert>
@@ -193,6 +206,9 @@ export default function PartnerSignupPage() {
   const [error, setError] = useState<string | null>(null);
 
   const createAndSetPaymentIntent = useCallback(async (programsData: Program[]) => {
+    // This logic might need adjustment if different programs have different discounts.
+    // For now, we'll base the initial payment intent on the first program's full price.
+    // The actual confirmed amount can be updated on the server if needed.
     const firstPricedProgram = programsData.find(p => parseFloat(p.price.replace(/[$,/mo]/gi, '')) > 0);
     if (!firstPricedProgram) {
         throw new Error("No programs with a valid price found.");
