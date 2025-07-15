@@ -9,17 +9,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, Layers, BookOpen, Handshake, CreditCard, ShieldCheck, Tag } from 'lucide-react';
+import { Loader2, Layers, Handshake, CreditCard } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { getAllPrograms, getCourseById, getAllCourses } from '@/lib/firestore-data';
+import { getAllPrograms } from '@/lib/firestore-data';
 import { processCheckout } from '@/actions/checkout';
 import { createPaymentIntent } from '@/actions/stripe';
 import type { Partner } from '@/types/partner';
 import { getPartnerById } from '@/lib/partner-data';
-import type { Program, Course } from '@/types/course';
+import type { Program } from '@/types/course';
 import type { RevenueSharePartner } from '@/types/user';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -33,7 +33,6 @@ const partnerSignupFormSchema = z.object({
   companyName: z.string().min(2, { message: 'Your brand/company name is required.' }),
   adminEmail: z.string().email({ message: 'Please enter a valid email address.' }),
   selectedProgramId: z.string().min(1, "Please select a Program to purchase."),
-  couponCode: z.string().optional(),
 });
 type PartnerSignupFormValues = z.infer<typeof partnerSignupFormSchema>;
 
@@ -49,21 +48,12 @@ function PartnerCheckoutForm({ partner, programs, clientSecret }: { partner: Par
     defaultValues: {
       customerName: '', companyName: '', adminEmail: '',
       selectedProgramId: programs.length === 1 ? programs[0].id : '',
-      couponCode: ''
     },
   });
 
   const selectedProgramId = form.watch('selectedProgramId');
-  const enteredCouponCode = form.watch('couponCode');
   const selectedProgram = programs.find(p => p.id === selectedProgramId);
-  
-  const discountPercentage = (partner.couponCode && partner.couponCode.toLowerCase() === enteredCouponCode?.toLowerCase())
-    ? partner.discountPercentage ?? 0
-    : 0;
-
-  const subtotal = selectedProgram ? parseFloat(selectedProgram.price.replace(/[$,/mo]/gi, '')) : 0;
-  const discountAmount = (subtotal * discountPercentage) / 100;
-  const finalTotal = subtotal - discountAmount;
+  const finalTotal = selectedProgram ? parseFloat(selectedProgram.price.replace(/[$,/mo]/gi, '')) : 0;
 
   const handleSignupSubmit = async (data: PartnerSignupFormValues) => {
     setIsProcessing(true);
@@ -98,9 +88,9 @@ function PartnerCheckoutForm({ partner, programs, clientSecret }: { partner: Par
       const result = await processCheckout({
         ...data,
         paymentIntentId: paymentIntent.id,
-        subtotalAmount: subtotal,
-        appliedDiscountPercent: discountPercentage,
-        appliedDiscountAmount: discountAmount,
+        subtotalAmount: finalTotal,
+        appliedDiscountPercent: 0,
+        appliedDiscountAmount: 0,
         finalTotalAmount: finalTotal,
         partnerId: partner.id,
         revenueSharePartners: [revenueSharePartner],
@@ -139,7 +129,7 @@ function PartnerCheckoutForm({ partner, programs, clientSecret }: { partner: Par
         ) : (
             <Handshake className="h-12 w-12 mx-auto text-primary mb-4" />
         )}
-        <CardTitle className="text-2xl font-bold">Sign Up to access GYMRAMP in association with {partner.name}</CardTitle>
+        <CardTitle className="text-2xl font-bold">Sign Up via {partner.name}</CardTitle>
         <CardDescription>Select a program and create your account to get started.</CardDescription>
       </CardHeader>
       <Form {...form}>
@@ -162,16 +152,12 @@ function PartnerCheckoutForm({ partner, programs, clientSecret }: { partner: Par
               </FormItem>
             )} />
 
-             <FormField control={form.control} name="couponCode" render={({ field }) => ( <FormItem><FormLabel className="flex items-center gap-1"><Tag className="h-4 w-4"/>Coupon Code (Optional)</FormLabel><FormControl><Input {...field} placeholder="Enter coupon code" /></FormControl><FormMessage /></FormItem> )} />
-
             {selectedProgram && (
               <Alert>
                 <Layers className="h-4 w-4" />
                 <AlertTitle>Order Summary</AlertTitle>
                 <div className="space-y-1 mt-2 text-sm">
-                  <div className="flex justify-between"><span>Program Price:</span> <span>${subtotal.toFixed(2)}</span></div>
-                  {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Discount ({discountPercentage}%):</span> <span>-${discountAmount.toFixed(2)}</span></div>}
-                  <div className="flex justify-between font-bold text-lg pt-2 border-t mt-2"><span>Total:</span> <span>${finalTotal.toFixed(2)}</span></div>
+                  <div className="flex justify-between font-bold text-lg pt-2"><span>Total:</span> <span>${finalTotal.toFixed(2)}</span></div>
                 </div>
               </Alert>
             )}
@@ -206,12 +192,9 @@ export default function PartnerSignupPage() {
   const [error, setError] = useState<string | null>(null);
 
   const createAndSetPaymentIntent = useCallback(async (programsData: Program[]) => {
-    // This logic might need adjustment if different programs have different discounts.
-    // For now, we'll base the initial payment intent on the first program's full price.
-    // The actual confirmed amount can be updated on the server if needed.
     const firstPricedProgram = programsData.find(p => parseFloat(p.price.replace(/[$,/mo]/gi, '')) > 0);
     if (!firstPricedProgram) {
-        throw new Error("No programs with a valid price found.");
+        throw new Error("No programs with a valid price found for this partner.");
     }
     const amountInCents = Math.round(parseFloat(firstPricedProgram.price.replace(/[$,/mo]/gi, '')) * 100);
     const piResult = await createPaymentIntent(amountInCents);
@@ -229,18 +212,24 @@ export default function PartnerSignupPage() {
       try {
         if (!partnerId) throw new Error("Partner ID is missing.");
         
-        const [partnerData, programsData] = await Promise.all([
-          getPartnerById(partnerId),
-          getAllPrograms()
-        ]);
-
+        const partnerData = await getPartnerById(partnerId);
         if (!partnerData) throw new Error("This partner link is not valid.");
-        if (programsData.length === 0) throw new Error("No programs are available for purchase at this time.");
-
         setPartner(partnerData);
-        setPrograms(programsData);
+
+        if (!partnerData.availableProgramIds || partnerData.availableProgramIds.length === 0) {
+          throw new Error("This partner has no programs available for purchase at this time.");
+        }
+
+        const allPrograms = await getAllPrograms();
+        const availablePrograms = allPrograms.filter(p => partnerData.availableProgramIds!.includes(p.id));
         
-        await createAndSetPaymentIntent(programsData);
+        if (availablePrograms.length === 0) {
+            throw new Error("The programs for this partner are not currently available.");
+        }
+        
+        setPrograms(availablePrograms);
+        
+        await createAndSetPaymentIntent(availablePrograms);
 
       } catch (e: any) {
         setError(e.message);

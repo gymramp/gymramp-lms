@@ -68,8 +68,7 @@ export async function addPartner(partnerData: PartnerFormData): Promise<Partner 
         const partnersRef = collection(db, PARTNERS_COLLECTION);
         const newPartnerDoc = {
             ...partnerData,
-            couponCode: partnerData.couponCode || null,
-            discountPercentage: partnerData.discountPercentage ?? null,
+            availableProgramIds: partnerData.availableProgramIds || [],
             logoUrl: partnerData.logoUrl || null,
             isDeleted: false,
             deletedAt: null,
@@ -86,10 +85,6 @@ export async function updatePartner(partnerId: string, partnerData: Partial<Part
     return retryOperation(async () => {
         const partnerRef = doc(db, PARTNERS_COLLECTION, partnerId);
         const dataToUpdate: Partial<PartnerFormData & {updatedAt: Timestamp}> = { ...partnerData, updatedAt: serverTimestamp() as Timestamp };
-        // Ensure null is saved if fields are empty
-        if (partnerData.couponCode !== undefined) dataToUpdate.couponCode = partnerData.couponCode || null;
-        if (partnerData.discountPercentage !== undefined) dataToUpdate.discountPercentage = partnerData.discountPercentage ?? null;
-
         await updateDoc(partnerRef, dataToUpdate);
         return getPartnerById(partnerId);
     });

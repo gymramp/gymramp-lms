@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,12 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { PlusCircle, MoreHorizontal, Trash2, Edit, Search, Loader2, Handshake, ExternalLink, Copy, Users, Tag } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Trash2, Edit, Search, Loader2, Handshake, ExternalLink, Copy, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Partner } from '@/types/partner';
 import type { User } from '@/types/user';
 import { getAllPartners, deletePartner } from '@/lib/partner-data';
-import { AddEditPartnerDialog } from '@/components/admin/AddEditPartnerDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getUserByEmail } from '@/lib/user-data';
 import { auth } from '@/lib/firebase';
@@ -27,8 +26,6 @@ export default function AdminPartnersPage() {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [filteredPartners, setFilteredPartners] = useState<Partner[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isAddEditDialogOpen, setIsAddEditDialogOpen] = useState(false);
-  const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [partnerToDelete, setPartnerToDelete] = useState<Partner | null>(null);
@@ -80,16 +77,6 @@ export default function AdminPartnersPage() {
     setFilteredPartners(filtered);
   }, [searchTerm, partners]);
 
-  const handleAddPartnerClick = () => {
-    setEditingPartner(null);
-    setIsAddEditDialogOpen(true);
-  };
-
-  const handleEditPartnerClick = (partner: Partner) => {
-    setEditingPartner(partner);
-    setIsAddEditDialogOpen(true);
-  };
-
   const openDeleteDialog = (partner: Partner) => {
     setPartnerToDelete(partner);
     setIsDeleteDialogOpen(true);
@@ -110,11 +97,7 @@ export default function AdminPartnersPage() {
       setPartnerToDelete(null);
     }
   };
-
-  const handleSavePartner = () => {
-    fetchPartners();
-  };
-
+  
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
       toast({ title: "Copied to Clipboard!", description: "Signup link copied." });
@@ -131,7 +114,7 @@ export default function AdminPartnersPage() {
     <div className="container mx-auto">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-primary flex items-center gap-2"><Handshake className="h-7 w-7" /> Partner Management</h1>
-        <Button onClick={handleAddPartnerClick} className="bg-accent text-accent-foreground hover:bg-accent/90"><PlusCircle className="mr-2 h-4 w-4" /> Add Partner</Button>
+        <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90"><Link href="/admin/partners/new"><PlusCircle className="mr-2 h-4 w-4" /> Add Partner</Link></Button>
       </div>
       <div className="mb-6 flex items-center gap-2">
         <Search className="h-5 w-5 text-muted-foreground" />
@@ -144,7 +127,7 @@ export default function AdminPartnersPage() {
             <div className="text-center py-8">{searchTerm ? "No partners found." : "No partners created yet."}</div>
           ) : (
             <Table>
-              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Coupon</TableHead><TableHead>Rev. Share %</TableHead><TableHead>Signup Link</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Rev. Share %</TableHead><TableHead>Signup Link</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
               <TableBody>
                 {filteredPartners.map((partner) => {
                   const signupUrl = `${window.location.origin}/signup/${partner.id}`;
@@ -163,13 +146,6 @@ export default function AdminPartnersPage() {
                         </div>
                       </TableCell>
                       <TableCell>{partner.email}</TableCell>
-                      <TableCell>
-                        {partner.couponCode ? (
-                            <Badge variant="outline" className='flex gap-1 items-center'>
-                                <Tag className='h-3 w-3'/> {partner.couponCode} ({partner.discountPercentage || 0}%)
-                            </Badge>
-                        ) : 'N/A'}
-                      </TableCell>
                       <TableCell><Badge variant="secondary">{partner.percentage}%</Badge></TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -183,7 +159,7 @@ export default function AdminPartnersPage() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuItem asChild><Link href={`/admin/partners/${partner.id}/customers`}><Users className="mr-2 h-4 w-4" />View Customers</Link></DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleEditPartnerClick(partner)}><Edit className="mr-2 h-4 w-4" />Edit Partner</DropdownMenuItem>
+                            <DropdownMenuItem asChild><Link href={`/admin/partners/${partner.id}/edit`}><Edit className="mr-2 h-4 w-4" />Edit Partner</Link></DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openDeleteDialog(partner)}><Trash2 className="mr-2 h-4 w-4" />Delete Partner</DropdownMenuItem>
                           </DropdownMenuContent>
@@ -197,8 +173,6 @@ export default function AdminPartnersPage() {
           )}
         </CardContent>
       </Card>
-
-      <AddEditPartnerDialog isOpen={isAddEditDialogOpen} setIsOpen={setIsAddEditDialogOpen} initialData={editingPartner} onSave={handleSavePartner} />
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>

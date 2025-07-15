@@ -8,9 +8,8 @@ export interface Partner {
   email: string;
   companyName?: string | null;
   percentage: number;
-  logoUrl?: string | null; // Added logoUrl
-  couponCode?: string | null; // Added for discounts
-  discountPercentage?: number | null; // Added for discount amount
+  logoUrl?: string | null;
+  availableProgramIds?: string[]; // Array of Program IDs this partner can sell
   isDeleted?: boolean;
   deletedAt?: Timestamp | null;
   createdAt?: Timestamp;
