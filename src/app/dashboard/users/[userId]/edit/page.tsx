@@ -306,7 +306,9 @@ export default function DashboardEditUserPage() {
                   <FormField control={form.control} name="role" render={({ field }) => (
                     <FormItem><FormLabel>Role</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value} disabled={!canChangeRole || userToEdit.role === 'Super Admin'}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger></FormControl>
+                        <FormControl>
+                          <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
+                        </FormControl>
                         <SelectContent>
                           <SelectItem value={userToEdit.role} disabled={assignableRolesForDropdown.length > 0 && !assignableRolesForDropdown.includes(userToEdit.role) && userToEdit.role !== 'Super Admin'}>{userToEdit.role} {canChangeRole ? "" : "(Cannot Change)"}</SelectItem>
                           {assignableRolesForDropdown.filter(r => r !== userToEdit.role).map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}

@@ -336,12 +336,9 @@ export function AddEditBrandCourseDialog({ isOpen, setIsOpen, brandId, onCourseS
                   <FormLabel>Difficulty Level</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                     <FormControl>
-                      {/* Wrap SelectTrigger in a div to ensure FormControl has a single child */}
-                      <div> 
                         <SelectTrigger>
                           <SelectValue placeholder="Select a level" />
                         </SelectTrigger>
-                      </div>
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="Beginner">Beginner</SelectItem>
@@ -378,11 +375,9 @@ export function AddEditBrandCourseDialog({ isOpen, setIsOpen, brandId, onCourseS
                     value={field.value || 'none'} // Use 'none' as the value for the placeholder
                   >
                     <FormControl>
-                      <div> {/* Wrapper for SelectTrigger */}
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a certificate template" />
-                        </SelectTrigger>
-                      </div>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a certificate template" />
+                      </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="none">None (Default)</SelectItem>
