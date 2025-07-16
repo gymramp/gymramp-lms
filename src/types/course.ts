@@ -115,16 +115,16 @@ export interface Program {
   title: string;
   description: string;
   courseIds: string[];
-  isStandardSubscription?: boolean; // New field to differentiate pricing model
+  isStandardSubscription: boolean; // New field to differentiate pricing model
   // For standard monthly subscription model
-  standardSubscriptionPrice?: string | null;
-  stripeStandardPriceId?: string | null;
+  standardSubscriptionPrice: string | null;
+  stripeStandardPriceId: string | null;
   // For one-time + tiered subscription model
-  price?: string;
-  firstSubscriptionPrice?: string | null;
-  stripeFirstPriceId?: string | null;
-  secondSubscriptionPrice?: string | null;
-  stripeSecondPriceId?: string | null;
+  price: string | null;
+  firstSubscriptionPrice: string | null;
+  stripeFirstPriceId: string | null;
+  secondSubscriptionPrice: string | null;
+  stripeSecondPriceId: string | null;
   isDeleted?: boolean;
   deletedAt?: Timestamp | null;
   createdAt?: Timestamp;
@@ -132,16 +132,8 @@ export interface Program {
 }
 
 // Type for form data when adding/editing a Program
-export type ProgramFormData = Omit<Program, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'courseIds'> & {
-  isStandardSubscription?: boolean;
-  standardSubscriptionPrice?: string | null;
-  stripeStandardPriceId?: string | null;
-  price?: string; // One-time base price
-  firstSubscriptionPrice?: string | null;
-  stripeFirstPriceId?: string | null;
-  secondSubscriptionPrice?: string | null;
-  stripeSecondPriceId?: string | null;
-};
+export type ProgramFormData = Omit<Program, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'courseIds'>;
+
 
 // --- Brand Specific Content ---
 

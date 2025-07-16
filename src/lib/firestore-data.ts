@@ -480,20 +480,10 @@ export async function createProgram(programData: ProgramFormData): Promise<Progr
     return retryOperation(async () => {
         const programsRef = collection(db, PROGRAMS_COLLECTION);
         const newProgramDoc = {
-            title: programData.title,
-            description: programData.description,
-            // Set defaults for all pricing fields if not provided
-            isStandardSubscription: programData.isStandardSubscription ?? false,
-            standardSubscriptionPrice: programData.standardSubscriptionPrice || null,
-            stripeStandardPriceId: programData.stripeStandardPriceId || null,
-            price: programData.price || null,
-            firstSubscriptionPrice: programData.firstSubscriptionPrice || null,
-            stripeFirstPriceId: programData.stripeFirstPriceId || null,
-            secondSubscriptionPrice: programData.secondSubscriptionPrice || null,
-            stripeSecondPriceId: programData.stripeSecondPriceId || null,
-            courseIds: [],
+            ...programData, // All fields are now in ProgramFormData
             isDeleted: false,
             deletedAt: null,
+            courseIds: [],
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         };
@@ -541,17 +531,6 @@ export async function updateProgram(programId: string, programData: Partial<Prog
         if (!programSnap.exists() || programSnap.data().isDeleted === true) return null;
 
         const dataToUpdate: Partial<ProgramFormData & {updatedAt: Timestamp}> = { ...programData, updatedAt: serverTimestamp() as Timestamp };
-
-        // Ensure nulls are set correctly if fields are cleared
-        if ('isStandardSubscription' in programData) dataToUpdate.isStandardSubscription = programData.isStandardSubscription ?? false;
-        if ('standardSubscriptionPrice' in programData) dataToUpdate.standardSubscriptionPrice = programData.standardSubscriptionPrice || null;
-        if ('stripeStandardPriceId' in programData) dataToUpdate.stripeStandardPriceId = programData.stripeStandardPriceId || null;
-        if ('price' in programData) dataToUpdate.price = programData.price || null;
-        if ('firstSubscriptionPrice' in programData) dataToUpdate.firstSubscriptionPrice = programData.firstSubscriptionPrice || null;
-        if ('stripeFirstPriceId' in programData) dataToUpdate.stripeFirstPriceId = programData.stripeFirstPriceId || null;
-        if ('secondSubscriptionPrice' in programData) dataToUpdate.secondSubscriptionPrice = programData.secondSubscriptionPrice || null;
-        if ('stripeSecondPriceId' in programData) dataToUpdate.stripeSecondPriceId = programData.stripeSecondPriceId || null;
-
         await updateDoc(programRef, dataToUpdate);
         const updatedDocSnap = await getDoc(programRef);
         if (updatedDocSnap.exists()) {
