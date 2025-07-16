@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useTransition, useCallback } from 'react';
@@ -14,10 +15,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from '@/hooks/use-toast';
-import type { Program, ProgramFormData } from '@/types/course';
-import { createProgram, getProgramById, updateProgram } from '@/lib/firestore-data';
+import type { Program, ProgramFormData, Course } from '@/types/course';
+import { createProgram, getProgramById, updateProgram, getAllCourses } from '@/lib/firestore-data';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2, ArrowLeft, Layers, DollarSign, Star } from 'lucide-react';
+import { Loader2, ArrowLeft, Layers, DollarSign, Star, BookCheck } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
+
 
 const programFormSchema = z.object({
   title: z.string().min(3, { message: 'Program title must be at least 3 characters.' }),
@@ -30,6 +34,7 @@ const programFormSchema = z.object({
   stripeFirstPriceId: z.string().optional().nullable(),
   secondSubscriptionPrice: z.string().optional().nullable(),
   stripeSecondPriceId: z.string().optional().nullable(),
+  courseIds: z.array(z.string()).optional(),
 });
 
 type ProgramFormValues = z.infer<typeof programFormSchema>;
@@ -42,6 +47,7 @@ export default function EditProgramPage({ params }: { params: { programId: strin
 
   const [isLoading, setIsLoading] = useState(!isCreating);
   const [isSaving, setIsSaving] = useState(false);
+  const [allCourses, setAllCourses] = useState<Course[]>([]);
   
   const form = useForm<ProgramFormValues>({
     resolver: zodResolver(programFormSchema),
@@ -49,38 +55,41 @@ export default function EditProgramPage({ params }: { params: { programId: strin
       title: '',
       description: '',
       isStandardSubscription: false,
+      courseIds: [],
     },
   });
 
   const pricingModel = form.watch('isStandardSubscription');
 
   const fetchProgramData = useCallback(async () => {
-    if (isCreating) {
-      setIsLoading(false);
-      return;
-    }
     setIsLoading(true);
     try {
-      const data = await getProgramById(programId);
-      if (data) {
-        form.reset({
-          title: data.title || '',
-          description: data.description || '',
-          isStandardSubscription: data.isStandardSubscription ?? false,
-          standardSubscriptionPrice: data.standardSubscriptionPrice || '',
-          stripeStandardPriceId: data.stripeStandardPriceId || '',
-          price: data.price || '',
-          firstSubscriptionPrice: data.firstSubscriptionPrice || '',
-          stripeFirstPriceId: data.stripeFirstPriceId || '',
-          secondSubscriptionPrice: data.secondSubscriptionPrice || '',
-          stripeSecondPriceId: data.stripeSecondPriceId || '',
-        });
-      } else {
-        toast({ title: "Error", description: "Program not found.", variant: "destructive" });
-        router.push('/admin/programs');
+      const coursesData = await getAllCourses();
+      setAllCourses(coursesData);
+
+      if (!isCreating) {
+        const data = await getProgramById(programId);
+        if (data) {
+          form.reset({
+            title: data.title || '',
+            description: data.description || '',
+            isStandardSubscription: data.isStandardSubscription ?? false,
+            standardSubscriptionPrice: data.standardSubscriptionPrice || '',
+            stripeStandardPriceId: data.stripeStandardPriceId || '',
+            price: data.price || '',
+            firstSubscriptionPrice: data.firstSubscriptionPrice || '',
+            stripeFirstPriceId: data.stripeFirstPriceId || '',
+            secondSubscriptionPrice: data.secondSubscriptionPrice || '',
+            stripeSecondPriceId: data.stripeSecondPriceId || '',
+            courseIds: data.courseIds || [],
+          });
+        } else {
+          toast({ title: "Error", description: "Program not found.", variant: "destructive" });
+          router.push('/admin/programs');
+        }
       }
     } catch (error) {
-      toast({ title: "Error", description: "Failed to load program data.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to load program or course data.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -104,6 +113,7 @@ export default function EditProgramPage({ params }: { params: { programId: strin
         stripeFirstPriceId: !data.isStandardSubscription ? data.stripeFirstPriceId : null,
         secondSubscriptionPrice: !data.isStandardSubscription ? data.secondSubscriptionPrice : null,
         stripeSecondPriceId: !data.isStandardSubscription ? data.stripeSecondPriceId : null,
+        courseIds: data.courseIds || [],
       };
 
       let savedProgram: Program | null = null;
@@ -146,6 +156,57 @@ export default function EditProgramPage({ params }: { params: { programId: strin
             <CardContent className="space-y-6">
               <FormField control={form.control} name="title" render={({ field }) => ( <FormItem><FormLabel>Program Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem> )} />
               <FormField control={form.control} name="description" render={({ field }) => ( <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea rows={3} {...field} /></FormControl><FormMessage /></FormItem> )} />
+            </CardContent>
+          </Card>
+
+           <Card>
+            <CardHeader><CardTitle className="flex items-center gap-2"><BookCheck className="h-5 w-5"/> Included Courses</CardTitle><CardDescription>Select the courses from the library to include in this program.</CardDescription></CardHeader>
+            <CardContent>
+              <FormField
+                control={form.control}
+                name="courseIds"
+                render={() => (
+                  <FormItem>
+                    {allCourses.length === 0 ? (
+                      <p className="text-sm text-muted-foreground italic">No courses available in the library.</p>
+                    ) : (
+                      <ScrollArea className="h-80 w-full rounded-md border p-4">
+                        <div className="space-y-2">
+                          {allCourses.map((course) => (
+                            <FormField
+                              key={course.id}
+                              control={form.control}
+                              name="courseIds"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-2 hover:bg-muted/50 rounded-md">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value?.includes(course.id)}
+                                      onCheckedChange={(checked) => {
+                                        const currentIds = field.value || [];
+                                        const newIds = checked
+                                          ? [...currentIds, course.id]
+                                          : currentIds.filter((value) => value !== course.id);
+                                        field.onChange(newIds);
+                                      }}
+                                      id={`course-${course.id}`}
+                                    />
+                                  </FormControl>
+                                  <FormLabel htmlFor={`course-${course.id}`} className="font-normal flex flex-col cursor-pointer flex-1">
+                                    <span className="flex items-center gap-2">{course.title}</span>
+                                    <span className="text-xs text-muted-foreground">{course.description}</span>
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </CardContent>
           </Card>
 
@@ -228,3 +289,4 @@ export default function EditProgramPage({ params }: { params: { programId: strin
     </div>
   );
 }
+

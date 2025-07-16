@@ -1,4 +1,5 @@
 
+
 // Define question types
 export type QuestionType = 'multiple-choice' | 'true-false' | 'multiple-select';
 import type { Timestamp } from 'firebase/firestore'; // Import Timestamp
@@ -132,7 +133,7 @@ export interface Program {
 }
 
 // Type for form data when adding/editing a Program
-export type ProgramFormData = Omit<Program, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'courseIds'>;
+export type ProgramFormData = Omit<Program, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt'>;
 
 
 // --- Brand Specific Content ---

@@ -1,4 +1,5 @@
 
+
 import { db } from './firebase';
 import {
     collection,
@@ -481,9 +482,9 @@ export async function createProgram(programData: ProgramFormData): Promise<Progr
         const programsRef = collection(db, PROGRAMS_COLLECTION);
         const newProgramDoc = {
             ...programData, // All fields are now in ProgramFormData
+            courseIds: programData.courseIds || [],
             isDeleted: false,
             deletedAt: null,
-            courseIds: [],
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         };
