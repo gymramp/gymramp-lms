@@ -29,8 +29,9 @@ import { useToast } from '@/hooks/use-toast';
 import { createLesson, updateLesson } from '@/lib/firestore-data';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import type { Lesson, LessonFormData, LessonTranslation } from '@/types/course';
-import { Upload, PlaySquare, FileUp, Image as ImageIconLucide, Trash2, Loader2, Video, Globe, Languages } from 'lucide-react';
+import { Upload, PlaySquare, FileUp, Image as ImageIconLucide, Trash2, Loader2, Video, Globe, Languages, Wand2 } from 'lucide-react';
 import RichTextEditor from '@/components/ui/RichTextEditor';
+import { translateContent } from '@/ai/flows/translate-content';
 
 // Supported languages for translation UI
 const SUPPORTED_LOCALES = [
@@ -91,6 +92,7 @@ export function AddEditLessonDialog({
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
 
   const [translationVideoUploadState, setTranslationVideoUploadState] = useState<Record<string, { progress: number; error: string | null; uploading: boolean }>>({});
+  const [isTranslating, setIsTranslating] = useState<Record<string, boolean>>({});
 
 
   const form = useForm<LessonFormValues>({
@@ -158,6 +160,7 @@ export function AddEditLessonDialog({
         setImageUploadError(null);
         setTranslationVideoUploadState({});
         setIsSaving(false);
+        setIsTranslating({});
     }
   }, [initialData, form, isOpen]);
 
@@ -224,6 +227,46 @@ export function AddEditLessonDialog({
          } finally {
              setIsImageUploading(false);
          }
+     };
+
+     const handleAutoTranslate = async (targetLocale: string) => {
+        const { title, content } = form.getValues();
+        if (!title || !content) {
+          toast({
+            title: "Missing Content",
+            description: "Please fill in the main English title and content before translating.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        setIsTranslating(prev => ({...prev, [targetLocale]: true}));
+        try {
+            const result = await translateContent({
+                sourceTitle: title,
+                sourceContent: content,
+                targetLocale: targetLocale
+            });
+
+            if (result.translatedTitle && result.translatedContent) {
+                 form.setValue(`translations.${targetLocale}.title`, result.translatedTitle);
+                 form.setValue(`translations.${targetLocale}.content`, result.translatedContent);
+                 toast({
+                    title: "Translation Complete!",
+                    description: `Content has been translated to ${SUPPORTED_LOCALES.find(l => l.value === targetLocale)?.label}.`,
+                 });
+            } else {
+                 throw new Error("AI did not return translated content.");
+            }
+        } catch (error: any) {
+             toast({
+                title: "Translation Failed",
+                description: error.message || "Could not translate content.",
+                variant: "destructive",
+             });
+        } finally {
+            setIsTranslating(prev => ({...prev, [targetLocale]: false}));
+        }
      };
 
 
@@ -339,7 +382,13 @@ export function AddEditLessonDialog({
 
                            return (
                             <div key={locale.value} className="p-4 border rounded-md space-y-4">
-                                <h3 className="font-semibold text-lg">{locale.label}</h3>
+                                <div className="flex justify-between items-center">
+                                    <h3 className="font-semibold text-lg">{locale.label}</h3>
+                                    <Button type="button" variant="outline" size="sm" onClick={() => handleAutoTranslate(locale.value)} disabled={isTranslating[locale.value]}>
+                                        {isTranslating[locale.value] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                                        Auto-Translate
+                                    </Button>
+                                </div>
                                 <FormField
                                     control={form.control}
                                     name={`translations.${locale.value}.title`}
