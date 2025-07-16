@@ -93,6 +93,7 @@ export async function createDefaultCompany(): Promise<Company | null> {
                 stripeSubscriptionId: null,
                 parentBrandId: null,
                 createdByUserId: "SYSTEM", // Indicate system creation
+                partnerId: null,
             };
             const docRef = await addDoc(companiesRef, { ...newCompanyData, isDeleted: false, deletedAt: null, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
             const newDocSnap = await getDoc(docRef);
@@ -274,6 +275,7 @@ export async function addCompany(
             updatedAt: serverTimestamp() as Timestamp,
             parentBrandId: parentBrandIdForChild || null,
             createdByUserId: creatingUserId || null,
+            partnerId: companyData.partnerId || null, // Store partnerId
          };
         console.log("[addCompany] docData.assignedProgramIds being written to Firestore:", JSON.stringify(docData.assignedProgramIds, null, 2));
         const docRef = await addDoc(companiesRef, docData);
@@ -346,6 +348,7 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
         if (companyData.canManageCourses !== undefined) dataToUpdate.canManageCourses = companyData.canManageCourses;
         if (companyData.stripeCustomerId !== undefined) dataToUpdate.stripeCustomerId = companyData.stripeCustomerId || null;
         if (companyData.stripeSubscriptionId !== undefined) dataToUpdate.stripeSubscriptionId = companyData.stripeSubscriptionId || null;
+        if (companyData.partnerId !== undefined) dataToUpdate.partnerId = companyData.partnerId || null;
 
         if (Object.keys(dataToUpdate).length > 1) {
             console.log(`[updateCompany] Data being written for brand ${companyId} (assignedProgramIds included):`, JSON.stringify(dataToUpdate.assignedProgramIds, null, 2));

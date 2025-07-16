@@ -64,8 +64,11 @@ const cleanupFirebaseApp = async (appName: string): Promise<void> => {
     }
 };
 
-export async function processPublicSignup(data: SignupFormValues): Promise<SignupResult> {
+export async function processPublicSignup(data: SignupFormValues, partnerId?: string): Promise<SignupResult> {
   console.log("[processPublicSignup] Starting for brand:", data.companyName);
+  if (partnerId) {
+    console.log("[processPublicSignup] Associated with Partner ID:", partnerId);
+  }
 
   const localAuthAppName = `signupAuthApp-${Date.now()}`;
   let localAuthInstance: Auth | undefined;
@@ -101,6 +104,7 @@ export async function processPublicSignup(data: SignupFormValues): Promise<Signu
         stripeSubscriptionId: null,
         parentBrandId: null,
         createdByUserId: null, // No parent user for public signups
+        partnerId: partnerId || null, // Store the partner ID
     };
 
     const newCompany = await addCompany(newCompanyData);

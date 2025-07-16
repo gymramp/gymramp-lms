@@ -1,3 +1,4 @@
+
 // src/types/user.ts
 
 import type { Timestamp } from 'firebase/firestore'; // Import Timestamp
@@ -71,6 +72,7 @@ export interface Company { // Conceptually "Brand"
   createdByUserId?: string | null; // ID of the user (likely Admin/Owner of parent) who created this brand
   userCount?: number; // Denormalized for UI display
   childBrandCount?: number; // Denormalized for UI display
+  partnerId?: string | null; // Added to track formal partner
 }
 
 // Type for the form data when adding/editing a company (now Brand)

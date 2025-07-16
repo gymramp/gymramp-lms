@@ -6,259 +6,149 @@ import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, Layers, Handshake, CreditCard } from 'lucide-react';
+import { Loader2, Handshake, User, Building, Eye, EyeOff } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { getAllPrograms } from '@/lib/firestore-data';
-import { processCheckout } from '@/actions/checkout';
-import { createPaymentIntent } from '@/actions/stripe';
 import type { Partner } from '@/types/partner';
 import { getPartnerById } from '@/lib/partner-data';
-import type { Program } from '@/types/course';
-import type { RevenueSharePartner } from '@/types/user';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { loadStripe, StripeElementsOptions } from '@stripe/stripe-js';
+import { processPublicSignup } from '@/actions/signup';
 import Image from 'next/image';
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
+import Link from 'next/link';
+import { signInWithCustomToken } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 const partnerSignupFormSchema = z.object({
-  customerName: z.string().min(2, { message: 'Your name is required.' }),
-  companyName: z.string().min(2, { message: 'Your brand/company name is required.' }),
+  customerName: z.string().min(2, { message: "Your name is required." }),
+  companyName: z.string().min(2, { message: 'Your company/brand name is required.' }),
   adminEmail: z.string().email({ message: 'Please enter a valid email address.' }),
-  selectedProgramId: z.string().min(1, "Please select a Program to purchase."),
+  password: z.string().min(8, { message: "Password must be at least 8 characters long." }),
 });
+
 type PartnerSignupFormValues = z.infer<typeof partnerSignupFormSchema>;
-
-function PartnerCheckoutForm({ partner, programs, clientSecret }: { partner: Partner, programs: Program[], clientSecret: string | null }) {
-  const { toast } = useToast();
-  const stripe = useStripe();
-  const elements = useElements();
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentErrorMessage, setPaymentErrorMessage] = useState<string | null>(null);
-
-  const form = useForm<PartnerSignupFormValues>({
-    resolver: zodResolver(partnerSignupFormSchema),
-    defaultValues: {
-      customerName: '', companyName: '', adminEmail: '',
-      selectedProgramId: programs.length === 1 ? programs[0].id : '',
-    },
-  });
-
-  const selectedProgramId = form.watch('selectedProgramId');
-  const selectedProgram = programs.find(p => p.id === selectedProgramId);
-  const finalTotal = selectedProgram && typeof selectedProgram.price === 'string' ? parseFloat(selectedProgram.price.replace(/[$,/mo]/gi, '')) : 0;
-
-  const handleSignupSubmit = async (data: PartnerSignupFormValues) => {
-    setIsProcessing(true);
-    setPaymentErrorMessage(null);
-    if (!stripe || !elements) {
-      setPaymentErrorMessage("Payment gateway is not ready. Please wait a moment.");
-      setIsProcessing(false);
-      return;
-    }
-
-    const { error: submitError, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      redirect: 'if_required',
-    });
-
-    if (submitError) {
-      setPaymentErrorMessage(submitError.message || "An unexpected error occurred during payment.");
-      setIsProcessing(false);
-      return;
-    }
-
-    if (paymentIntent?.status === 'succeeded') {
-      toast({ title: "Payment Successful!", description: "Finalizing your account setup..." });
-      
-      const revenueSharePartner: RevenueSharePartner = {
-        name: partner.name,
-        companyName: partner.companyName,
-        percentage: partner.percentage,
-        shareBasis: 'coursePrice' // Assuming partner share is always on the initial price
-      };
-
-      const result = await processCheckout({
-        ...data,
-        paymentIntentId: paymentIntent.id,
-        subtotalAmount: finalTotal,
-        appliedDiscountPercent: 0,
-        appliedDiscountAmount: 0,
-        finalTotalAmount: finalTotal,
-        partnerId: partner.id,
-        revenueSharePartners: [revenueSharePartner],
-      });
-
-      if (result.success && result.tempPassword) {
-        toast({
-          title: "Account Created!",
-          description: "Your account is ready. You will receive a welcome email with your temporary password shortly.",
-          duration: 10000,
-        });
-        form.reset();
-      } else {
-        setPaymentErrorMessage(`Account setup failed after payment: ${result.error}. Please contact support.`);
-      }
-    } else {
-      setPaymentErrorMessage(`Payment status: ${paymentIntent?.status}. Please try again.`);
-    }
-
-    setIsProcessing(false);
-  };
-
-  return (
-    <Card className="w-full max-w-2xl mx-auto shadow-lg">
-      <CardHeader className="text-center">
-        {partner.logoUrl ? (
-            <div className="relative h-20 w-full mb-4">
-                <Image
-                    src={partner.logoUrl}
-                    alt={`${partner.name} Logo`}
-                    fill
-                    style={{ objectFit: 'contain' }}
-                    priority
-                />
-            </div>
-        ) : (
-            <Handshake className="h-12 w-12 mx-auto text-primary mb-4" />
-        )}
-        <CardTitle className="text-2xl font-bold">Sign Up via {partner.name}</CardTitle>
-        <CardDescription>Select a program and create your account to get started.</CardDescription>
-      </CardHeader>
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSignupSubmit)}>
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField control={form.control} name="customerName" render={({ field }) => ( <FormItem><FormLabel>Your Full Name</FormLabel><FormControl><Input {...field} placeholder="e.g., Jane Smith" /></FormControl><FormMessage /></FormItem> )} />
-              <FormField control={form.control} name="companyName" render={({ field }) => ( <FormItem><FormLabel>Your Company/Brand Name</FormLabel><FormControl><Input {...field} placeholder="e.g., Jane's Gym" /></FormControl><FormMessage /></FormItem> )} />
-            </div>
-            <FormField control={form.control} name="adminEmail" render={({ field }) => ( <FormItem><FormLabel>Your Email (for login)</FormLabel><FormControl><Input {...field} type="email" placeholder="you@example.com" /></FormControl><FormMessage /></FormItem> )} />
-            
-            <FormField control={form.control} name="selectedProgramId" render={({ field }) => (
-              <FormItem><FormLabel>Select Program</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl><SelectTrigger><SelectValue placeholder="Choose a Program..." /></SelectTrigger></FormControl>
-                  <SelectContent>
-                    {programs.map(p => (
-                        <SelectItem key={p.id} value={p.id}>{p.title} - ${typeof p.price === 'string' ? parseFloat(p.price.replace(/[$,/mo]/gi, '')).toFixed(2) : '0.00'}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select><FormMessage />
-              </FormItem>
-            )} />
-
-            {selectedProgram && (
-              <Alert>
-                <Layers className="h-4 w-4" />
-                <AlertTitle>Order Summary</AlertTitle>
-                <div className="space-y-1 mt-2 text-sm">
-                  <div className="flex justify-between font-bold text-lg pt-2"><span>Total:</span> <span>${finalTotal.toFixed(2)}</span></div>
-                </div>
-              </Alert>
-            )}
-
-            {clientSecret && elements && (
-                <div>
-                    <Label className="text-base font-semibold">Payment Details</Label>
-                    <PaymentElement id="payment-element" options={{ layout: "tabs" }} className="mt-2" />
-                </div>
-            )}
-            {paymentErrorMessage && <p className="text-sm font-medium text-destructive">{paymentErrorMessage}</p>}
-          </CardContent>
-          <CardFooter>
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isProcessing || !stripe || !elements}>
-              {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
-              {isProcessing ? 'Processing Payment...' : `Sign Up & Pay $${finalTotal.toFixed(2)}`}
-            </Button>
-          </CardFooter>
-        </form>
-      </Form>
-    </Card>
-  );
-}
 
 export default function PartnerSignupPage() {
   const params = useParams();
+  const router = useRouter();
   const partnerId = params.partnerId as string;
   const [partner, setPartner] = useState<Partner | null>(null);
-  const [programs, setPrograms] = useState<Program[]>([]);
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const { toast } = useToast();
 
-  const createAndSetPaymentIntent = useCallback(async (programsData: Program[]) => {
-    const firstPricedProgram = programsData.find(p => typeof p.price === 'string' && parseFloat(p.price.replace(/[$,/mo]/gi, '')) > 0);
-    if (!firstPricedProgram || typeof firstPricedProgram.price !== 'string') {
-        throw new Error("No programs with a valid price found for this partner.");
-    }
-    const amountInCents = Math.round(parseFloat(firstPricedProgram.price.replace(/[$,/mo]/gi, '')) * 100);
-    const piResult = await createPaymentIntent(amountInCents);
-    if (piResult.clientSecret) {
-        setClientSecret(piResult.clientSecret);
-    } else {
-        throw new Error(piResult.error || "Failed to initialize payment.");
-    }
-  }, []);
+  const form = useForm<PartnerSignupFormValues>({
+    resolver: zodResolver(partnerSignupFormSchema),
+    defaultValues: { customerName: '', companyName: '', adminEmail: '', password: '' },
+  });
 
   useEffect(() => {
-    async function fetchData() {
-      setIsLoading(true);
-      setError(null);
+    async function fetchPartner() {
+      if (!partnerId) {
+        setError("Partner link is invalid or missing an ID.");
+        setIsLoading(false);
+        return;
+      }
       try {
-        if (!partnerId) throw new Error("Partner ID is missing.");
-        
         const partnerData = await getPartnerById(partnerId);
-        if (!partnerData) throw new Error("This partner link is not valid.");
-        setPartner(partnerData);
-
-        if (!partnerData.availableProgramIds || partnerData.availableProgramIds.length === 0) {
-          throw new Error("This partner has no programs available for purchase at this time.");
+        if (!partnerData) {
+          setError("This partner link is not valid.");
+        } else {
+          setPartner(partnerData);
         }
-
-        const allPrograms = await getAllPrograms();
-        const availablePrograms = allPrograms.filter(p => partnerData.availableProgramIds!.includes(p.id));
-        
-        if (availablePrograms.length === 0) {
-            throw new Error("The programs for this partner are not currently available.");
-        }
-        
-        setPrograms(availablePrograms);
-        
-        await createAndSetPaymentIntent(availablePrograms);
-
       } catch (e: any) {
-        setError(e.message);
+        setError("Could not retrieve partner information.");
       } finally {
         setIsLoading(false);
       }
     }
-    fetchData();
-  }, [partnerId, createAndSetPaymentIntent]);
+    fetchPartner();
+  }, [partnerId]);
+
+  const onSubmit = async (data: PartnerSignupFormValues) => {
+    setIsSubmitting(true);
+    try {
+      const result = await processPublicSignup(data, partnerId);
+      if (result.success && result.customToken) {
+        toast({
+          title: "Account Created!",
+          description: "Welcome! You will be automatically logged in.",
+          duration: 7000,
+        });
+        await signInWithCustomToken(auth, result.customToken);
+        router.push('/onboarding');
+      } else {
+        toast({
+          title: "Signup Failed",
+          description: result.error || "An unknown error occurred.",
+          variant: "destructive",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: "An Error Occurred",
+        description: err.message || "Something went wrong during signup.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (isLoading) {
     return <div className="container mx-auto text-center py-20"><Loader2 className="h-12 w-12 animate-spin mx-auto" /></div>;
   }
-  if (error) {
-    return <div className="container mx-auto text-center py-20"><Alert variant="destructive"><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert></div>;
-  }
-  if (!partner || !clientSecret) {
-      return <div className="container mx-auto text-center py-20"><Alert variant="destructive"><AlertTitle>Initialization Error</AlertTitle><AlertDescription>Could not initialize the checkout page. Please try again later.</AlertDescription></Alert></div>;
-  }
 
-  const stripeElementsOptions: StripeElementsOptions = { clientSecret, appearance: { theme: 'stripe' } };
+  if (error || !partner) {
+    return <div className="container mx-auto text-center py-20"><Alert variant="destructive"><AlertTitle>Error</AlertTitle><AlertDescription>{error || "Partner not found."}</AlertDescription></Alert></div>;
+  }
 
   return (
-    <div className="container mx-auto py-12">
-      <Elements stripe={stripePromise} options={stripeElementsOptions} key={clientSecret}>
-        <PartnerCheckoutForm partner={partner} programs={programs} clientSecret={clientSecret}/>
-      </Elements>
+    <div className="container flex items-center justify-center min-h-screen py-12">
+      <div className="w-full max-w-lg">
+        <Card className="shadow-xl">
+          <CardHeader className="text-center">
+             {partner.logoUrl ? (
+                <div className="relative h-16 w-full mb-4">
+                    <Image src={partner.logoUrl} alt={`${partner.name} Logo`} fill style={{ objectFit: 'contain' }} priority />
+                </div>
+            ) : (
+                <Handshake className="h-12 w-12 mx-auto text-primary mb-4" />
+            )}
+            <CardTitle className="text-2xl font-bold">Sign Up via {partner.name}</CardTitle>
+            <CardDescription>Create your account to get started.</CardDescription>
+          </CardHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)}>
+              <CardContent className="space-y-4">
+                <FormField control={form.control} name="customerName" render={({ field }) => ( <FormItem><FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Your Full Name</FormLabel><FormControl><Input placeholder="e.g., Jane Doe" {...field} /></FormControl><FormMessage /></FormItem> )} />
+                <FormField control={form.control} name="companyName" render={({ field }) => ( <FormItem><FormLabel className="flex items-center"><Building className="mr-2 h-4 w-4" /> Company/Brand Name</FormLabel><FormControl><Input placeholder="e.g., Downtown Fitness" {...field} /></FormControl><FormMessage /></FormItem> )} />
+                <FormField control={form.control} name="adminEmail" render={({ field }) => ( <FormItem><FormLabel>Your Email Address (for login)</FormLabel><FormControl><Input type="email" placeholder="you@example.com" {...field} /></FormControl><FormMessage /></FormItem> )} />
+                <FormField control={form.control} name="password" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Create a Password</FormLabel>
+                    <div className="relative">
+                      <FormControl><Input type={showPassword ? 'text' : 'password'} placeholder="Must be at least 8 characters" {...field} /></FormControl>
+                      <Button type="button" variant="ghost" size="sm" className="absolute right-0 top-0 h-full px-3 py-2" onClick={() => setShowPassword(p => !p)}><span className="sr-only">{showPassword ? 'Hide' : 'Show'}</span>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</Button>
+                    </div><FormMessage />
+                  </FormItem>
+                )} />
+              </CardContent>
+              <CardFooter className="flex flex-col gap-4">
+                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isSubmitting ? 'Creating Account...' : 'Sign Up'}
+                </Button>
+                <p className="text-xs text-muted-foreground text-center">Already have an account? <Link href="/" className="underline hover:text-primary">Log in here</Link>.</p>
+              </CardFooter>
+            </form>
+          </Form>
+        </Card>
+      </div>
     </div>
   );
 }
