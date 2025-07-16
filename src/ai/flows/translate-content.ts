@@ -9,22 +9,13 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'zod';
+import {
+  TranslateContentInputSchema,
+  type TranslateContentInput,
+  TranslateContentOutputSchema,
+  type TranslateContentOutput
+} from '@/types/course';
 
-// Define the input schema for the translation flow
-export const TranslateContentInputSchema = z.object({
-  sourceTitle: z.string().describe('The original English title of the lesson.'),
-  sourceContent: z.string().describe('The original English content of the lesson in HTML format.'),
-  targetLocale: z.string().describe('The target language code (e.g., "es", "fr").'),
-});
-export type TranslateContentInput = z.infer<typeof TranslateContentInputSchema>;
-
-// Define the output schema for the translation flow
-export const TranslateContentOutputSchema = z.object({
-  translatedTitle: z.string().describe('The translated title.'),
-  translatedContent: z.string().describe('The translated content, preserving HTML tags.'),
-});
-export type TranslateContentOutput = z.infer<typeof TranslateContentOutputSchema>;
 
 // Export the main function to trigger the translation flow
 export async function translateContent(input: TranslateContentInput): Promise<TranslateContentOutput> {

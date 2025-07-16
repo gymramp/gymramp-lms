@@ -1,5 +1,6 @@
 
 
+import { z } from 'zod';
 // Define question types
 export type QuestionType = 'multiple-choice' | 'true-false' | 'multiple-select';
 import type { Timestamp } from 'firebase/firestore'; // Import Timestamp
@@ -49,7 +50,7 @@ export interface Quiz {
 export interface LessonTranslation {
   title?: string;
   content?: string;
-  videoUrl?: string | null; // Added video URL for translation
+  videoUrl?: string | null;
 }
 
 // Represents a single standalone lesson in the library
@@ -224,3 +225,18 @@ export interface BrandQuiz {
 export type BrandQuizFormData = Omit<BrandQuiz, 'id' | 'brandId' | 'questions' | 'questionCount' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'translations'> & {
   brandId: string; // Required for creation
 };
+
+// --- AI Translation Types ---
+
+export const TranslateContentInputSchema = z.object({
+  sourceTitle: z.string().describe('The original English title of the lesson.'),
+  sourceContent: z.string().describe('The original English content of the lesson in HTML format.'),
+  targetLocale: z.string().describe('The target language code (e.g., "es", "fr").'),
+});
+export type TranslateContentInput = z.infer<typeof TranslateContentInputSchema>;
+
+export const TranslateContentOutputSchema = z.object({
+  translatedTitle: z.string().describe('The translated title.'),
+  translatedContent: z.string().describe('The translated content, preserving HTML tags.'),
+});
+export type TranslateContentOutput = z.infer<typeof TranslateContentOutputSchema>;
