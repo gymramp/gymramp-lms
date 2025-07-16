@@ -6,22 +6,25 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/types/user';
 import type { PartnerFormData } from '@/types/partner';
 import { getUserByEmail } from '@/lib/user-data';
 import { addPartner } from '@/lib/partner-data';
+import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2, ArrowLeft, Handshake, Percent } from 'lucide-react';
+import { Loader2, ArrowLeft, Handshake, Percent, Upload, ImageIcon as ImageIconLucide, Trash2 } from 'lucide-react';
 
-// A simplified schema focusing on only the basic fields.
-const basicPartnerFormSchema = z.object({
+const partnerFormSchema = z.object({
   name: z.string().min(2, { message: "Partner name must be at least 2 characters." }),
   email: z.string().email({ message: "Please enter a valid email address." }),
   companyName: z.string().optional().or(z.literal('')),
@@ -29,26 +32,27 @@ const basicPartnerFormSchema = z.object({
     .number({ invalid_type_error: "Percentage must be a number." })
     .min(0.01, "Percentage must be greater than 0.")
     .max(100, "Percentage cannot exceed 100."),
+  logoUrl: z.string().url().optional().or(z.literal('')),
 });
 
-type BasicPartnerFormValues = z.infer<typeof basicPartnerFormSchema>;
+type PartnerFormValues = z.infer<typeof partnerFormSchema>;
 
 export default function NewPartnerPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
-  const form = useForm<BasicPartnerFormValues>({
-    resolver: zodResolver(basicPartnerFormSchema),
-    defaultValues: {
-      name: '',
-      email: '',
-      companyName: '',
-      percentage: 0,
-    },
+  const form = useForm<PartnerFormValues>({
+    resolver: zodResolver(partnerFormSchema),
+    defaultValues: { name: '', email: '', companyName: '', percentage: 0, logoUrl: '' },
   });
+
+  const logoUrlValue = form.watch('logoUrl');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -66,22 +70,41 @@ export default function NewPartnerPage() {
     });
     return () => unsubscribe();
   }, [router, toast]);
+  
+  const handleLogoFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-  const onSubmit = (data: BasicPartnerFormValues) => {
+    setIsUploading(true);
+    setUploadProgress(0);
+    setUploadError(null);
+
+    try {
+      const uniqueFileName = `${Date.now()}-partnerlogo-${file.name}`;
+      const storagePath = `${STORAGE_PATHS.PARTNER_LOGOS}/${uniqueFileName}`;
+      const downloadURL = await uploadImage(file, storagePath, setUploadProgress);
+      form.setValue('logoUrl', downloadURL, { shouldValidate: true });
+      toast({ title: "Logo Uploaded" });
+    } catch (error: any) {
+      setUploadError(error.message || "Failed to upload logo.");
+      toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const onSubmit = (data: PartnerFormValues) => {
     startTransition(async () => {
-      // Construct the full PartnerFormData, setting non-included fields to reasonable defaults.
       const partnerFormData: PartnerFormData = {
-        name: data.name,
-        email: data.email,
+        ...data,
         companyName: data.companyName || null,
-        percentage: data.percentage,
-        logoUrl: null, // Default to null
-        availableProgramIds: [], // Default to an empty array
+        logoUrl: data.logoUrl || null,
+        availableProgramIds: [],
       };
 
       const newPartner = await addPartner(partnerFormData);
       if (newPartner) {
-        toast({ title: "Partner Created", description: `Partner "${newPartner.name}" has been created. You can now edit them to add more details.` });
+        toast({ title: "Partner Created", description: `Partner "${newPartner.name}" has been created.` });
         router.push(`/admin/partners/${newPartner.id}/edit`);
       } else {
         toast({ title: "Creation Failed", variant: "destructive" });
@@ -106,64 +129,28 @@ export default function NewPartnerPage() {
               <CardDescription>Fill out the form below to create a new partner.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Partner Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., John Doe" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Contact Email</FormLabel>
-                    <FormControl>
-                      <Input type="email" placeholder="partner@example.com" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="companyName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Company Name (Optional)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Partner Co." {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="percentage"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center gap-1">
-                      <Percent className="h-4 w-4"/>
-                      Revenue Share (%)
-                    </FormLabel>
-                    <FormControl>
-                      <Input type="number" min="0.01" max="100" step="0.01" placeholder="10" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormField control={form.control} name="name" render={({ field }) => ( <FormItem><FormLabel>Partner Name</FormLabel><FormControl><Input placeholder="e.g., John Doe" {...field} /></FormControl><FormMessage /></FormItem> )} />
+              <FormField control={form.control} name="email" render={({ field }) => ( <FormItem><FormLabel>Contact Email</FormLabel><FormControl><Input type="email" placeholder="partner@example.com" {...field} /></FormControl><FormMessage /></FormItem> )} />
+              <FormField control={form.control} name="companyName" render={({ field }) => ( <FormItem><FormLabel>Company Name (Optional)</FormLabel><FormControl><Input placeholder="Partner Co." {...field} /></FormControl><FormMessage /></FormItem> )} />
+              <FormField control={form.control} name="percentage" render={({ field }) => ( <FormItem><FormLabel className="flex items-center gap-1"><Percent className="h-4 w-4"/>Revenue Share (%)</FormLabel><FormControl><Input type="number" min="0.01" max="100" step="0.01" placeholder="10" {...field} /></FormControl><FormMessage /></FormItem> )} />
+              <FormItem>
+                <Label>Partner Logo (Optional)</Label>
+                <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
+                  {logoUrlValue && !isUploading ? (
+                    <div className="relative w-32 h-32 mx-auto mb-2">
+                      <Image src={logoUrlValue} alt="Logo preview" fill style={{ objectFit: 'contain' }} className="rounded-md" />
+                      <Button type="button" variant="destructive" size="icon" className="absolute top-0 right-0 h-6 w-6" onClick={() => form.setValue('logoUrl', '')}><Trash2 className="h-4 w-4" /></Button>
+                    </div>
+                  ) : isUploading ? (
+                    <div className="py-8"><Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" /><Progress value={uploadProgress} className="w-full h-2" />{uploadError && <p className="text-xs text-destructive mt-2">{uploadError}</p>}</div>
+                  ) : (
+                    <Label htmlFor="logo-upload" className="cursor-pointer block"><ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Upload logo</p><Input id="logo-upload" type="file" accept="image/*" className="hidden" onChange={handleLogoFileChange} disabled={isUploading} /></Label>
+                  )}
+                </div>
+              </FormItem>
             </CardContent>
             <CardFooter>
-              <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isPending}>
+              <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isPending || isUploading}>
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Create Partner
               </Button>
