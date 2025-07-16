@@ -41,7 +41,7 @@ export const DatePickerWithPresets = React.forwardRef<HTMLDivElement, DatePicker
               id="date"
               variant={"outline"}
               className={cn(
-                "w-full justify-start text-left font-normal",
+                "w-full justify-start text-left font-normal h-10",
                 !date && "text-muted-foreground"
               )}
             >
