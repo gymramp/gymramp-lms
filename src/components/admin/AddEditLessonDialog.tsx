@@ -46,6 +46,7 @@ const SUPPORTED_LOCALES = [
 const lessonTranslationSchema = z.object({
   title: z.string().optional(),
   content: z.string().optional(),
+  videoUrl: z.string().url({ message: 'Invalid video URL format.' }).optional().or(z.literal('')),
 });
 
 const lessonFormSchema = z.object({
@@ -350,6 +351,17 @@ export function AddEditLessonDialog({
                                     <FormItem>
                                         <FormLabel>Translated Content</FormLabel>
                                         <FormControl><RichTextEditor value={field.value ?? ''} onChange={field.onChange} /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name={`translations.${locale.value}.videoUrl`}
+                                    render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Translated Video URL</FormLabel>
+                                        <FormControl><Input placeholder="e.g., https://youtube.com/watch?v=..." {...field} value={field.value ?? ''} /></FormControl>
                                         <FormMessage />
                                     </FormItem>
                                     )}

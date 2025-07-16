@@ -49,6 +49,7 @@ export interface Quiz {
 export interface LessonTranslation {
   title?: string;
   content?: string;
+  videoUrl?: string | null; // Added video URL for translation
 }
 
 // Represents a single standalone lesson in the library
@@ -65,7 +66,7 @@ export interface Lesson {
     deletedAt?: Timestamp | null;
     createdAt?: Timestamp;
     updatedAt?: Timestamp;
-    translations?: { [key: string]: LessonTranslation }; // e.g., { 'es': { title: '...', content: '...' } }
+    translations?: { [key: string]: LessonTranslation }; // e.g., { 'es': { title: '...', content: '...', videoUrl: '...' } }
 }
 
 // Translation object for a Course
@@ -109,6 +110,7 @@ export interface LessonFormData {
     exerciseFilesInfo?: string | null;
     isPreviewAvailable?: boolean;
     playbackTime?: string | null;
+    translations?: { [key: string]: LessonTranslation };
 }
 
 // Type for the form data when adding/editing a quiz (basic for now)
