@@ -4,6 +4,7 @@
 
 
 
+
 import { db } from './firebase';
 import {
     collection,
@@ -174,12 +175,17 @@ export async function deleteCourse(courseId: string): Promise<boolean> {
 
 const sanitizeTranslations = (translations?: { [key: string]: LessonTranslation }): { [key: string]: LessonTranslation } => {
   if (!translations) return {};
-  const sanitized = { ...translations };
-  for (const locale in sanitized) {
-    if (Object.prototype.hasOwnProperty.call(sanitized, locale)) {
-      const translation = sanitized[locale];
-      if (translation.videoUrl === undefined || translation.videoUrl === '') {
-        translation.videoUrl = null;
+  const sanitized: { [key: string]: LessonTranslation } = {};
+  for (const locale in translations) {
+    if (Object.prototype.hasOwnProperty.call(translations, locale)) {
+      const translation = translations[locale];
+      // Only include the translation object if at least one field is non-empty
+      if (translation.title || translation.content || translation.videoUrl) {
+          sanitized[locale] = {
+              title: translation.title || null,
+              content: translation.content || null,
+              videoUrl: translation.videoUrl || null,
+          };
       }
     }
   }
