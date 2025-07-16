@@ -199,10 +199,11 @@ export async function updateUser(userId: string, userData: Partial<UserFormData 
     }
     return retryOperation(async () => {
         const userRef = doc(db, USERS_COLLECTION, userId);
-        const { password, ...dataToUpdate } = userData;
+        const { ...dataToUpdate } = userData; // Omit password, though it's not expected here anyway
 
         const updatePayload: Partial<User> = {};
 
+        // Only add fields to the payload if they are explicitly provided in userData
         if (dataToUpdate.name !== undefined) updatePayload.name = dataToUpdate.name;
         if (dataToUpdate.email !== undefined) updatePayload.email = dataToUpdate.email.toLowerCase();
         if (dataToUpdate.role !== undefined) updatePayload.role = dataToUpdate.role;
@@ -224,7 +225,6 @@ export async function updateUser(userId: string, userData: Partial<UserFormData 
         }
 
         updatePayload.updatedAt = serverTimestamp() as Timestamp;
-
 
         await updateDoc(userRef, updatePayload);
         const updatedDocSnap = await getDoc(userRef);

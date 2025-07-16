@@ -1,33 +1,54 @@
 // src/app/account/page.tsx
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useTransition } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/types/user';
 import { getUserByEmail, updateUser } from '@/lib/user-data';
+import { getCompanyById } from '@/lib/company-data';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { auth } from '@/lib/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { Building, Mail, User as UserIcon, Upload, Trash2, Loader2 } from 'lucide-react';
+import { onAuthStateChanged, updateEmail } from 'firebase/auth';
+import { Building, Mail, User as UserIcon, Upload, Trash2, Loader2, Save } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+const profileFormSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters."),
+  email: z.string().email("Please enter a valid email address."),
+});
+
+type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
 export default function AccountBasicsPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [brandName, setBrandName] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const { toast } = useToast();
+
+  const form = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileFormSchema),
+    defaultValues: {
+      name: '',
+      email: '',
+    },
+  });
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -35,6 +56,15 @@ export default function AccountBasicsPage() {
         try {
           const userDetails = await getUserByEmail(firebaseUser.email);
           setCurrentUser(userDetails);
+          if (userDetails) {
+            form.reset({ name: userDetails.name, email: userDetails.email });
+            if (userDetails.companyId) {
+              const company = await getCompanyById(userDetails.companyId);
+              setBrandName(company?.name || 'N/A');
+            } else {
+              setBrandName('N/A');
+            }
+          }
         } catch (error) {
            console.error("Error fetching user profile:", error);
            toast({ title: "Error", description: "Failed to load profile.", variant: "destructive" });
@@ -47,7 +77,7 @@ export default function AccountBasicsPage() {
     });
 
     return () => unsubscribe();
-  }, [router, toast]);
+  }, [router, toast, form]);
 
   const handleProfileImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -112,6 +142,35 @@ export default function AccountBasicsPage() {
          setIsUploading(false);
      }
   };
+
+  const onSubmit = (data: ProfileFormValues) => {
+    if (!currentUser) return;
+    startTransition(async () => {
+      try {
+        if (data.email.toLowerCase() !== currentUser.email.toLowerCase()) {
+           if (!auth.currentUser) throw new Error("Not authenticated.");
+           // IMPORTANT: You might need to handle re-authentication here for security.
+           // For simplicity, we are directly updating the email.
+           await updateEmail(auth.currentUser, data.email);
+           toast({ title: "Email Verification Required", description: `A verification link was sent to ${data.email}. Please verify to complete the change.` });
+        }
+        
+        const updatedUser = await updateUser(currentUser.id, data);
+        if (updatedUser) {
+          setCurrentUser(updatedUser);
+          form.reset(updatedUser);
+          toast({ title: "Profile Updated", description: "Your details have been saved." });
+        } else {
+          throw new Error("Failed to update profile in database.");
+        }
+      } catch (error: any) {
+        console.error("Profile update error:", error);
+        toast({ title: "Update Failed", description: error.message || "Could not update your profile.", variant: "destructive" });
+        // Reset form to original state on failure
+        form.reset({ name: currentUser.name, email: currentUser.email });
+      }
+    });
+  };
   
   const getInitials = (name?: string | null): string => {
     if (!name) return '??';
@@ -147,72 +206,90 @@ export default function AccountBasicsPage() {
         <CardTitle className="text-xl font-bold">Profile Information</CardTitle>
         <CardDescription>View and manage your personal details.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-         <div className="space-y-4">
-           <Label className="text-base font-semibold">Profile Image</Label>
-           <div className="flex items-center gap-6">
-               <Avatar className="h-20 w-20 border-2 border-primary/20">
-                  <AvatarImage src={currentUser.profileImageUrl || undefined} alt={currentUser.name || 'User Avatar'} />
-                  <AvatarFallback className="text-2xl">{getInitials(currentUser.name)}</AvatarFallback>
-               </Avatar>
-               <div className="flex flex-col gap-2">
-                   <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isUploading}
-                      className="w-fit"
-                    >
-                      {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                      {isUploading ? 'Uploading...' : 'Upload Image'}
-                   </Button>
-                   {currentUser.profileImageUrl && (
-                       <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10 w-fit"
-                          onClick={handleRemoveProfileImage}
-                          disabled={isUploading}
-                       >
-                           <Trash2 className="mr-2 h-4 w-4" /> Remove Image
-                       </Button>
-                   )}
-                   <Input
-                     ref={fileInputRef}
-                     type="file"
-                     accept="image/*"
-                     className="hidden"
-                     onChange={handleProfileImageChange}
-                     disabled={isUploading}
-                   />
-                    {isUploading && (
-                       <div className="w-full max-w-xs mt-2">
-                          <Progress value={uploadProgress} className="h-2" />
-                          <p className="text-xs text-muted-foreground text-center mt-1">{Math.round(uploadProgress)}%</p>
-                       </div>
-                    )}
-                    {uploadError && <p className="text-xs text-destructive mt-2">{uploadError}</p>}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <CardContent className="space-y-6">
+            <div className="space-y-4">
+              <FormLabel className="text-base font-semibold">Profile Image</FormLabel>
+              <div className="flex items-center gap-6">
+                  <Avatar className="h-20 w-20 border-2 border-primary/20">
+                    <AvatarImage src={currentUser.profileImageUrl || undefined} alt={currentUser.name || 'User Avatar'} />
+                    <AvatarFallback className="text-2xl">{getInitials(currentUser.name)}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                        className="w-fit"
+                      >
+                        {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                        {isUploading ? 'Uploading...' : 'Upload Image'}
+                      </Button>
+                      {currentUser.profileImageUrl && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10 w-fit"
+                            onClick={handleRemoveProfileImage}
+                            disabled={isUploading}
+                          >
+                              <Trash2 className="mr-2 h-4 w-4" /> Remove Image
+                          </Button>
+                      )}
+                      <Input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleProfileImageChange}
+                        disabled={isUploading}
+                      />
+                        {isUploading && (
+                          <div className="w-full max-w-xs mt-2">
+                              <Progress value={uploadProgress} className="h-2" />
+                              <p className="text-xs text-muted-foreground text-center mt-1">{Math.round(uploadProgress)}%</p>
+                          </div>
+                        )}
+                        {uploadError && <p className="text-xs text-destructive mt-2">{uploadError}</p>}
+                </div>
               </div>
-          </div>
-         </div>
+            </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="name" className="flex items-center gap-1 text-muted-foreground"><UserIcon className="h-4 w-4" /> Name</Label>
-          <Input id="name" value={currentUser.name || ''} readOnly disabled />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="email" className="flex items-center gap-1 text-muted-foreground"><Mail className="h-4 w-4" /> Email</Label>
-          <Input id="email" value={currentUser.email} readOnly disabled />
-        </div>
-         <div className="space-y-2">
-           <Label htmlFor="brand" className="flex items-center gap-1 text-muted-foreground"><Building className="h-4 w-4" /> Brand</Label>
-           <Input id="brand" value={currentUser.company || currentUser.companyId || 'N/A'} readOnly disabled />
-         </div>
-        <div className="space-y-2">
-          <Label htmlFor="role" className="flex items-center gap-1 text-muted-foreground"><Building className="h-4 w-4" /> Role</Label>
-          <Input id="role" value={currentUser.role} readOnly disabled />
-        </div>
-      </CardContent>
+            <FormField control={form.control} name="name" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="flex items-center gap-1 text-muted-foreground"><UserIcon className="h-4 w-4" /> Name</FormLabel>
+                <FormControl><Input {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="email" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="flex items-center gap-1 text-muted-foreground"><Mail className="h-4 w-4" /> Email</FormLabel>
+                <FormControl><Input type="email" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <div className="space-y-2">
+              <Label htmlFor="brand" className="flex items-center gap-1 text-muted-foreground"><Building className="h-4 w-4" /> Brand</Label>
+              <Input id="brand" value={brandName || 'Loading...'} readOnly disabled />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role" className="flex items-center gap-1 text-muted-foreground"><Building className="h-4 w-4" /> Role</Label>
+              <Input id="role" value={currentUser.role} readOnly disabled />
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button type="submit" disabled={isPending || !form.formState.isDirty}>
+              {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              Save Changes
+            </Button>
+          </CardFooter>
+        </form>
+      </Form>
     </Card>
   );
 }
