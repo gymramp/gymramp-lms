@@ -69,6 +69,7 @@ function PartnerSignupForm({ partner, programs, onSuccessfulSignup }: { partner:
   }, [programs, form]);
   
   useEffect(() => {
+    // Only create a payment intent if the amount is > 0
     if (amountInCents > 0) {
       createPaymentIntent(amountInCents).then(res => {
         if (res.clientSecret) {
@@ -78,7 +79,7 @@ function PartnerSignupForm({ partner, programs, onSuccessfulSignup }: { partner:
         }
       });
     } else {
-        setClientSecret(null); // No payment needed if $0
+        setClientSecret(null); // No payment needed if $0 or less
     }
   }, [amountInCents]);
 
@@ -89,6 +90,7 @@ function PartnerSignupForm({ partner, programs, onSuccessfulSignup }: { partner:
 
     let paymentIntentId: string | null = null;
 
+    // Only process payment if there's an amount and the Stripe form is ready
     if (amountInCents > 0) {
         if (!stripe || !elements || !clientSecret) {
             setPaymentError("Payment form is not ready. Please wait a moment and try again.");
@@ -155,7 +157,7 @@ function PartnerSignupForm({ partner, programs, onSuccessfulSignup }: { partner:
                     <Select onValueChange={(value) => { field.onChange(value); setSelectedProgramId(value); }} defaultValue={field.value}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Choose a program..." /></SelectTrigger></FormControl>
                         <SelectContent>
-                            {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.title} - {p.price}</SelectItem>)}
+                            {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.title} - {p.price || "$0.00"}</SelectItem>)}
                         </SelectContent>
                     </Select>
                     <FormMessage />
@@ -176,7 +178,7 @@ function PartnerSignupForm({ partner, programs, onSuccessfulSignup }: { partner:
           <CardFooter className="flex flex-col gap-4 pt-4">
             <Button type="submit" className="w-full" disabled={isSubmitting || (amountInCents > 0 && !clientSecret)}>
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isSubmitting ? 'Processing...' : `Sign Up & Pay $${amountInDollars.toFixed(2)}`}
+              {isSubmitting ? 'Processing...' : (amountInCents > 0 ? `Sign Up & Pay $${amountInDollars.toFixed(2)}` : 'Sign Up (Free)')}
             </Button>
             <p className="text-xs text-muted-foreground text-center">Already have an account? <Link href="/" className="underline hover:text-primary">Log in here</Link>.</p>
           </CardFooter>
@@ -229,13 +231,16 @@ export default function PartnerSignupPage() {
     return <div className="container mx-auto text-center py-20"><Alert variant="destructive"><AlertTitle>Error</AlertTitle><AlertDescription>{error || "Partner not found."}</AlertDescription></Alert></div>;
   }
   
-  const amountInCents = programs.length > 0 && programs[0].price ? Math.round(parseFloat(programs[0].price.replace(/[$,]/g, '')) * 100) : 0;
-  const options: StripeElementsOptions = {
+  const selectedProgram = programs.length > 0 ? programs[0] : null; // Simplified for now, can be improved with selection
+  const amountInCents = selectedProgram?.price ? Math.round(parseFloat(selectedProgram.price.replace(/[$,]/g, '')) * 100) : 0;
+  
+  // Conditionally set options for Stripe Elements
+  const options: StripeElementsOptions | undefined = amountInCents > 0 ? {
       mode: 'payment',
       amount: amountInCents,
       currency: 'usd',
       appearance: { theme: 'stripe' },
-  };
+  } : undefined;
 
   return (
     <div className="container flex items-center justify-center min-h-screen py-12">
@@ -252,9 +257,14 @@ export default function PartnerSignupPage() {
             <CardTitle className="text-2xl font-bold">Sign Up via {partner.name}</CardTitle>
             <CardDescription>Create your account and select a program to get started.</CardDescription>
           </CardHeader>
-          <Elements stripe={stripePromise} options={options}>
-            <PartnerSignupForm partner={partner} programs={programs} onSuccessfulSignup={handleSuccessfulSignup}/>
-          </Elements>
+          {/* Conditionally render the Elements provider */}
+          {options ? (
+            <Elements stripe={stripePromise} options={options}>
+              <PartnerSignupForm partner={partner} programs={programs} onSuccessfulSignup={handleSuccessfulSignup}/>
+            </Elements>
+          ) : (
+             <PartnerSignupForm partner={partner} programs={programs} onSuccessfulSignup={handleSuccessfulSignup}/>
+          )}
         </Card>
       </div>
     </div>
