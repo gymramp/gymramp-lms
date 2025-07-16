@@ -4,7 +4,7 @@ import type { User, UserRole, Company } from '@/types/user';
 import {
     BarChartBig, Building, Layers, CreditCard, BookOpen, FileText,
     ListChecks, UserPlus, ShoppingCart, Gift,
-    TestTube2, Percent, HelpCircle, LayoutDashboard, Users, MapPin, Settings, Award, Cog, Package, Handshake, KeyRound, Briefcase
+    TestTube2, Percent, HelpCircle, LayoutDashboard, Users, MapPin, Settings, Award, Cog, Package, Handshake, KeyRound, Briefcase, DatabaseZap
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { getCompanyById } from '@/lib/company-data';
@@ -62,7 +62,8 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
           { href: '/admin/free-trial-checkout', label: 'Free Trial', icon: Gift },
         ],
       },
-      { href: '/admin/revenue-share-report', label: 'Rev Share Report', icon: Percent }
+      { href: '/admin/revenue-share-report', label: 'Rev Share Report', icon: Percent },
+      { href: '/admin/migrate-data', label: 'Data Tools', icon: DatabaseZap },
     );
   } else if (user.role === 'Admin' || user.role === 'Owner') {
     roleSpecificItems.push(
