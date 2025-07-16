@@ -53,7 +53,7 @@ function PartnerCheckoutForm({ partner, programs, clientSecret }: { partner: Par
 
   const selectedProgramId = form.watch('selectedProgramId');
   const selectedProgram = programs.find(p => p.id === selectedProgramId);
-  const finalTotal = selectedProgram ? parseFloat(selectedProgram.price.replace(/[$,/mo]/gi, '')) : 0;
+  const finalTotal = selectedProgram && typeof selectedProgram.price === 'string' ? parseFloat(selectedProgram.price.replace(/[$,/mo]/gi, '')) : 0;
 
   const handleSignupSubmit = async (data: PartnerSignupFormValues) => {
     setIsProcessing(true);
@@ -146,7 +146,9 @@ function PartnerCheckoutForm({ partner, programs, clientSecret }: { partner: Par
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl><SelectTrigger><SelectValue placeholder="Choose a Program..." /></SelectTrigger></FormControl>
                   <SelectContent>
-                    {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.title} - ${parseFloat(p.price.replace(/[$,/mo]/gi, '')).toFixed(2)}</SelectItem>)}
+                    {programs.map(p => (
+                        <SelectItem key={p.id} value={p.id}>{p.title} - ${typeof p.price === 'string' ? parseFloat(p.price.replace(/[$,/mo]/gi, '')).toFixed(2) : '0.00'}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select><FormMessage />
               </FormItem>
@@ -192,8 +194,8 @@ export default function PartnerSignupPage() {
   const [error, setError] = useState<string | null>(null);
 
   const createAndSetPaymentIntent = useCallback(async (programsData: Program[]) => {
-    const firstPricedProgram = programsData.find(p => parseFloat(p.price.replace(/[$,/mo]/gi, '')) > 0);
-    if (!firstPricedProgram) {
+    const firstPricedProgram = programsData.find(p => typeof p.price === 'string' && parseFloat(p.price.replace(/[$,/mo]/gi, '')) > 0);
+    if (!firstPricedProgram || typeof firstPricedProgram.price !== 'string') {
         throw new Error("No programs with a valid price found for this partner.");
     }
     const amountInCents = Math.round(parseFloat(firstPricedProgram.price.replace(/[$,/mo]/gi, '')) * 100);
