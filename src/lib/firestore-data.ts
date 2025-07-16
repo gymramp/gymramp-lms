@@ -1,6 +1,7 @@
 
 
 
+
 import { db } from './firebase';
 import {
     collection,
@@ -179,6 +180,7 @@ export async function createLesson(lessonData: LessonFormData): Promise<Lesson |
             exerciseFilesInfo: lessonData.exerciseFilesInfo?.trim() || null,
             playbackTime: lessonData.playbackTime?.trim() || null,
             isPreviewAvailable: lessonData.isPreviewAvailable || false,
+            translations: lessonData.translations || {},
             isDeleted: false,
             deletedAt: null,
             createdAt: serverTimestamp(),
