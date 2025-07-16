@@ -39,50 +39,53 @@ const partnerSignupFormSchema = z.object({
 
 type PartnerSignupFormValues = z.infer<typeof partnerSignupFormSchema>;
 
+// New component specifically for the payment part of the form
+function PaymentForm({ clientSecret, onPaymentError }: { clientSecret: string, onPaymentError: (msg: string | null) => void }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  
+  useEffect(() => {
+    if (!stripe || !elements) {
+      onPaymentError("Payment form is not ready. Please wait a moment and try again.");
+    } else {
+      onPaymentError(null);
+    }
+  }, [stripe, elements, onPaymentError]);
+
+  return (
+    <Card className="bg-muted/50 p-4">
+      <CardHeader className="p-0 pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <CreditCard className="h-4 w-4" />
+          Payment Details
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <PaymentElement />
+      </CardContent>
+    </Card>
+  );
+}
+
+
 function PartnerSignupForm({ partner, programs, onSuccessfulSignup }: { partner: Partner, programs: Program[], onSuccessfulSignup: () => void }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
-  const router = useRouter();
-
-  const [selectedProgramId, setSelectedProgramId] = useState<string | undefined>(programs.length === 1 ? programs[0].id : undefined);
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const form = useForm<PartnerSignupFormValues>({
     resolver: zodResolver(partnerSignupFormSchema),
-    defaultValues: { customerName: '', companyName: '', adminEmail: '', password: '', selectedProgramId: selectedProgramId || '' },
+    defaultValues: { customerName: '', companyName: '', adminEmail: '', password: '', selectedProgramId: programs.length === 1 ? programs[0].id : '' },
   });
 
+  const selectedProgramId = form.watch('selectedProgramId');
   const selectedProgram = programs.find(p => p.id === selectedProgramId);
   const amountInDollars = selectedProgram?.price ? parseFloat(selectedProgram.price.replace(/[$,]/g, '')) : 0;
   const amountInCents = Math.round(amountInDollars * 100);
-  
+
   const stripe = useStripe();
   const elements = useElements();
-
-  useEffect(() => {
-    if (programs.length === 1) {
-      form.setValue('selectedProgramId', programs[0].id);
-      setSelectedProgramId(programs[0].id);
-    }
-  }, [programs, form]);
-  
-  useEffect(() => {
-    // Only create a payment intent if the amount is > 0
-    if (amountInCents > 0) {
-      createPaymentIntent(amountInCents).then(res => {
-        if (res.clientSecret) {
-          setClientSecret(res.clientSecret);
-        } else {
-          setPaymentError(res.error || "Failed to initialize payment.");
-        }
-      });
-    } else {
-        setClientSecret(null); // No payment needed if $0 or less
-    }
-  }, [amountInCents]);
-
 
   const onSubmit = async (data: PartnerSignupFormValues) => {
     setIsSubmitting(true);
@@ -90,40 +93,38 @@ function PartnerSignupForm({ partner, programs, onSuccessfulSignup }: { partner:
 
     let paymentIntentId: string | null = null;
 
-    // Only process payment if there's an amount and the Stripe form is ready
     if (amountInCents > 0) {
-        if (!stripe || !elements || !clientSecret) {
-            setPaymentError("Payment form is not ready. Please wait a moment and try again.");
-            setIsSubmitting(false);
-            return;
-        }
+      if (!stripe || !elements) {
+        setPaymentError("Payment form is not ready. Please wait a moment and try again.");
+        setIsSubmitting(false);
+        return;
+      }
 
-        const { error: submitError, paymentIntent } = await stripe.confirmPayment({
-            elements,
-            confirmParams: { return_url: `${window.location.origin}/onboarding` },
-            redirect: 'if_required',
-        });
+      const { error: submitError, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        confirmParams: { return_url: `${window.location.origin}/onboarding` },
+        redirect: 'if_required',
+      });
 
-        if (submitError) {
-            setPaymentError(submitError.message || "An unexpected payment error occurred.");
-            setIsSubmitting(false);
-            return;
-        }
-        if (paymentIntent?.status !== 'succeeded') {
-             setPaymentError(`Payment was not successful. Status: ${paymentIntent?.status}.`);
-             setIsSubmitting(false);
-             return;
-        }
-        paymentIntentId = paymentIntent.id;
+      if (submitError) {
+        setPaymentError(submitError.message || "An unexpected payment error occurred.");
+        setIsSubmitting(false);
+        return;
+      }
+      if (paymentIntent?.status !== 'succeeded') {
+        setPaymentError(`Payment was not successful. Status: ${paymentIntent?.status}.`);
+        setIsSubmitting(false);
+        return;
+      }
+      paymentIntentId = paymentIntent.id;
     }
-
 
     try {
       const result = await processPublicSignup({ ...data, paymentIntentId }, partner.id);
       if (result.success && result.customToken) {
         toast({ title: "Account Created!", description: "Welcome! You will be automatically logged in.", duration: 7000 });
         await signInWithCustomToken(auth, result.customToken);
-        onSuccessfulSignup(); // Call callback to trigger navigation in parent
+        onSuccessfulSignup();
       } else {
         toast({ title: "Signup Failed", description: result.error || "An unknown error occurred.", variant: "destructive" });
       }
@@ -135,58 +136,50 @@ function PartnerSignupForm({ partner, programs, onSuccessfulSignup }: { partner:
   };
 
   return (
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)}>
-          <CardContent className="space-y-4">
-            <FormField control={form.control} name="customerName" render={({ field }) => ( <FormItem><FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Your Full Name</FormLabel><FormControl><Input placeholder="e.g., Jane Doe" {...field} /></FormControl><FormMessage /></FormItem> )} />
-            <FormField control={form.control} name="companyName" render={({ field }) => ( <FormItem><FormLabel className="flex items-center"><Building className="mr-2 h-4 w-4" /> Company/Brand Name</FormLabel><FormControl><Input placeholder="e.g., Downtown Fitness" {...field} /></FormControl><FormMessage /></FormItem> )} />
-            <FormField control={form.control} name="adminEmail" render={({ field }) => ( <FormItem><FormLabel>Your Email Address (for login)</FormLabel><FormControl><Input type="email" placeholder="you@example.com" {...field} /></FormControl><FormMessage /></FormItem> )} />
-            <FormField control={form.control} name="password" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Create a Password</FormLabel>
-                <div className="relative">
-                  <FormControl><Input type={showPassword ? 'text' : 'password'} placeholder="Must be at least 8 characters" {...field} /></FormControl>
-                  <Button type="button" variant="ghost" size="sm" className="absolute right-0 top-0 h-full px-3 py-2" onClick={() => setShowPassword(p => !p)}><span className="sr-only">{showPassword ? 'Hide' : 'Show'}</span>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</Button>
-                </div><FormMessage />
-              </FormItem>
-            )} />
-            
-            <FormField control={form.control} name="selectedProgramId" render={({ field }) => (
-                <FormItem>
-                    <FormLabel className="flex items-center"><Layers className="mr-2 h-4 w-4" /> Select Program</FormLabel>
-                    <Select onValueChange={(value) => { field.onChange(value); setSelectedProgramId(value); }} defaultValue={field.value}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="Choose a program..." /></SelectTrigger></FormControl>
-                        <SelectContent>
-                            {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.title} - {p.price || "$0.00"}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-            )}/>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)}>
+        <CardContent className="space-y-4">
+          <FormField control={form.control} name="customerName" render={({ field }) => ( <FormItem><FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Your Full Name</FormLabel><FormControl><Input placeholder="e.g., Jane Doe" {...field} /></FormControl><FormMessage /></FormItem> )} />
+          <FormField control={form.control} name="companyName" render={({ field }) => ( <FormItem><FormLabel className="flex items-center"><Building className="mr-2 h-4 w-4" /> Company/Brand Name</FormLabel><FormControl><Input placeholder="e.g., Downtown Fitness" {...field} /></FormControl><FormMessage /></FormItem> )} />
+          <FormField control={form.control} name="adminEmail" render={({ field }) => ( <FormItem><FormLabel>Your Email Address (for login)</FormLabel><FormControl><Input type="email" placeholder="you@example.com" {...field} /></FormControl><FormMessage /></FormItem> )} />
+          <FormField control={form.control} name="password" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Create a Password</FormLabel>
+              <div className="relative">
+                <FormControl><Input type={showPassword ? 'text' : 'password'} placeholder="Must be at least 8 characters" {...field} /></FormControl>
+                <Button type="button" variant="ghost" size="sm" className="absolute right-0 top-0 h-full px-3 py-2" onClick={() => setShowPassword(p => !p)}><span className="sr-only">{showPassword ? 'Hide' : 'Show'}</span>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</Button>
+              </div><FormMessage />
+            </FormItem>
+          )} />
+          
+          <FormField control={form.control} name="selectedProgramId" render={({ field }) => (
+            <FormItem>
+              <FormLabel className="flex items-center"><Layers className="mr-2 h-4 w-4" /> Select Program</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value || ''}>
+                <FormControl><SelectTrigger><SelectValue placeholder="Choose a program..." /></SelectTrigger></FormControl>
+                <SelectContent>
+                  {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.title} - {p.price || "$0.00"}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )} />
 
-            {selectedProgram && amountInCents > 0 && (
-                <Card className="bg-muted/50 p-4">
-                    <CardHeader className="p-0 pb-2"><CardTitle className="text-base flex items-center gap-2"><CreditCard className="h-4 w-4"/>Payment Details</CardTitle></CardHeader>
-                    <CardContent className="p-0">
-                       {clientSecret ? <PaymentElement /> : <div className="text-center p-4"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>}
-                       {paymentError && <p className="text-sm text-destructive mt-2">{paymentError}</p>}
-                    </CardContent>
-                </Card>
-            )}
+          {amountInCents > 0 && <PaymentElement />}
 
-          </CardContent>
-          <CardFooter className="flex flex-col gap-4 pt-4">
-            <Button type="submit" className="w-full" disabled={isSubmitting || (amountInCents > 0 && !clientSecret)}>
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isSubmitting ? 'Processing...' : (amountInCents > 0 ? `Sign Up & Pay $${amountInDollars.toFixed(2)}` : 'Sign Up (Free)')}
-            </Button>
-            <p className="text-xs text-muted-foreground text-center">Already have an account? <Link href="/" className="underline hover:text-primary">Log in here</Link>.</p>
-          </CardFooter>
-        </form>
-      </Form>
+          {paymentError && <p className="text-sm text-destructive mt-2">{paymentError}</p>}
+        </CardContent>
+        <CardFooter className="flex flex-col gap-4 pt-4">
+          <Button type="submit" className="w-full" disabled={isSubmitting || (amountInCents > 0 && (!stripe || !elements))}>
+            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isSubmitting ? 'Processing...' : (amountInCents > 0 ? `Sign Up & Pay $${amountInDollars.toFixed(2)}` : 'Sign Up')}
+          </Button>
+          <p className="text-xs text-muted-foreground text-center">Already have an account? <Link href="/" className="underline hover:text-primary">Log in here</Link>.</p>
+        </CardFooter>
+      </form>
+    </Form>
   );
 }
-
 
 export default function PartnerSignupPage() {
   const params = useParams();
@@ -196,6 +189,11 @@ export default function PartnerSignupPage() {
   const [programs, setPrograms] = useState<Program[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+
+  const onSuccessfulSignup = () => {
+    router.push('/onboarding');
+  };
 
   useEffect(() => {
     async function fetchPartnerData() {
@@ -207,6 +205,22 @@ export default function PartnerSignupPage() {
         if (partnerData.availableProgramIds && partnerData.availableProgramIds.length > 0) {
             const programsData = await getProgramsByIds(partnerData.availableProgramIds);
             setPrograms(programsData);
+            
+            // Logic to create a payment intent if there's a payable program
+            const payableProgram = programsData.find(p => p.price && parseFloat(p.price.replace(/[$,]/g, '')) > 0);
+            if (payableProgram && payableProgram.price) {
+                 const amountInCents = Math.round(parseFloat(payableProgram.price.replace(/[$,]/g, '')) * 100);
+                 if (amountInCents > 0) {
+                     createPaymentIntent(amountInCents).then(res => {
+                        if (res.clientSecret) {
+                            setClientSecret(res.clientSecret);
+                        } else {
+                            setError(res.error || "Failed to initialize payment.");
+                        }
+                     });
+                 }
+            }
+
         } else {
              setError("This partner has no programs available for purchase.");
         }
@@ -218,10 +232,6 @@ export default function PartnerSignupPage() {
     }
     fetchPartnerData();
   }, [partnerId]);
-  
-  const handleSuccessfulSignup = () => {
-    router.push('/onboarding');
-  }
 
   if (isLoading) {
     return <div className="container mx-auto text-center py-20"><Loader2 className="h-12 w-12 animate-spin mx-auto" /></div>;
@@ -230,44 +240,33 @@ export default function PartnerSignupPage() {
   if (error || !partner) {
     return <div className="container mx-auto text-center py-20"><Alert variant="destructive"><AlertTitle>Error</AlertTitle><AlertDescription>{error || "Partner not found."}</AlertDescription></Alert></div>;
   }
-  
-  const selectedProgram = programs.length > 0 ? programs[0] : null; // Simplified for now, can be improved with selection
-  const amountInCents = selectedProgram?.price ? Math.round(parseFloat(selectedProgram.price.replace(/[$,]/g, '')) * 100) : 0;
-  
-  // Conditionally set options for Stripe Elements
-  const options: StripeElementsOptions | undefined = amountInCents > 0 ? {
-      mode: 'payment',
-      amount: amountInCents,
-      currency: 'usd',
-      appearance: { theme: 'stripe' },
-  } : undefined;
+
+  const options: StripeElementsOptions | undefined = clientSecret ? { clientSecret, appearance: { theme: 'stripe' } } : undefined;
 
   return (
     <div className="container flex items-center justify-center min-h-screen py-12">
       <div className="w-full max-w-lg">
         <Card className="shadow-xl">
           <CardHeader className="text-center">
-             {partner.logoUrl ? (
-                <div className="relative h-16 w-full mb-4">
-                    <Image src={partner.logoUrl} alt={`${partner.name} Logo`} fill style={{ objectFit: 'contain' }} priority />
-                </div>
+            {partner.logoUrl ? (
+              <div className="relative h-16 w-full mb-4">
+                <Image src={partner.logoUrl} alt={`${partner.name} Logo`} fill style={{ objectFit: 'contain' }} priority />
+              </div>
             ) : (
-                <Handshake className="h-12 w-12 mx-auto text-primary mb-4" />
+              <Handshake className="h-12 w-12 mx-auto text-primary mb-4" />
             )}
             <CardTitle className="text-2xl font-bold">Sign Up via {partner.name}</CardTitle>
             <CardDescription>Create your account and select a program to get started.</CardDescription>
           </CardHeader>
-          {/* Conditionally render the Elements provider */}
           {options ? (
             <Elements stripe={stripePromise} options={options}>
-              <PartnerSignupForm partner={partner} programs={programs} onSuccessfulSignup={handleSuccessfulSignup}/>
+              <PartnerSignupForm partner={partner} programs={programs} onSuccessfulSignup={onSuccessfulSignup} />
             </Elements>
           ) : (
-             <PartnerSignupForm partner={partner} programs={programs} onSuccessfulSignup={handleSuccessfulSignup}/>
+            <PartnerSignupForm partner={partner} programs={programs} onSuccessfulSignup={onSuccessfulSignup} />
           )}
         </Card>
       </div>
     </div>
   );
 }
-
