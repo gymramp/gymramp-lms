@@ -3,6 +3,7 @@
 
 
 
+
 import { db } from './firebase';
 import {
     collection,
@@ -21,7 +22,7 @@ import {
     Timestamp,
     documentId
 } from 'firebase/firestore';
-import type { Course, Lesson, Quiz, Question, CourseFormData, LessonFormData, QuizFormData, QuestionFormData, QuestionType, Program, ProgramFormData } from '@/types/course';
+import type { Course, Lesson, Quiz, Question, CourseFormData, LessonFormData, QuizFormData, QuestionFormData, QuestionType, Program, ProgramFormData, LessonTranslation } from '@/types/course';
 
 const COURSES_COLLECTION = 'courses';
 const LESSONS_COLLECTION = 'lessons';
@@ -171,6 +172,21 @@ export async function deleteCourse(courseId: string): Promise<boolean> {
 
 // --- Lesson Library Functions ---
 
+const sanitizeTranslations = (translations?: { [key: string]: LessonTranslation }): { [key: string]: LessonTranslation } => {
+  if (!translations) return {};
+  const sanitized = { ...translations };
+  for (const locale in sanitized) {
+    if (Object.prototype.hasOwnProperty.call(sanitized, locale)) {
+      const translation = sanitized[locale];
+      if (translation.videoUrl === undefined || translation.videoUrl === '') {
+        translation.videoUrl = null;
+      }
+    }
+  }
+  return sanitized;
+};
+
+
 export async function createLesson(lessonData: LessonFormData): Promise<Lesson | null> {
     return retryOperation(async () => {
         const lessonsRef = collection(db, LESSONS_COLLECTION);
@@ -181,7 +197,7 @@ export async function createLesson(lessonData: LessonFormData): Promise<Lesson |
             exerciseFilesInfo: lessonData.exerciseFilesInfo?.trim() || null,
             playbackTime: lessonData.playbackTime?.trim() || null,
             isPreviewAvailable: lessonData.isPreviewAvailable || false,
-            translations: lessonData.translations || {},
+            translations: sanitizeTranslations(lessonData.translations), // Sanitize before saving
             isDeleted: false,
             deletedAt: null,
             createdAt: serverTimestamp(),
@@ -231,6 +247,11 @@ export async function updateLesson(lessonId: string, lessonData: Partial<LessonF
         if (!lessonSnap.exists() || lessonSnap.data().isDeleted === true) return null;
 
          const dataToUpdate: Partial<LessonFormData & {updatedAt: Timestamp}> = { updatedAt: serverTimestamp() as Timestamp };
+         
+         if (lessonData.translations) {
+            lessonData.translations = sanitizeTranslations(lessonData.translations);
+        }
+        
          for (const key in lessonData) {
              if (Object.prototype.hasOwnProperty.call(lessonData, key)) {
                  const value = lessonData[key as keyof LessonFormData];
