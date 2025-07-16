@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -74,6 +75,9 @@ export default function LearnCoursePage() {
     const isVideoLesson = currentContentItem?.type === 'lesson' || currentContentItem?.type === 'brandLesson';
     const isCurrentUserOnTrial = !!userBrandDetails?.isTrial;
 
+    // TODO: This is a placeholder for user language preference
+    const userLocale = 'es'; // Example: Hardcode to Spanish for testing
+
     useEffect(() => {
         setIsMounted(true);
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -139,14 +143,14 @@ export default function LearnCoursePage() {
                     if (isBrandCourse) {
                         if (typePrefix === 'brandLesson') itemData = await getBrandLessonById(id);
                         else if (typePrefix === 'brandQuiz') itemData = await getBrandQuizById(id);
-                        else { // Fallback to global if mixed curriculum is possible (though unlikely for brand course)
-                            if (typePrefix === 'lesson') itemData = await getLessonById(id);
-                            else if (typePrefix === 'quiz') itemData = await getQuizById(id);
+                        else { 
+                            if (typePrefix === 'lesson') itemData = await getLessonById(id, userLocale); // Pass locale
+                            else if (typePrefix === 'quiz') itemData = await getQuizById(id); // TODO: Add locale to quiz
                             itemType = typePrefix as 'lesson' | 'quiz';
                         }
                     } else { // Global course
-                        if (typePrefix === 'lesson') itemData = await getLessonById(id);
-                        else if (typePrefix === 'quiz') itemData = await getQuizById(id);
+                        if (typePrefix === 'lesson') itemData = await getLessonById(id, userLocale); // Pass locale
+                        else if (typePrefix === 'quiz') itemData = await getQuizById(id); // TODO: Add locale to quiz
                         itemType = typePrefix as 'lesson' | 'quiz';
                     }
                     if (itemData) allItemsMap.set(prefixedId, { id: prefixedId, type: itemType, data: itemData as CurriculumDisplayItem['data'] });
@@ -157,7 +161,7 @@ export default function LearnCoursePage() {
                 const progressData = await getUserCourseProgress(userId, courseId);
                 setUserProgressData(progressData);
                 setCompletedItemIds(progressData.completedItems || []);
-                setTriggeredEventIds(new Set()); // Reset session-based triggered events
+                setTriggeredEventIds(new Set()); 
 
                 let initialItemIndex = 0;
                 if (orderedItems.length > 0) {
@@ -181,7 +185,7 @@ export default function LearnCoursePage() {
         } finally {
             setIsLoading(false);
         }
-    }, [courseId, router, toast]);
+    }, [courseId, router, toast, userLocale]); // Added userLocale dependency
 
     useEffect(() => {
         if (currentUser?.id) {
@@ -199,7 +203,7 @@ export default function LearnCoursePage() {
             clearTimeout(saveProgressTimeoutRef.current);
             saveProgressTimeoutRef.current = null;
         }
-        setTriggeredEventIds(new Set()); // Reset triggered events when content item changes
+        setTriggeredEventIds(new Set()); 
 
         if (currentContentItem && (currentContentItem.type === 'lesson' || currentContentItem.type === 'brandLesson')) {
             const videoData = currentContentItem.data as Lesson | BrandLesson;

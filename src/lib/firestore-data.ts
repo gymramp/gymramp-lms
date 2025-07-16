@@ -5,6 +5,7 @@
 
 
 
+
 import { db } from './firebase';
 import {
     collection,
@@ -232,13 +233,28 @@ export async function getAllLessons(): Promise<Lesson[]> {
     });
 }
 
-export async function getLessonById(lessonId: string): Promise<Lesson | null> {
-     if (!lessonId) return null;
+export async function getLessonById(lessonId: string, locale?: string): Promise<Lesson | null> {
+    if (!lessonId) return null;
     return retryOperation(async () => {
         const lessonRef = doc(db, LESSONS_COLLECTION, lessonId);
         const docSnap = await getDoc(lessonRef);
+
         if (docSnap.exists() && docSnap.data().isDeleted !== true) {
-            return { id: docSnap.id, ...docSnap.data() } as Lesson;
+            let lessonData = { id: docSnap.id, ...docSnap.data() } as Lesson;
+
+            // If a locale is provided and it's not the default, merge translated content
+            if (locale && locale !== 'en' && lessonData.translations && lessonData.translations[locale]) {
+                const translation = lessonData.translations[locale];
+                console.log(`[getLessonById] Merging translation for locale '${locale}' for lesson '${lessonId}'.`);
+                if (translation.title) lessonData.title = translation.title;
+                if (translation.content) lessonData.content = translation.content;
+                // If videoUrl is explicitly null in translation, it means no video for that language.
+                // If it's a string, it's a URL. If undefined, we keep the default video.
+                if (translation.videoUrl !== undefined) {
+                    lessonData.videoUrl = translation.videoUrl;
+                }
+            }
+            return lessonData;
         } else {
             return null;
         }
