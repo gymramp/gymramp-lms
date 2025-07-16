@@ -26,6 +26,11 @@ export type QuestionFormDataBase = Omit<QuestionBase, 'id'>;
 export interface Question extends QuestionBase {}
 export type QuestionFormData = QuestionFormDataBase;
 
+// Translation object for a Quiz
+export interface QuizTranslation {
+  title?: string;
+  questions?: Question[];
+}
 
 // Represents a standalone quiz in the library
 export interface Quiz {
@@ -37,6 +42,13 @@ export interface Quiz {
     deletedAt?: Timestamp | null;
     createdAt?: Timestamp;
     updatedAt?: Timestamp;
+    translations?: { [key: string]: QuizTranslation }; // e.g., { 'es': { title: '...', questions: [...] } }
+}
+
+// Translation object for a Lesson
+export interface LessonTranslation {
+  title?: string;
+  content?: string;
 }
 
 // Represents a single standalone lesson in the library
@@ -53,6 +65,14 @@ export interface Lesson {
     deletedAt?: Timestamp | null;
     createdAt?: Timestamp;
     updatedAt?: Timestamp;
+    translations?: { [key: string]: LessonTranslation }; // e.g., { 'es': { title: '...', content: '...' } }
+}
+
+// Translation object for a Course
+export interface CourseTranslation {
+    title?: string;
+    description?: string;
+    longDescription?: string;
 }
 
 // Represents a course in the global library
@@ -71,10 +91,11 @@ export interface Course {
   deletedAt?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+  translations?: { [key: string]: CourseTranslation }; // e.g., { 'es': { title: '...', description: '...', longDescription: '...' } }
 }
 
 // Type for the form data when adding/editing a course metadata (global library)
-export type CourseFormData = Omit<Course, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'curriculum'> & {
+export type CourseFormData = Omit<Course, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'curriculum' | 'translations'> & {
     certificateTemplateId?: string | null;
 };
 
@@ -154,9 +175,10 @@ export interface BrandCourse {
     deletedAt?: Timestamp | null;
     createdAt?: Timestamp;
     updatedAt?: Timestamp;
+    translations?: { [key: string]: CourseTranslation };
 }
 
-export type BrandCourseFormData = Omit<BrandCourse, 'id' | 'brandId' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'curriculum'> & {
+export type BrandCourseFormData = Omit<BrandCourse, 'id' | 'brandId' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'curriculum' | 'translations'> & {
     certificateTemplateId?: string | null;
 };
 
@@ -173,9 +195,10 @@ export interface BrandLesson {
     deletedAt?: Timestamp | null;
     createdAt?: Timestamp;
     updatedAt?: Timestamp;
+    translations?: { [key: string]: LessonTranslation };
 }
 
-export type BrandLessonFormData = Omit<BrandLesson, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt'> & {
+export type BrandLessonFormData = Omit<BrandLesson, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'translations'> & {
   brandId: string; // Required for creation
 };
 
@@ -193,8 +216,9 @@ export interface BrandQuiz {
     deletedAt?: Timestamp | null;
     createdAt?: Timestamp;
     updatedAt?: Timestamp;
+    translations?: { [key: string]: QuizTranslation };
 }
 
-export type BrandQuizFormData = Omit<BrandQuiz, 'id' | 'brandId' | 'questions' | 'questionCount' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt'> & {
+export type BrandQuizFormData = Omit<BrandQuiz, 'id' | 'brandId' | 'questions' | 'questionCount' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'translations'> & {
   brandId: string; // Required for creation
 };
