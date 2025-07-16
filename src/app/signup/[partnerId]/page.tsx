@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, Handshake, User, Building, Eye, EyeOff, Layers, ShoppingCart, CreditCard } from 'lucide-react';
+import { Loader2, Handshake, User, Building, Eye, EyeOff, Layers } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -23,11 +23,6 @@ import Link from 'next/link';
 import { signInWithCustomToken } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { loadStripe, StripeElementsOptions } from '@stripe/stripe-js';
-import { createPaymentIntent } from '@/actions/stripe';
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
 const partnerSignupFormSchema = z.object({
   customerName: z.string().min(2, { message: "Your name is required." }),
@@ -39,88 +34,21 @@ const partnerSignupFormSchema = z.object({
 
 type PartnerSignupFormValues = z.infer<typeof partnerSignupFormSchema>;
 
-// New component specifically for the payment part of the form
-function PaymentForm({ clientSecret, onPaymentError }: { clientSecret: string, onPaymentError: (msg: string | null) => void }) {
-  const stripe = useStripe();
-  const elements = useElements();
-  
-  useEffect(() => {
-    if (!stripe || !elements) {
-      onPaymentError("Payment form is not ready. Please wait a moment and try again.");
-    } else {
-      onPaymentError(null);
-    }
-  }, [stripe, elements, onPaymentError]);
-
-  return (
-    <Card className="bg-muted/50 p-4">
-      <CardHeader className="p-0 pb-2">
-        <CardTitle className="text-base flex items-center gap-2">
-          <CreditCard className="h-4 w-4" />
-          Payment Details
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-0">
-        <PaymentElement />
-      </CardContent>
-    </Card>
-  );
-}
-
-
 function PartnerSignupForm({ partner, programs, onSuccessfulSignup }: { partner: Partner, programs: Program[], onSuccessfulSignup: () => void }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
-  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const form = useForm<PartnerSignupFormValues>({
     resolver: zodResolver(partnerSignupFormSchema),
     defaultValues: { customerName: '', companyName: '', adminEmail: '', password: '', selectedProgramId: programs.length === 1 ? programs[0].id : '' },
   });
 
-  const selectedProgramId = form.watch('selectedProgramId');
-  const selectedProgram = programs.find(p => p.id === selectedProgramId);
-  const amountInDollars = selectedProgram?.price ? parseFloat(selectedProgram.price.replace(/[$,]/g, '')) : 0;
-  const amountInCents = Math.round(amountInDollars * 100);
-
-  const stripe = useStripe();
-  const elements = useElements();
-
   const onSubmit = async (data: PartnerSignupFormValues) => {
     setIsSubmitting(true);
-    setPaymentError(null);
-
-    let paymentIntentId: string | null = null;
-
-    if (amountInCents > 0) {
-      if (!stripe || !elements) {
-        setPaymentError("Payment form is not ready. Please wait a moment and try again.");
-        setIsSubmitting(false);
-        return;
-      }
-
-      const { error: submitError, paymentIntent } = await stripe.confirmPayment({
-        elements,
-        confirmParams: { return_url: `${window.location.origin}/onboarding` },
-        redirect: 'if_required',
-      });
-
-      if (submitError) {
-        setPaymentError(submitError.message || "An unexpected payment error occurred.");
-        setIsSubmitting(false);
-        return;
-      }
-      if (paymentIntent?.status !== 'succeeded') {
-        setPaymentError(`Payment was not successful. Status: ${paymentIntent?.status}.`);
-        setIsSubmitting(false);
-        return;
-      }
-      paymentIntentId = paymentIntent.id;
-    }
-
     try {
-      const result = await processPublicSignup({ ...data, paymentIntentId }, partner.id);
+      // paymentIntentId is omitted as we removed Stripe form
+      const result = await processPublicSignup({ ...data, paymentIntentId: null }, partner.id);
       if (result.success && result.customToken) {
         toast({ title: "Account Created!", description: "Welcome! You will be automatically logged in.", duration: 7000 });
         await signInWithCustomToken(auth, result.customToken);
@@ -158,21 +86,17 @@ function PartnerSignupForm({ partner, programs, onSuccessfulSignup }: { partner:
               <Select onValueChange={field.onChange} value={field.value || ''}>
                 <FormControl><SelectTrigger><SelectValue placeholder="Choose a program..." /></SelectTrigger></FormControl>
                 <SelectContent>
-                  {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.title} - {p.price || "$0.00"}</SelectItem>)}
+                  {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.title} - {p.price || "Contact for pricing"}</SelectItem>)}
                 </SelectContent>
               </Select>
               <FormMessage />
             </FormItem>
           )} />
-
-          {amountInCents > 0 && <PaymentElement />}
-
-          {paymentError && <p className="text-sm text-destructive mt-2">{paymentError}</p>}
         </CardContent>
         <CardFooter className="flex flex-col gap-4 pt-4">
-          <Button type="submit" className="w-full" disabled={isSubmitting || (amountInCents > 0 && (!stripe || !elements))}>
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isSubmitting ? 'Processing...' : (amountInCents > 0 ? `Sign Up & Pay $${amountInDollars.toFixed(2)}` : 'Sign Up')}
+            {isSubmitting ? 'Processing...' : 'Sign Up'}
           </Button>
           <p className="text-xs text-muted-foreground text-center">Already have an account? <Link href="/" className="underline hover:text-primary">Log in here</Link>.</p>
         </CardFooter>
@@ -189,7 +113,6 @@ export default function PartnerSignupPage() {
   const [programs, setPrograms] = useState<Program[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
 
   const onSuccessfulSignup = () => {
     router.push('/onboarding');
@@ -205,22 +128,6 @@ export default function PartnerSignupPage() {
         if (partnerData.availableProgramIds && partnerData.availableProgramIds.length > 0) {
             const programsData = await getProgramsByIds(partnerData.availableProgramIds);
             setPrograms(programsData);
-            
-            // Logic to create a payment intent if there's a payable program
-            const payableProgram = programsData.find(p => p.price && parseFloat(p.price.replace(/[$,]/g, '')) > 0);
-            if (payableProgram && payableProgram.price) {
-                 const amountInCents = Math.round(parseFloat(payableProgram.price.replace(/[$,]/g, '')) * 100);
-                 if (amountInCents > 0) {
-                     createPaymentIntent(amountInCents).then(res => {
-                        if (res.clientSecret) {
-                            setClientSecret(res.clientSecret);
-                        } else {
-                            setError(res.error || "Failed to initialize payment.");
-                        }
-                     });
-                 }
-            }
-
         } else {
              setError("This partner has no programs available for purchase.");
         }
@@ -241,8 +148,6 @@ export default function PartnerSignupPage() {
     return <div className="container mx-auto text-center py-20"><Alert variant="destructive"><AlertTitle>Error</AlertTitle><AlertDescription>{error || "Partner not found."}</AlertDescription></Alert></div>;
   }
 
-  const options: StripeElementsOptions | undefined = clientSecret ? { clientSecret, appearance: { theme: 'stripe' } } : undefined;
-
   return (
     <div className="container flex items-center justify-center min-h-screen py-12">
       <div className="w-full max-w-lg">
@@ -258,13 +163,7 @@ export default function PartnerSignupPage() {
             <CardTitle className="text-2xl font-bold">Sign Up via {partner.name}</CardTitle>
             <CardDescription>Create your account and select a program to get started.</CardDescription>
           </CardHeader>
-          {options ? (
-            <Elements stripe={stripePromise} options={options}>
-              <PartnerSignupForm partner={partner} programs={programs} onSuccessfulSignup={onSuccessfulSignup} />
-            </Elements>
-          ) : (
-            <PartnerSignupForm partner={partner} programs={programs} onSuccessfulSignup={onSuccessfulSignup} />
-          )}
+          <PartnerSignupForm partner={partner} programs={programs} onSuccessfulSignup={onSuccessfulSignup} />
         </Card>
       </div>
     </div>
