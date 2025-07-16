@@ -1,5 +1,6 @@
 
 
+
 import { db } from './firebase';
 import {
     collection,
@@ -15,7 +16,8 @@ import {
     serverTimestamp,
     arrayUnion,
     arrayRemove,
-    Timestamp
+    Timestamp,
+    documentId
 } from 'firebase/firestore';
 import type { Course, Lesson, Quiz, Question, CourseFormData, LessonFormData, QuizFormData, QuestionFormData, QuestionType, Program, ProgramFormData } from '@/types/course';
 
@@ -481,7 +483,16 @@ export async function createProgram(programData: ProgramFormData): Promise<Progr
     return retryOperation(async () => {
         const programsRef = collection(db, PROGRAMS_COLLECTION);
         const newProgramDoc = {
-            ...programData, // All fields are now in ProgramFormData
+            title: programData.title,
+            description: programData.description,
+            isStandardSubscription: programData.isStandardSubscription,
+            standardSubscriptionPrice: programData.standardSubscriptionPrice || null,
+            stripeStandardPriceId: programData.stripeStandardPriceId || null,
+            price: programData.price || null,
+            firstSubscriptionPrice: programData.firstSubscriptionPrice || null,
+            stripeFirstPriceId: programData.stripeFirstPriceId || null,
+            secondSubscriptionPrice: programData.secondSubscriptionPrice || null,
+            stripeSecondPriceId: programData.stripeSecondPriceId || null,
             courseIds: programData.courseIds || [],
             isDeleted: false,
             deletedAt: null,
@@ -507,6 +518,28 @@ export async function getAllPrograms(): Promise<Program[]> {
         querySnapshot.forEach((doc) => {
             programs.push({ id: doc.id, ...doc.data() } as Program);
         });
+        return programs;
+    });
+}
+
+export async function getProgramsByIds(programIds: string[]): Promise<Program[]> {
+    if (!programIds || programIds.length === 0) {
+        return [];
+    }
+    return retryOperation(async () => {
+        const programsRef = collection(db, PROGRAMS_COLLECTION);
+        const programs: Program[] = [];
+        // Firestore 'in' query is limited to 30 elements, so we chunk it.
+        for (let i = 0; i < programIds.length; i += 30) {
+            const chunk = programIds.slice(i, i + 30);
+            const q = query(programsRef, where(documentId(), "in", chunk));
+            const querySnapshot = await getDocs(q);
+            querySnapshot.forEach((doc) => {
+                if (doc.data().isDeleted !== true) {
+                    programs.push({ id: doc.id, ...doc.data() } as Program);
+                }
+            });
+        }
         return programs;
     });
 }

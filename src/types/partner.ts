@@ -1,4 +1,5 @@
 
+
 import type { Timestamp } from 'firebase/firestore';
 
 // This is the main Partner entity stored in Firestore
@@ -9,7 +10,7 @@ export interface Partner {
   companyName?: string | null;
   percentage: number;
   logoUrl?: string | null;
-  availableProgramIds?: string[]; // Array of Program IDs this partner can sell
+  availableProgramIds: string[]; // Changed to non-optional
   isDeleted?: boolean;
   deletedAt?: Timestamp | null;
   createdAt?: Timestamp;

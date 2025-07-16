@@ -1,16 +1,19 @@
 
+
 'use server';
 
 import { initializeApp, getApps, deleteApp, type FirebaseApp } from 'firebase/app';
 // Import the SERVER-SIDE Firebase Admin SDK
 import { getAuth as getAdminAuth } from 'firebase-admin/auth';
 import { adminApp } from '@/lib/firebase-admin'; // Import server-side admin app
+import { addCustomerPurchaseRecord } from '@/lib/customer-data';
+import { getProgramById } from '@/lib/firestore-data';
 
 // Keep client auth for user creation
 import { getAuth as getClientAuth, createUserWithEmailAndPassword, type Auth } from 'firebase/auth';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { CompanyFormData } from '@/types/user';
+import type { CompanyFormData, User, UserFormData } from '@/types/user';
 import { addCompany, createDefaultLocation } from '@/lib/company-data';
 import { addUser } from '@/lib/user-data';
 import { sendNewUserWelcomeEmail } from '@/lib/email';
@@ -21,6 +24,8 @@ const signupFormSchema = z.object({
   companyName: z.string().min(2),
   adminEmail: z.string().email(),
   password: z.string().min(8),
+  selectedProgramId: z.string().optional(),
+  paymentIntentId: z.string().optional().nullable(),
 });
 
 type SignupFormValues = z.infer<typeof signupFormSchema>;
@@ -79,15 +84,24 @@ export async function processPublicSignup(data: SignupFormValues, partnerId?: st
     if (!validatedData.success) {
       throw new Error("Invalid signup data provided.");
     }
-    const { customerName, companyName, adminEmail, password } = validatedData.data;
+    const { customerName, companyName, adminEmail, password, selectedProgramId, paymentIntentId } = validatedData.data;
+    
+    let saleAmount = 0;
+    let selectedProgram = null;
+    if (selectedProgramId) {
+      selectedProgram = await getProgramById(selectedProgramId);
+      if (selectedProgram?.price) {
+         saleAmount = parseFloat(selectedProgram.price.replace(/[$,]/g, '')) || 0;
+      }
+    }
 
     const newCompanyData: CompanyFormData = {
         name: companyName,
         isTrial: false, // Public signups are not trials
         trialEndsAt: null,
-        assignedProgramIds: [], // No programs assigned by default on public signup
+        assignedProgramIds: selectedProgramId ? [selectedProgramId] : [],
         maxUsers: 5, // Default limit for public signups
-        saleAmount: 0, // No sale associated with public signup
+        saleAmount: saleAmount,
         revenueSharePartners: null, // No rev share by default
         whiteLabelEnabled: false,
         primaryColor: null,
@@ -157,6 +171,23 @@ export async function processPublicSignup(data: SignupFormValues, partnerId?: st
     }
 
     console.log(`[processPublicSignup] Admin user "${newAdminUser.name}" created in Firestore with ID: ${newAdminUser.id}`);
+    
+    // Create customer purchase record if a program was selected
+    if (selectedProgram) {
+        await addCustomerPurchaseRecord({
+            brandId: newCompany.id,
+            brandName: newCompany.name,
+            adminUserId: newAdminUser.id,
+            adminUserEmail: newAdminUser.email,
+            totalAmountPaid: saleAmount,
+            paymentIntentId: paymentIntentId || null,
+            selectedProgramId: selectedProgram.id,
+            selectedProgramTitle: selectedProgram.title,
+            selectedCourseIds: selectedProgram.courseIds || [],
+            partnerId: partnerId || null,
+        });
+    }
+
 
     try {
         await sendNewUserWelcomeEmail(newAdminUser.email, newAdminUser.name, password);

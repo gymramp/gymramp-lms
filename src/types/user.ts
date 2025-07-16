@@ -1,4 +1,5 @@
 
+
 // src/types/user.ts
 
 import type { Timestamp } from 'firebase/firestore'; // Import Timestamp
@@ -48,7 +49,7 @@ export interface Company { // Conceptually "Brand"
   customDomain?: string | null;
   shortDescription?: string | null;
   logoUrl?: string | null;
-  assignedCourseIds?: string[];
+  assignedProgramIds?: string[];
   maxUsers?: number | null;
   isTrial?: boolean;
   trialEndsAt?: Timestamp | null;
