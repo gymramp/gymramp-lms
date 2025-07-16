@@ -482,6 +482,7 @@ export async function createProgram(programData: ProgramFormData): Promise<Progr
         const newProgramDoc = {
             title: programData.title,
             description: programData.description,
+            // Set defaults for all pricing fields if not provided
             isStandardSubscription: programData.isStandardSubscription ?? false,
             standardSubscriptionPrice: programData.standardSubscriptionPrice || null,
             stripeStandardPriceId: programData.stripeStandardPriceId || null,
