@@ -17,7 +17,7 @@ import {
 import { ArrowLeft, PlusCircle, Edit, Trash2, CheckCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Quiz, Question } from '@/types/course';
-import { getQuizById, deleteQuestion, addQuestionToQuiz, updateQuestion } from '@/lib/firestore-data';
+import { getQuizById, deleteQuestion } from '@/lib/firestore-data';
 import { AddEditQuestionDialog } from '@/components/admin/AddEditQuestionDialog';
 import {
   AlertDialog,
@@ -40,8 +40,7 @@ export default function ManageQuizQuestionsPage() {
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isQuestionDialogOpen, setIsQuestionDialogOpen] = useState(false);
-  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [questionToDelete, setQuestionToDelete] = useState<Question | null>(null);
 
@@ -74,13 +73,7 @@ export default function ManageQuizQuestionsPage() {
 
 
   const handleAddQuestionClick = () => {
-    setEditingQuestion(null);
-    setIsQuestionDialogOpen(true);
-  };
-
-  const handleEditQuestionClick = (question: Question) => {
-    setEditingQuestion(question);
-    setIsQuestionDialogOpen(true);
+    setIsAddDialogOpen(true);
   };
 
    const openDeleteConfirmation = (question: Question) => {
@@ -117,8 +110,7 @@ export default function ManageQuizQuestionsPage() {
 
    const handleQuestionSaved = (savedQuestion: Question) => {
         fetchQuizAndQuestions(); 
-        setIsQuestionDialogOpen(false);
-        setEditingQuestion(null);
+        setIsAddDialogOpen(false);
    };
 
   if (isLoading) {
@@ -192,10 +184,12 @@ export default function ManageQuizQuestionsPage() {
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleEditQuestionClick(question)}
+                                    asChild
                                     className="mr-1"
                                 >
+                                  <Link href={`/admin/quizzes/manage/${quizId}/${question.id}/edit`}>
                                     <Edit className="h-4 w-4 mr-1" /> Edit
+                                  </Link>
                                 </Button>
                                 <Button
                                     variant="ghost"
@@ -215,10 +209,10 @@ export default function ManageQuizQuestionsPage() {
       </Card>
 
        <AddEditQuestionDialog
-            isOpen={isQuestionDialogOpen}
-            setIsOpen={setIsQuestionDialogOpen}
+            isOpen={isAddDialogOpen}
+            setIsOpen={setIsAddDialogOpen}
             quizId={quizId}
-            initialData={editingQuestion}
+            initialData={null} // Always adding here
             onQuestionSaved={handleQuestionSaved}
        />
 

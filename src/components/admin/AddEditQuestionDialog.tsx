@@ -18,7 +18,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox'; // Import Checkbox
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Form,
   FormControl,
@@ -31,7 +31,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from '@/hooks/use-toast';
 import type { Question, QuestionFormData, QuestionType } from '@/types/course';
 import { PlusCircle, Trash2 } from 'lucide-react';
-import { addQuestionToQuiz, updateQuestion } from '@/lib/firestore-data';
+import { addQuestionToQuiz } from '@/lib/firestore-data';
 
 // Zod schema using discriminated union for question types
 const baseSchema = z.object({
@@ -103,7 +103,7 @@ interface AddEditQuestionDialogProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   quizId: string;
-  initialData: Question | null;
+  initialData: Question | null; // This will now always be null for adding
   onQuestionSaved: (question: Question) => void;
 }
 
@@ -111,26 +111,26 @@ export function AddEditQuestionDialog({
   isOpen,
   setIsOpen,
   quizId,
-  initialData,
+  initialData, // Kept for prop consistency, but logic will treat it as 'add only'
   onQuestionSaved,
 }: AddEditQuestionDialogProps) {
-  const isEditing = !!initialData;
+  const isEditing = false; // This dialog is now only for adding
   const { toast } = useToast();
 
   const form = useForm<QuestionFormValues>({
     resolver: zodResolver(questionFormSchema),
     defaultValues: {
-      type: 'multiple-choice', // Default to single answer multiple choice
+      type: 'multiple-choice',
       text: '',
       options: [{ text: '' }, { text: '' }],
-      correctAnswer: '', // For single answer
-      correctAnswers: [], // For multiple answers
+      correctAnswer: '',
+      correctAnswers: [],
     },
   });
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
-    name: "options" as any, // Type assertion for discriminated union
+    name: "options" as any,
   });
 
   const questionType = form.watch('type');
@@ -138,67 +138,37 @@ export function AddEditQuestionDialog({
 
   useEffect(() => {
     if (isOpen) {
-      if (initialData) {
-        form.reset({
-          type: initialData.type,
-          text: initialData.text,
-          options: (initialData.type === 'multiple-choice' || initialData.type === 'multiple-select')
-            ? (initialData.options || []).map(opt => ({ text: opt }))
-            : [{ text: 'True' }, { text: 'False' }], // Default for TF if no options stored
-          correctAnswer: initialData.type !== 'multiple-select' ? initialData.correctAnswer || '' : '',
-          correctAnswers: initialData.type === 'multiple-select' ? initialData.correctAnswers || [] : [],
-        });
-      } else { // Reset for new question
-        form.reset({
-          type: 'multiple-choice',
-          text: '',
-          options: [{ text: '' }, { text: '' }],
-          correctAnswer: '',
-          correctAnswers: [],
-        });
-      }
+      form.reset({
+        type: 'multiple-choice',
+        text: '',
+        options: [{ text: '' }, { text: '' }],
+        correctAnswer: '',
+        correctAnswers: [],
+      });
     }
-  }, [initialData, form, isOpen]);
+  }, [form, isOpen]);
 
   const onSubmit = async (data: QuestionFormValues) => {
     try {
-      let savedQuestion: Question | null = null;
       let optionsForStorage: string[] = [];
-      let finalCorrectAnswer: string | undefined = undefined;
-      let finalCorrectAnswers: string[] | undefined = undefined;
-
       if (data.type === 'multiple-choice' || data.type === 'multiple-select') {
         optionsForStorage = data.options.map(opt => opt.text.trim()).filter(Boolean);
       } else if (data.type === 'true-false') {
         optionsForStorage = ["True", "False"];
       }
 
-      if (data.type === 'multiple-choice' || data.type === 'true-false') {
-        finalCorrectAnswer = data.correctAnswer;
-      } else if (data.type === 'multiple-select') {
-        finalCorrectAnswers = data.correctAnswers;
-      }
-
-      const finalQuestionPayload: Omit<Question, 'id'> = {
+      const questionPayload: QuestionFormData = {
         type: data.type,
         text: data.text,
         options: optionsForStorage,
-        ...(finalCorrectAnswer !== undefined && { correctAnswer: finalCorrectAnswer }),
-        ...(finalCorrectAnswers !== undefined && { correctAnswers: finalCorrectAnswers }),
+        correctAnswer: (data.type === 'multiple-choice' || data.type === 'true-false') ? data.correctAnswer : undefined,
+        correctAnswers: data.type === 'multiple-select' ? data.correctAnswers : undefined,
       };
 
-
-      if (isEditing && initialData) {
-        savedQuestion = await updateQuestion(quizId, initialData.id, finalQuestionPayload as QuestionFormData);
-      } else {
-        savedQuestion = await addQuestionToQuiz(quizId, finalQuestionPayload as QuestionFormData);
-      }
+      const savedQuestion = await addQuestionToQuiz(quizId, questionPayload);
 
       if (savedQuestion) {
-        toast({
-          title: isEditing ? 'Question Updated' : 'Question Added',
-          description: `The question has been successfully saved.`,
-        });
+        toast({ title: 'Question Added', description: `The question has been successfully saved.` });
         onQuestionSaved(savedQuestion);
         handleClose();
       } else {
@@ -206,11 +176,7 @@ export function AddEditQuestionDialog({
       }
     } catch (error) {
       console.error("Failed to save question:", error);
-      toast({
-        title: 'Error Saving Question',
-        description: error instanceof Error ? error.message : 'An unknown error occurred.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error Saving Question', description: error instanceof Error ? error.message : 'An unknown error occurred.', variant: 'destructive' });
     }
   };
 
@@ -227,10 +193,8 @@ export function AddEditQuestionDialog({
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit Question' : 'Add New Question'}</DialogTitle>
-          <DialogDescription>
-            {isEditing ? 'Update the details of this question.' : 'Enter the details for the new question.'}
-          </DialogDescription>
+          <DialogTitle>Add New Question</DialogTitle>
+          <DialogDescription>Enter the details for the new question.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
@@ -244,42 +208,26 @@ export function AddEditQuestionDialog({
                     <RadioGroup
                       onValueChange={(value) => {
                         field.onChange(value as QuestionType);
-                        // Reset options and correct answers based on type
                         if (value === 'multiple-choice') {
                           form.setValue('options' as any, [{ text: '' }, { text: '' }]);
-                          form.setValue('correctAnswers', []); // Clear multi-correct
-                          form.setValue('correctAnswer', ''); // Reset single-correct
-                        } else if (value === 'true-false') {
-                          form.setValue('options' as any, []); // True/false doesn't use custom options array in form
                           form.setValue('correctAnswers', []);
-                          form.setValue('correctAnswer', ''); // Or a default like 'True'
+                          form.setValue('correctAnswer', '');
+                        } else if (value === 'true-false') {
+                          form.setValue('options' as any, []);
+                          form.setValue('correctAnswers', []);
+                          form.setValue('correctAnswer', '');
                         } else if (value === 'multiple-select') {
                           form.setValue('options' as any, [{ text: '' }, { text: '' }]);
-                          form.setValue('correctAnswer', ''); // Clear single-correct
-                          form.setValue('correctAnswers', []); // Reset multi-correct
+                          form.setValue('correctAnswer', '');
+                          form.setValue('correctAnswers', []);
                         }
                       }}
                       value={field.value}
                       className="flex space-x-4"
                     >
-                      <FormItem className="flex items-center space-x-2 space-y-0">
-                        <FormControl>
-                          <RadioGroupItem value="multiple-choice" />
-                        </FormControl>
-                        <FormLabel className="font-normal">Multiple Choice (Single Answer)</FormLabel>
-                      </FormItem>
-                      <FormItem className="flex items-center space-x-2 space-y-0">
-                        <FormControl>
-                          <RadioGroupItem value="true-false" />
-                        </FormControl>
-                        <FormLabel className="font-normal">True/False</FormLabel>
-                      </FormItem>
-                      <FormItem className="flex items-center space-x-2 space-y-0">
-                        <FormControl>
-                          <RadioGroupItem value="multiple-select" />
-                        </FormControl>
-                        <FormLabel className="font-normal">Multiple Select (Multiple Answers)</FormLabel>
-                      </FormItem>
+                      <FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="multiple-choice" /></FormControl><FormLabel className="font-normal">MC (Single)</FormLabel></FormItem>
+                      <FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="true-false" /></FormControl><FormLabel className="font-normal">T/F</FormLabel></FormItem>
+                      <FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="multiple-select" /></FormControl><FormLabel className="font-normal">MC (Multi)</FormLabel></FormItem>
                     </RadioGroup>
                   </FormControl>
                   <FormMessage />
@@ -287,182 +235,55 @@ export function AddEditQuestionDialog({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="text"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Question Text</FormLabel>
-                  <FormControl>
-                    <Textarea rows={3} placeholder="Enter the question text..." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
+            <FormField control={form.control} name="text" render={({ field }) => (<FormItem><FormLabel>Question Text</FormLabel><FormControl><Textarea rows={3} placeholder="Enter the question text..." {...field} /></FormControl><FormMessage /></FormItem>)} />
+            
             {(questionType === 'multiple-choice' || questionType === 'multiple-select') && (
               <div className="space-y-3">
                 <FormLabel>Answer Options</FormLabel>
                 {fields.map((item, index) => (
-                  <FormField
-                    key={item.id}
-                    control={form.control}
-                    name={`options.${index}.text` as any}
-                    render={({ field }) => (
-                      <FormItem>
-                        <div className="flex items-center gap-2">
-                          <FormControl>
-                            <Input placeholder={`Option ${index + 1}`} {...field} />
-                          </FormControl>
-                          {fields.length > 2 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => remove(index)}
-                              className="text-destructive hover:bg-destructive/10"
-                              aria-label="Remove option"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <FormField key={item.id} control={form.control} name={`options.${index}.text` as any} render={({ field }) => (
+                    <FormItem><div className="flex items-center gap-2"><FormControl><Input placeholder={`Option ${index + 1}`} {...field} /></FormControl>{fields.length > 2 && (<Button type="button" variant="ghost" size="icon" onClick={() => remove(index)} className="text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></Button>)}</div><FormMessage /></FormItem>
+                  )}/>
                 ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => append({ text: '' })}
-                  className="mt-2"
-                >
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Option
-                </Button>
-                {form.formState.errors.options && !Array.isArray(form.formState.errors.options) && form.formState.errors.options.message && (
-                    <p className="text-sm font-medium text-destructive">{form.formState.errors.options.message}</p>
-                )}
-                 {Array.isArray(form.formState.errors.options) && form.formState.errors.options.map((error: any, index: number) => (
-                    error && error.text && <p key={index} className="text-sm font-medium text-destructive">Option {index+1}: {error.text.message}</p>
-                ))}
+                <Button type="button" variant="outline" size="sm" onClick={() => append({ text: '' })} className="mt-2"><PlusCircle className="mr-2 h-4 w-4"/>Add Option</Button>
+                {form.formState.errors.options && !Array.isArray(form.formState.errors.options) && form.formState.errors.options.message && (<p className="text-sm font-medium text-destructive">{form.formState.errors.options.message}</p>)}
+                {Array.isArray(form.formState.errors.options) && form.formState.errors.options.map((error: any, index: number) => (error && error.text && <p key={index} className="text-sm font-medium text-destructive">Option {index+1}: {error.text.message}</p>))}
               </div>
             )}
 
             {questionType === 'multiple-choice' && (
-              <FormField
-                control={form.control}
-                name="correctAnswer"
-                render={({ field }) => (
-                  <FormItem className="space-y-3">
-                    <FormLabel>Correct Answer (Pick One)</FormLabel>
-                    <FormControl>
-                      <RadioGroup onValueChange={field.onChange} value={field.value} className="flex flex-col space-y-1">
-                        {currentOptionsForDisplay.map((option, index) => (
-                          option.text.trim() !== '' && (
-                            <FormItem key={`mc-correct-${index}`} className="flex items-center space-x-3 space-y-0">
-                              <FormControl>
-                                <RadioGroupItem value={option.text} id={`mc-correct-${index}-${option.text}`} />
-                              </FormControl>
-                              <Label htmlFor={`mc-correct-${index}-${option.text}`} className="font-normal">{option.text}</Label>
-                            </FormItem>
-                          )
-                        ))}
-                      </RadioGroup>
-                    </FormControl>
-                    {currentOptionsForDisplay.filter(opt => opt.text.trim() !== '').length < 2 && (
-                         <p className="text-xs font-medium text-muted-foreground">Fill at least two options above to select a correct answer.</p>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormField control={form.control} name="correctAnswer" render={({ field }) => (
+                <FormItem className="space-y-3"><FormLabel>Correct Answer (Pick One)</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} value={field.value} className="flex flex-col space-y-1">
+                  {currentOptionsForDisplay.filter(option => option.text.trim() !== '').map((option, index) => (<FormItem key={`mc-correct-${index}`} className="flex items-center space-x-3"><FormControl><RadioGroupItem value={option.text} id={`mc-correct-${index}-${option.text}`} /></FormControl><Label htmlFor={`mc-correct-${index}-${option.text}`} className="font-normal">{option.text}</Label></FormItem>))}
+                </RadioGroup></FormControl>{currentOptionsForDisplay.filter(opt => opt.text.trim() !== '').length < 2 && (<p className="text-xs font-medium text-muted-foreground">Fill at least two options to select a correct answer.</p>)}<FormMessage />
+                </FormItem>
+              )}/>
             )}
 
             {questionType === 'true-false' && (
-              <FormField
-                control={form.control}
-                name="correctAnswer"
-                render={({ field }) => (
-                  <FormItem className="space-y-3">
-                    <FormLabel>Correct Answer</FormLabel>
-                    <FormControl>
-                      <RadioGroup onValueChange={field.onChange} value={field.value} className="flex flex-col space-y-1">
-                        <FormItem className="flex items-center space-x-3 space-y-0">
-                          <FormControl><RadioGroupItem value="True" id="tf-correct-true" /></FormControl>
-                          <Label htmlFor="tf-correct-true" className="font-normal">True</Label>
-                        </FormItem>
-                        <FormItem className="flex items-center space-x-3 space-y-0">
-                          <FormControl><RadioGroupItem value="False" id="tf-correct-false" /></FormControl>
-                          <Label htmlFor="tf-correct-false" className="font-normal">False</Label>
-                        </FormItem>
-                      </RadioGroup>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormField control={form.control} name="correctAnswer" render={({ field }) => (
+                <FormItem className="space-y-3"><FormLabel>Correct Answer</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} value={field.value} className="flex flex-col space-y-1">
+                  <FormItem className="flex items-center space-x-3"><FormControl><RadioGroupItem value="True" id="tf-correct-true" /></FormControl><Label htmlFor="tf-correct-true" className="font-normal">True</Label></FormItem>
+                  <FormItem className="flex items-center space-x-3"><FormControl><RadioGroupItem value="False" id="tf-correct-false" /></FormControl><Label htmlFor="tf-correct-false" className="font-normal">False</Label></FormItem>
+                </RadioGroup></FormControl><FormMessage />
+                </FormItem>
+              )}/>
             )}
 
             {questionType === 'multiple-select' && (
-              <FormField
-                control={form.control}
-                name="correctAnswers"
-                render={() => ( // Field prop not directly used here, form.getValues/setValue is used for array
-                  <FormItem className="space-y-3">
-                    <FormLabel>Correct Answers (Select All That Apply)</FormLabel>
-                    <div className="space-y-2">
-                      {currentOptionsForDisplay.map((option, index) => (
-                        option.text.trim() !== '' && (
-                          <FormField
-                            key={`ms-correct-${index}`}
-                            control={form.control}
-                            name={`correctAnswers`}
-                            render={({ field: checkboxField }) => (
-                              <FormItem className="flex flex-row items-center space-x-3 space-y-0 p-2 border rounded-md hover:bg-muted/50">
-                                <FormControl>
-                                  <Checkbox
-                                    checked={checkboxField.value?.includes(option.text)}
-                                    onCheckedChange={(checked) => {
-                                      const currentValues = checkboxField.value || [];
-                                      return checked
-                                        ? checkboxField.onChange([...currentValues, option.text])
-                                        : checkboxField.onChange(currentValues.filter(value => value !== option.text));
-                                    }}
-                                    id={`ms-correct-${index}-${option.text}`}
-                                  />
-                                </FormControl>
-                                <Label htmlFor={`ms-correct-${index}-${option.text}`} className="font-normal cursor-pointer flex-1">
-                                  {option.text}
-                                </Label>
-                              </FormItem>
-                            )}
-                          />
-                        )
-                      ))}
-                    </div>
-                    {currentOptionsForDisplay.filter(opt => opt.text.trim() !== '').length < 2 && (
-                         <p className="text-xs font-medium text-muted-foreground">Fill at least two options above to select correct answers.</p>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormField control={form.control} name="correctAnswers" render={() => (
+                <FormItem className="space-y-3"><FormLabel>Correct Answers (Select All That Apply)</FormLabel><div className="space-y-2">
+                  {currentOptionsForDisplay.filter(option => option.text.trim() !== '').map((option, index) => (<FormField key={`ms-correct-${index}`} control={form.control} name={`correctAnswers`} render={({ field: checkboxField }) => (
+                    <FormItem className="flex flex-row items-center space-x-3 p-2 border rounded-md hover:bg-muted/50"><FormControl><Checkbox checked={checkboxField.value?.includes(option.text)} onCheckedChange={(checked) => checked ? checkboxField.onChange([...(checkboxField.value || []), option.text]) : checkboxField.onChange((checkboxField.value || []).filter(value => value !== option.text))} id={`ms-correct-${index}-${option.text}`} /></FormControl><Label htmlFor={`ms-correct-${index}-${option.text}`} className="font-normal cursor-pointer flex-1">{option.text}</Label></FormItem>
+                  )}/>))}
+                </div>{currentOptionsForDisplay.filter(opt => opt.text.trim() !== '').length < 2 && (<p className="text-xs font-medium text-muted-foreground">Fill at least two options to select.</p>)}<FormMessage />
+                </FormItem>
+              )}/>
             )}
-
+            
             <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline">Cancel</Button>
-              </DialogClose>
-              <Button
-                type="submit"
-                className="bg-primary hover:bg-primary/90"
-                disabled={(questionType === 'multiple-choice' || questionType === 'multiple-select') && currentOptionsForDisplay.filter(opt => opt.text.trim() !== '').length < 2}
-              >
-                {isEditing ? 'Save Changes' : 'Add Question'}
-              </Button>
+              <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+              <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={(questionType === 'multiple-choice' || questionType === 'multiple-select') && currentOptionsForDisplay.filter(opt => opt.text.trim() !== '').length < 2}>Add Question</Button>
             </DialogFooter>
           </form>
         </Form>
@@ -470,4 +291,3 @@ export function AddEditQuestionDialog({
     </Dialog>
   );
 }
-

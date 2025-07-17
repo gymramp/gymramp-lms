@@ -1,0 +1,197 @@
+
+'use client';
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useForm, useFieldArray } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useToast } from '@/hooks/use-toast';
+import type { Quiz, Question, QuestionFormData, QuestionType } from '@/types/course';
+import { getQuizById, updateQuestion } from '@/lib/firestore-data';
+import { PlusCircle, Trash2, ArrowLeft, Loader2 } from 'lucide-react';
+
+// Zod schema using discriminated union for question types
+const baseSchema = z.object({
+  text: z.string().min(5, { message: 'Question text must be at least 5 characters.' }),
+});
+
+const multipleChoiceOptionSchema = z.object({ text: z.string().min(1, "Option text cannot be empty.") });
+
+const multipleChoiceSchema = baseSchema.extend({
+  type: z.literal('multiple-choice'),
+  options: z.array(multipleChoiceOptionSchema).min(2, "At least two options are required."),
+  correctAnswer: z.string().min(1, { message: 'Please select the correct answer.' }),
+  correctAnswers: z.array(z.string()).optional(),
+});
+
+const trueFalseSchema = baseSchema.extend({
+  type: z.literal('true-false'),
+  options: z.array(multipleChoiceOptionSchema).optional(),
+  correctAnswer: z.enum(['True', 'False'], { required_error: 'Please select True or False.' }),
+  correctAnswers: z.array(z.string()).optional(),
+});
+
+const multipleSelectSchema = baseSchema.extend({
+  type: z.literal('multiple-select'),
+  options: z.array(multipleChoiceOptionSchema).min(2, "At least two options are required."),
+  correctAnswer: z.string().optional(),
+  correctAnswers: z.array(z.string()).min(1, { message: "At least one correct answer must be selected."}),
+});
+
+const questionFormSchema = z.discriminatedUnion("type", [multipleChoiceSchema, trueFalseSchema, multipleSelectSchema])
+.refine(data => (data.type !== 'multiple-choice' && data.type !== 'multiple-select') || new Set(data.options.map(opt => opt.text.trim())).size === data.options.length, {
+    message: "Answer options must be unique.",
+    path: ["options"],
+})
+.refine(data => (data.type !== 'multiple-choice' && data.type !== 'multiple-select') || data.options.map(opt => opt.text).includes(data.correctAnswer || ''), {
+    message: "Correct answer must be one of the options.",
+    path: ["correctAnswer"],
+})
+.refine(data => data.type !== 'multiple-select' || (data.correctAnswers || []).every(ca => data.options.map(opt => opt.text).includes(ca)), {
+    message: "Correct answers must be from the provided options.",
+    path: ["correctAnswers"],
+});
+
+type QuestionFormValues = z.infer<typeof questionFormSchema>;
+
+export default function EditQuestionPage() {
+    const params = useParams();
+    const router = useRouter();
+    const { toast } = useToast();
+    const quizId = params.quizId as string;
+    const questionId = params.questionId as string;
+
+    const [quiz, setQuiz] = useState<Quiz | null>(null);
+    const [initialQuestionData, setInitialQuestionData] = useState<Question | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    const form = useForm<QuestionFormValues>({
+        resolver: zodResolver(questionFormSchema),
+        defaultValues: { type: 'multiple-choice', text: '', options: [], correctAnswer: '', correctAnswers: [] },
+    });
+    
+    const { fields, append, remove } = useFieldArray({ control: form.control, name: "options" as any });
+    const questionType = form.watch('type');
+    const watchedOptions = form.watch('options' as any) || [];
+
+    const fetchInitialData = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            if (!quizId || !questionId) throw new Error("Quiz ID or Question ID missing");
+            
+            const fetchedQuiz = await getQuizById(quizId);
+            if (!fetchedQuiz) {
+                toast({ title: "Error", description: "Quiz not found.", variant: "destructive" });
+                router.push('/admin/quizzes'); return;
+            }
+            setQuiz(fetchedQuiz);
+
+            const question = fetchedQuiz.questions?.find(q => q.id === questionId);
+            if (!question) {
+                toast({ title: "Error", description: "Question not found in this quiz.", variant: "destructive" });
+                router.push(`/admin/quizzes/manage/${quizId}`); return;
+            }
+            setInitialQuestionData(question);
+
+            form.reset({
+                type: question.type, text: question.text,
+                options: (question.type === 'multiple-choice' || question.type === 'multiple-select') ? (question.options || []).map(opt => ({ text: opt })) : [],
+                correctAnswer: (question.type === 'multiple-choice' || question.type === 'true-false') ? question.correctAnswer || '' : '',
+                correctAnswers: question.type === 'multiple-select' ? question.correctAnswers || [] : [],
+            });
+
+        } catch (error) {
+            console.error("Error fetching data:", error);
+            toast({ title: "Error", description: "Could not load data for editing.", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
+    }, [quizId, questionId, router, toast, form]);
+
+    useEffect(() => { fetchInitialData(); }, [fetchInitialData]);
+
+    const onSubmit = async (data: QuestionFormValues) => {
+        try {
+            let optionsForStorage: string[] = [];
+            if (data.type === 'multiple-choice' || data.type === 'multiple-select') {
+                optionsForStorage = data.options.map(opt => opt.text.trim()).filter(Boolean);
+            } else if (data.type === 'true-false') {
+                optionsForStorage = ["True", "False"];
+            }
+
+            const questionPayload: QuestionFormData = {
+                type: data.type, text: data.text, options: optionsForStorage,
+                correctAnswer: (data.type === 'multiple-choice' || data.type === 'true-false') ? data.correctAnswer : undefined,
+                correctAnswers: data.type === 'multiple-select' ? data.correctAnswers : undefined,
+            };
+
+            const updatedQuestion = await updateQuestion(quizId, questionId, questionPayload);
+
+            if (updatedQuestion) {
+                toast({ title: 'Question Updated', description: `The question has been successfully saved.` });
+                router.push(`/admin/quizzes/manage/${quizId}`);
+            } else {
+                throw new Error("Failed to update question.");
+            }
+        } catch (error) {
+            console.error("Failed to save question:", error);
+            toast({ title: 'Error Saving Question', description: error instanceof Error ? error.message : 'An unknown error occurred.', variant: 'destructive' });
+        }
+    };
+    
+    if (isLoading) return <div className="container mx-auto p-6"><Loader2 className="h-8 w-8 animate-spin"/></div>;
+    if (!quiz || !initialQuestionData) return <div className="container mx-auto p-6">Quiz or question data not found.</div>;
+
+    return (
+        <div className="container mx-auto p-4 md:p-6 lg:p-8">
+            <Button variant="outline" onClick={() => router.push(`/admin/quizzes/manage/${quizId}`)} className="mb-6">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Quiz Questions
+            </Button>
+            <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Edit Question</CardTitle>
+                            <CardDescription>For quiz: {quiz.title}</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <FormField control={form.control} name="type" render={({ field }) => (/* Question Type RadioGroup ... */ <div/>)} /> {/* Type is non-editable for now */}
+                            <FormField control={form.control} name="text" render={({ field }) => (<FormItem><FormLabel>Question Text</FormLabel><FormControl><Textarea rows={3} {...field} /></FormControl><FormMessage /></FormItem>)} />
+
+                            {(questionType === 'multiple-choice' || questionType === 'multiple-select') && (
+                                <div className="space-y-3">
+                                    <FormLabel>Answer Options</FormLabel>
+                                    {fields.map((item, index) => (<FormField key={item.id} control={form.control} name={`options.${index}.text` as any} render={({ field }) => (<FormItem><div className="flex items-center gap-2"><FormControl><Input {...field} /></FormControl>{fields.length > 2 && <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}><Trash2 className="h-4 w-4"/></Button>}</div><FormMessage /></FormItem>)}/>))}
+                                    <Button type="button" variant="outline" size="sm" onClick={() => append({ text: '' })}><PlusCircle className="mr-2 h-4 w-4"/>Add Option</Button>
+                                </div>
+                            )}
+
+                            {questionType === 'multiple-choice' && (
+                                <FormField control={form.control} name="correctAnswer" render={({ field }) => (<FormItem><FormLabel>Correct Answer</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} value={field.value} className="space-y-1">{watchedOptions.filter(o => o.text).map((opt, i) => (<FormItem key={`mc-c-${i}`} className="flex items-center space-x-3"><FormControl><RadioGroupItem value={opt.text} /></FormControl><Label className="font-normal">{opt.text}</Label></FormItem>))}</RadioGroup></FormControl><FormMessage/></FormItem>)} />
+                            )}
+                             {questionType === 'true-false' && (
+                                <FormField control={form.control} name="correctAnswer" render={({ field }) => (<FormItem><FormLabel>Correct Answer</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} value={field.value} className="space-y-1"><FormItem className="flex items-center space-x-3"><FormControl><RadioGroupItem value="True" /></FormControl><Label className="font-normal">True</Label></FormItem><FormItem className="flex items-center space-x-3"><FormControl><RadioGroupItem value="False" /></FormControl><Label className="font-normal">False</Label></FormItem></RadioGroup></FormControl><FormMessage/></FormItem>)} />
+                            )}
+                             {questionType === 'multiple-select' && (
+                                <FormField control={form.control} name="correctAnswers" render={() => (<FormItem><FormLabel>Correct Answers</FormLabel><div className="space-y-2">{watchedOptions.filter(o => o.text).map((opt, i) => (<FormField key={`ms-c-${i}`} control={form.control} name="correctAnswers" render={({ field }) => (<FormItem className="flex items-center space-x-3"><FormControl><Checkbox checked={field.value?.includes(opt.text)} onCheckedChange={c=>c?field.onChange([...(field.value||[]), opt.text]):field.onChange((field.value||[]).filter(v=>v!==opt.text))}/></FormControl><Label className="font-normal">{opt.text}</Label></FormItem>)}/>))}</div><FormMessage /></FormItem>)} />
+                            )}
+
+                        </CardContent>
+                        <CardFooter>
+                            <Button type="submit">Save Changes</Button>
+                        </CardFooter>
+                    </Card>
+                </form>
+            </Form>
+        </div>
+    );
+}

@@ -34,8 +34,7 @@ export default function ManageBrandQuizQuestionsPage() {
   const [quiz, setQuiz] = useState<BrandQuiz | null>(null);
   const [questions, setQuestions] = useState<BrandQuestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isQuestionDialogOpen, setIsQuestionDialogOpen] = useState(false);
-  const [editingQuestion, setEditingQuestion] = useState<BrandQuestion | null>(null);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [questionToDelete, setQuestionToDelete] = useState<BrandQuestion | null>(null);
@@ -86,8 +85,7 @@ export default function ManageBrandQuizQuestionsPage() {
 
   useEffect(() => { if (isAuthorized) fetchQuizAndQuestions(); }, [isAuthorized, fetchQuizAndQuestions]);
 
-  const handleAddQuestionClick = () => { setEditingQuestion(null); setIsQuestionDialogOpen(true); };
-  const handleEditQuestionClick = (question: BrandQuestion) => { setEditingQuestion(question); setIsQuestionDialogOpen(true); };
+  const handleAddQuestionClick = () => { setIsAddDialogOpen(true); };
   const openDeleteConfirmation = (question: BrandQuestion) => { setQuestionToDelete(question); setIsDeleteDialogOpen(true); };
 
   const confirmDeleteQuestion = async () => {
@@ -105,7 +103,7 @@ export default function ManageBrandQuizQuestionsPage() {
   };
 
   const handleQuestionSaved = (savedQuestion: BrandQuestion) => {
-    fetchQuizAndQuestions(); setIsQuestionDialogOpen(false); setEditingQuestion(null);
+    fetchQuizAndQuestions(); setIsAddDialogOpen(false);
   };
 
   if (!currentUser || !currentBrand || !isAuthorized) {
@@ -154,7 +152,7 @@ export default function ManageBrandQuizQuestionsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => handleEditQuestionClick(q)} className="mr-1"><Edit className="h-4 w-4 mr-1" /> Edit</Button>
+                      <Button asChild variant="ghost" size="sm" className="mr-1"><Link href={`/brand-admin/quizzes/manage/${brandQuizId}/${q.id}/edit`}><Edit className="h-4 w-4 mr-1" /> Edit</Link></Button>
                       <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => openDeleteConfirmation(q)} disabled={isDeleting && questionToDelete?.id === q.id}>
                          {isDeleting && questionToDelete?.id === q.id ? <Loader2 className="h-4 w-4 animate-spin"/> : <Trash2 className="h-4 w-4 mr-1" />} Remove
                       </Button>
@@ -169,10 +167,10 @@ export default function ManageBrandQuizQuestionsPage() {
 
       {currentBrand?.id && (
         <AddEditBrandQuestionDialog
-          isOpen={isQuestionDialogOpen}
-          setIsOpen={setIsQuestionDialogOpen}
+          isOpen={isAddDialogOpen}
+          setIsOpen={setIsAddDialogOpen}
           brandQuizId={brandQuizId}
-          initialData={editingQuestion}
+          initialData={null}
           onQuestionSaved={handleQuestionSaved}
         />
       )}
