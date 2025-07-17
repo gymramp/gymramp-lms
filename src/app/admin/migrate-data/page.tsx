@@ -14,6 +14,7 @@ import { Loader2, DatabaseZap, Users, Building, ShieldCheck, AlertCircle } from 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import type { User, Company } from '@/types/user';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 
 export default function MigrateDataPage() {
   const [isPending, startTransition] = useTransition();
