@@ -70,7 +70,7 @@ export interface Lesson {
     translations?: { [key: string]: LessonTranslation }; // e.g., { 'es': { title: '...', content: '...', videoUrl: '...' } }
 }
 
-// Translation object for a Course
+// Translation object for a Course or Program
 export interface CourseTranslation {
     title?: string;
     description?: string;
@@ -117,6 +117,7 @@ export interface LessonFormData {
 // Type for the form data when adding/editing a quiz (basic for now)
 export interface QuizFormData {
     title: string;
+    translations?: { [key: string]: Pick<QuizTranslation, 'title'> }; // Only title can be edited directly
 }
 
 
@@ -154,6 +155,7 @@ export interface Program {
   deletedAt?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+  translations?: { [key: string]: Pick<CourseTranslation, 'title' | 'description'> }; // Programs only translate title/desc
 }
 
 // Type for form data when adding/editing a Program
@@ -224,6 +226,7 @@ export interface BrandQuiz {
 
 export type BrandQuizFormData = Omit<BrandQuiz, 'id' | 'brandId' | 'questions' | 'questionCount' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'translations'> & {
   brandId: string; // Required for creation
+  translations?: { [key: string]: Pick<QuizTranslation, 'title'> }; // Only title can be edited directly
 };
 
 // --- AI Translation Types ---

@@ -1,7 +1,8 @@
 
+
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -25,12 +26,25 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import type { BrandQuiz, BrandQuizFormData } from '@/types/course';
+import type { BrandQuiz, BrandQuizFormData, QuizTranslation } from '@/types/course';
 import { createBrandQuiz, updateBrandQuiz } from '@/lib/brand-content-data';
 import { Loader2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from '@/components/ui/alert';
+
+const SUPPORTED_LOCALES = [
+  { value: 'es', label: 'Spanish' },
+  { value: 'fr', label: 'French' },
+  { value: 'de', label: 'German' },
+];
+
+const quizTranslationSchema = z.object({
+  title: z.string().optional(),
+});
 
 const brandQuizFormSchema = z.object({
   title: z.string().min(3, { message: 'Quiz title must be at least 3 characters.' }),
+  translations: z.record(quizTranslationSchema).optional(),
 });
 
 type BrandQuizFormValues = z.infer<typeof brandQuizFormSchema>;
@@ -58,15 +72,19 @@ export function AddEditBrandQuizDialog({
     resolver: zodResolver(brandQuizFormSchema),
     defaultValues: {
       title: '',
+      translations: {},
     },
   });
 
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
-        form.reset({ title: initialData.title });
+        form.reset({
+          title: initialData.title,
+          translations: (initialData.translations as any) || {},
+        });
       } else {
-        form.reset({ title: '' });
+        form.reset({ title: '', translations: {} });
       }
     }
   }, [initialData, form, isOpen]);
@@ -79,7 +97,11 @@ export function AddEditBrandQuizDialog({
     setIsSaving(true);
     try {
       let savedQuiz: BrandQuiz | null = null;
-      const quizPayload: BrandQuizFormData = { title: data.title, brandId };
+      const quizPayload: BrandQuizFormData = { 
+        title: data.title, 
+        brandId, 
+        translations: data.translations 
+      };
 
       if (isEditing && initialData) {
         savedQuiz = await updateBrandQuiz(initialData.id, quizPayload);
@@ -114,35 +136,65 @@ export function AddEditBrandQuizDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit My Quiz Title' : 'Add Quiz'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit My Quiz' : 'Add Quiz'}</DialogTitle>
           <DialogDescription>
-            {isEditing ? 'Update the title of this quiz.' : 'Enter the title for the new quiz.'}
+            {isEditing ? 'Update the details of this quiz.' : 'Enter the details for the new quiz.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Quiz Title</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., Product Knowledge Check" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+             <Tabs defaultValue="main">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="main">Main Content</TabsTrigger>
+                    <TabsTrigger value="translations">Translations</TabsTrigger>
+                </TabsList>
+                 <TabsContent value="main" className="pt-4">
+                     <FormField
+                      control={form.control}
+                      name="title"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Quiz Title (English)</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g., Product Knowledge Check" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                </TabsContent>
+                <TabsContent value="translations" className="pt-4 space-y-4">
+                    <Alert variant="default" className="text-sm">
+                        <AlertDescription>
+                            Provide translations for the quiz title. If a translation is not provided, the English title will be used as a fallback.
+                        </AlertDescription>
+                    </Alert>
+                    {SUPPORTED_LOCALES.map(locale => (
+                         <FormField
+                            key={locale.value}
+                            control={form.control}
+                            name={`translations.${locale.value}.title`}
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Title ({locale.label})</FormLabel>
+                                    <FormControl><Input {...field} value={field.value ?? ''} /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                     ))}
+                </TabsContent>
+             </Tabs>
+
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancel</Button>
               </DialogClose>
               <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isSaving}>
                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isEditing ? 'Save Title' : 'Create Quiz'}
+                {isEditing ? 'Save Changes' : 'Create Quiz'}
               </Button>
             </DialogFooter>
           </form>

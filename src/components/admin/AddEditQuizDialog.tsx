@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -26,12 +27,24 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import type { Quiz, QuizFormData } from '@/types/course';
+import type { Quiz, QuizFormData, QuizTranslation } from '@/types/course';
 import { createQuiz, updateQuiz } from '@/lib/firestore-data'; // Use standalone quiz functions
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
-// Zod schema for basic quiz form validation (title only for now)
+const SUPPORTED_LOCALES = [
+  { value: 'es', label: 'Spanish' },
+  { value: 'fr', label: 'French' },
+  { value: 'de', label: 'German' },
+];
+
+const quizTranslationSchema = z.object({
+  title: z.string().optional(),
+});
+
 const quizFormSchema = z.object({
   title: z.string().min(3, { message: 'Quiz title must be at least 3 characters.' }),
+  translations: z.record(quizTranslationSchema).optional(),
 });
 
 type QuizFormValues = z.infer<typeof quizFormSchema>;
@@ -39,15 +52,13 @@ type QuizFormValues = z.infer<typeof quizFormSchema>;
 interface AddEditQuizDialogProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
-  // courseId: string; // REMOVED - No longer tied to a specific course initially
-  initialData: Quiz | null; // Quiz or null for adding
-  onQuizSaved: (quiz: Quiz) => void; // Callback after save
+  initialData: Quiz | null;
+  onQuizSaved: (quiz: Quiz) => void;
 }
 
 export function AddEditQuizDialog({
   isOpen,
   setIsOpen,
-  // courseId, // REMOVED
   initialData,
   onQuizSaved,
 }: AddEditQuizDialogProps) {
@@ -58,43 +69,44 @@ export function AddEditQuizDialog({
     resolver: zodResolver(quizFormSchema),
     defaultValues: {
       title: '',
+      translations: {},
     },
   });
 
-  // Effect to populate form when initialData changes (for editing)
   useEffect(() => {
-    if (initialData) {
-      form.reset({
-        title: initialData.title,
-      });
-    } else {
-      form.reset(); // Reset form if adding a new quiz
+    if (isOpen) {
+      if (initialData) {
+        form.reset({
+          title: initialData.title,
+          translations: (initialData.translations as any) || {}, // Cast to handle potential type mismatch
+        });
+      } else {
+        form.reset({ title: '', translations: {} });
+      }
     }
-  }, [initialData, form]);
+  }, [initialData, form, isOpen]);
 
-  const onSubmit = async (data: QuizFormValues) => { // Removed async as Firestore calls are now async
+  const onSubmit = async (data: QuizFormValues) => {
     try {
       let savedQuiz: Quiz | null = null;
-       const quizData: QuizFormData = { // Use QuizFormData
-          title: data.title,
-          // Questions handled separately
+      const quizData: QuizFormData = {
+        title: data.title,
+        translations: data.translations,
       };
 
       if (isEditing && initialData) {
-        // Update existing quiz using standalone updateQuiz
-        savedQuiz = await updateQuiz(initialData.id, quizData); // await the async function
+        savedQuiz = await updateQuiz(initialData.id, quizData);
       } else {
-        // Add new quiz using standalone createQuiz
-        savedQuiz = await createQuiz(quizData); // await the async function
+        savedQuiz = await createQuiz(quizData);
       }
 
        if (savedQuiz) {
           toast({
-            title: isEditing ? 'Quiz Updated' : 'Quiz Added',
+            title: isEditing ? 'Quiz Updated' : 'Quiz Created',
             description: `Quiz "${savedQuiz.title}" has been successfully saved. Add questions separately.`,
           });
-          onQuizSaved(savedQuiz); // Call the callback with the saved quiz
-          handleClose(); // Close dialog after successful save
+          onQuizSaved(savedQuiz);
+          handleClose();
        } else {
           throw new Error("Failed to save quiz.");
        }
@@ -109,49 +121,70 @@ export function AddEditQuizDialog({
     }
   };
 
-  // Handle closing the dialog
   const handleClose = () => {
-    form.reset(); // Reset form state on close
+    form.reset();
     setIsOpen(false);
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit Quiz Title' : 'Add Quiz'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Quiz' : 'Add Quiz'}</DialogTitle>
           <DialogDescription>
-            {isEditing ? 'Update the title of this quiz.' : 'Enter the title for the new standalone quiz. Questions can be added later.'}
+            {isEditing ? 'Update the details of this quiz.' : 'Enter the details for the new quiz. Questions are managed separately.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
-            {/* Quiz Title */}
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Quiz Title</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., Sales Fundamentals Checkpoint" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-             {/* Placeholder for adding questions later */}
-             <p className="text-sm text-muted-foreground pt-4">
-               Note: Questions for this quiz must be managed separately after the quiz is created.
-             </p>
-
+             <Tabs defaultValue="main">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="main">Main Content</TabsTrigger>
+                    <TabsTrigger value="translations">Translations</TabsTrigger>
+                </TabsList>
+                <TabsContent value="main" className="pt-4">
+                     <FormField
+                      control={form.control}
+                      name="title"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Quiz Title (English)</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g., Sales Fundamentals Checkpoint" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                </TabsContent>
+                <TabsContent value="translations" className="pt-4 space-y-4">
+                    <Alert variant="default" className="text-sm">
+                        <AlertDescription>
+                            Provide translations for the quiz title. If a translation is not provided, the English title will be used as a fallback. Question translations are managed on the question edit page.
+                        </AlertDescription>
+                    </Alert>
+                     {SUPPORTED_LOCALES.map(locale => (
+                         <FormField
+                            key={locale.value}
+                            control={form.control}
+                            name={`translations.${locale.value}.title`}
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Title ({locale.label})</FormLabel>
+                                    <FormControl><Input {...field} value={field.value ?? ''} /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                     ))}
+                </TabsContent>
+             </Tabs>
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancel</Button>
               </DialogClose>
               <Button type="submit" className="bg-primary hover:bg-primary/90">
-                {isEditing ? 'Save Title' : 'Create Quiz'}
+                {isEditing ? 'Save Changes' : 'Create Quiz'}
               </Button>
             </DialogFooter>
           </form>
