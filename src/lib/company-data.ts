@@ -642,3 +642,63 @@ export async function getCompanyForLogin(host: string | null): Promise<Company |
     return null;
   }
 }
+
+export async function assignMissingCompanyToUsers(defaultCompanyId: string): Promise<number> {
+    if (!defaultCompanyId) {
+        console.error("Cannot assign missing brand: defaultCompanyId is required.");
+        return 0;
+    }
+    return retryOperation(async () => {
+        const usersToUpdate = await getUsersWithoutCompany();
+        if (usersToUpdate.length === 0) {
+            console.log("No users found missing a brand ID.");
+            return 0;
+        }
+
+        const batch = writeBatch(db);
+        usersToUpdate.forEach(user => {
+            const userRef = doc(db, 'users', user.id);
+            console.log(`Assigning brand ${defaultCompanyId} to user ${user.email} (${user.id})`);
+            batch.update(userRef, { companyId: defaultCompanyId, isDeleted: false, updatedAt: serverTimestamp() });
+        });
+
+        await batch.commit();
+        console.log(`Successfully assigned brand ID ${defaultCompanyId} to ${usersToUpdate.length} users.`);
+        return usersToUpdate.length;
+    }, 3);
+}
+
+export async function assignMissingLocationToUsers(companyId: string, defaultLocationId: string): Promise<number> {
+    if (!companyId || !defaultLocationId) {
+        console.error("Cannot assign missing location: brand ID and defaultLocationId are required.");
+        return 0;
+    }
+
+    return retryOperation(async () => {
+        const usersRef = collection(db, 'users');
+        const companyUsersQuery = query(usersRef, where('companyId', '==', companyId), where("isDeleted", "==", false));
+        const companyUsersSnapshot = await getDocs(companyUsersQuery);
+
+        let updatedCount = 0;
+        const batch = writeBatch(db);
+
+        companyUsersSnapshot.forEach((userDoc) => {
+            const userData = userDoc.data() as User;
+            if (!userData.assignedLocationIds || !Array.isArray(userData.assignedLocationIds) || userData.assignedLocationIds.length === 0) {
+                console.log(`Assigning location ${defaultLocationId} to user ${userData.email} (${userDoc.id})`);
+                const userRef = doc(db, 'users', userDoc.id);
+                batch.update(userRef, { assignedLocationIds: [defaultLocationId], updatedAt: serverTimestamp() });
+                updatedCount++;
+            }
+        });
+
+        if (updatedCount > 0) {
+            await batch.commit();
+            console.log(`Successfully assigned location ${defaultLocationId} to ${updatedCount} users in brand ${companyId}.`);
+        } else {
+            console.log(`No users found in brand ${companyId} needing location assignment.`);
+        }
+
+        return updatedCount;
+    }, 3);
+}
