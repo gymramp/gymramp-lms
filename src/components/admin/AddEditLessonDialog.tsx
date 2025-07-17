@@ -45,8 +45,8 @@ const SUPPORTED_LOCALES = [
 ];
 
 const lessonTranslationSchema = z.object({
-  title: z.string().optional(),
-  content: z.string().optional(),
+  title: z.string().optional().or(z.literal('')),
+  content: z.string().optional().or(z.literal('')),
   videoUrl: z.string().url({ message: 'Invalid video URL format.' }).optional().or(z.literal('')),
 });
 

@@ -34,7 +34,7 @@ const SUPPORTED_LOCALES = [
 ];
 
 const quizTranslationSchema = z.object({
-  title: z.string().optional(),
+  title: z.string().optional().or(z.literal('')),
 });
 
 const editQuizFormSchema = z.object({

@@ -23,9 +23,27 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { createBrandLesson, updateBrandLesson } from '@/lib/brand-content-data';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
-import type { BrandLesson, BrandLessonFormData } from '@/types/course';
-import { Upload, PlaySquare, FileUp, Image as ImageIconLucide, Trash2, Loader2, Video } from 'lucide-react';
+import type { BrandLesson, BrandLessonFormData, LessonTranslation } from '@/types/course';
+import { Upload, PlaySquare, FileUp, Image as ImageIconLucide, Trash2, Loader2, Video, Globe, Languages, Wand2 } from 'lucide-react';
 import RichTextEditor from '@/components/ui/RichTextEditor';
+import { translateContent } from '@/ai/flows/translate-content';
+
+const SUPPORTED_LOCALES = [
+  { value: 'es', label: 'Spanish' },
+  { value: 'fr', label: 'French' },
+  { value: 'de', label: 'German' },
+  { value: 'it', label: 'Italian' },
+  { value: 'ja', label: 'Japanese' },
+  { value: 'pt', label: 'Portuguese' },
+  { value: 'zh', label: 'Chinese' },
+];
+
+const lessonTranslationSchema = z.object({
+  title: z.string().optional().or(z.literal('')),
+  content: z.string().optional().or(z.literal('')),
+  videoUrl: z.string().url({ message: 'Invalid video URL format.' }).optional().or(z.literal('')),
+});
+
 
 const brandLessonFormSchema = z.object({
   title: z.string().min(3, { message: 'Lesson title must be at least 3 characters.' }),
@@ -36,6 +54,7 @@ const brandLessonFormSchema = z.object({
   playbackMinutes: z.coerce.number().min(0).max(59).optional(),
   playbackSeconds: z.coerce.number().min(0).max(59).optional(),
   exerciseFilesInfo: z.string().optional().or(z.literal('')),
+  translations: z.record(lessonTranslationSchema).optional(),
 });
 
 type BrandLessonFormValues = z.infer<typeof brandLessonFormSchema>;
@@ -64,6 +83,9 @@ export function AddEditBrandLessonDialog({
   const [isImageUploading, setIsImageUploading] = useState(false);
   const [imageUploadProgress, setImageUploadProgress] = useState(0);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+  
+  const [translationVideoUploadState, setTranslationVideoUploadState] = useState<Record<string, { progress: number; error: string | null; uploading: boolean }>>({});
+  const [isTranslating, setIsTranslating] = useState<Record<string, boolean>>({});
 
   const form = useForm<BrandLessonFormValues>({
     resolver: zodResolver(brandLessonFormSchema),
@@ -103,11 +125,12 @@ export function AddEditBrandLessonDialog({
                 playbackMinutes: minutes,
                 playbackSeconds: seconds,
                 exerciseFilesInfo: initialData.exerciseFilesInfo || '',
+                translations: initialData.translations || {},
             });
         } else {
             form.reset({
                 title: '', content: '', featuredImageUrl: '', videoUrl: '',
-                playbackHours: 0, playbackMinutes: 0, playbackSeconds: 0, exerciseFilesInfo: '',
+                playbackHours: 0, playbackMinutes: 0, playbackSeconds: 0, exerciseFilesInfo: '', translations: {}
             });
         }
         setIsVideoUploading(false); setVideoUploadProgress(0); setVideoUploadError(null);
@@ -115,24 +138,76 @@ export function AddEditBrandLessonDialog({
         setIsSaving(false);
     }
   }, [initialData, form, isOpen]);
+  
+  const handleAutoTranslate = async (targetLocale: string) => {
+    const { title, content } = form.getValues();
+    if (!title || !content) {
+      toast({
+        title: "Missing Content",
+        description: "Please fill in the main English title and content before translating.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-  const handleVideoFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    setIsTranslating(prev => ({...prev, [targetLocale]: true}));
+    try {
+        const result = await translateContent({
+            sourceTitle: title,
+            sourceContent: content,
+            targetLocale: targetLocale
+        });
+
+        if (result.translatedTitle && result.translatedContent) {
+             form.setValue(`translations.${targetLocale}.title`, result.translatedTitle);
+             form.setValue(`translations.${targetLocale}.content`, result.translatedContent);
+             toast({
+                title: "Translation Complete!",
+                description: `Content has been translated to ${SUPPORTED_LOCALES.find(l => l.value === targetLocale)?.label}.`,
+             });
+        } else {
+             throw new Error("AI did not return translated content.");
+        }
+    } catch (error: any) {
+         toast({
+            title: "Translation Failed",
+            description: error.message || "Could not translate content.",
+            variant: "destructive",
+         });
+    } finally {
+        setIsTranslating(prev => ({...prev, [targetLocale]: false}));
+    }
+ };
+
+
+  const handleVideoFileChange = async (event: React.ChangeEvent<HTMLInputElement>, locale?: string) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    setIsVideoUploading(true); setVideoUploadProgress(0); setVideoUploadError(null);
+
+    const uploaderStateSetter = locale ? (state: any) => setTranslationVideoUploadState(prev => ({...prev, [locale]: {...(prev[locale] || {}), ...state}})) : setIsVideoUploading;
+    const progressSetter = locale ? (progress: number) => setTranslationVideoUploadState(prev => ({...prev, [locale]: {...(prev[locale] || {}), progress}})) : setVideoUploadProgress;
+    const errorSetter = locale ? (error: string | null) => setTranslationVideoUploadState(prev => ({...prev, [locale]: {...(prev[locale] || {}), error}})) : setVideoUploadError;
+
+    uploaderStateSetter({ uploading: true, progress: 0, error: null });
+
     try {
-        const uniqueFileName = `${brandId}-${isEditing && initialData?.id ? initialData.id : Date.now()}-lessonvideo-${file.name}`;
+        const uniqueFileName = `${brandId}-${isEditing && initialData?.id ? initialData.id : Date.now()}${locale ? `-${locale}` : ''}-lessonvideo-${file.name}`;
         const storagePath = `${STORAGE_PATHS.LESSON_VIDEOS}/${uniqueFileName}`;
-        const downloadURL = await uploadImage(file, storagePath, setVideoUploadProgress);
-        form.setValue('videoUrl', downloadURL, { shouldValidate: true });
-        toast({ title: "Video Uploaded", description: "Lesson video successfully uploaded." });
+        const downloadURL = await uploadImage(file, storagePath, progressSetter);
+
+        const fieldName = locale ? `translations.${locale}.videoUrl` as const : 'videoUrl' as const;
+        form.setValue(fieldName, downloadURL, { shouldValidate: true });
+
+        toast({ title: "Video Uploaded", description: `Video for ${locale || 'main language'} successfully uploaded.` });
+
     } catch (error: any) {
-        setVideoUploadError(error.message || "Failed to upload video.");
-        toast({ title: "Video Upload Failed", description: error.message || "Could not upload video.", variant: "destructive" });
+        errorSetter(error.message || "Failed to upload video.");
+        toast({ title: "Video Upload Failed", description: error.message || "Could not upload the video.", variant: "destructive" });
     } finally {
-        setIsVideoUploading(false);
+        uploaderStateSetter({ uploading: false });
     }
   };
+  
 
   const handleImageFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -171,6 +246,7 @@ export function AddEditBrandLessonDialog({
         videoUrl: data.videoUrl?.trim() === '' ? null : data.videoUrl,
         exerciseFilesInfo: data.exerciseFilesInfo?.trim() === '' ? null : data.exerciseFilesInfo,
         playbackTime: playbackTime,
+        translations: data.translations,
       };
 
       let savedLesson: BrandLesson | null = null;
@@ -209,73 +285,56 @@ export function AddEditBrandLessonDialog({
               {isEditing ? 'Update the details of this lesson.' : 'Create a new lesson for your account.'}
             </DialogDescription>
           </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="flex-1 overflow-y-auto">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="md:col-span-2 space-y-6">
-                  <FormField control={form.control} name="title" render={({ field }) => ( <FormItem> <FormLabel className="text-base font-semibold">Name</FormLabel> <FormControl><Input placeholder="Enter lesson name" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} />
-                  <FormField
-                    control={form.control}
-                    name="content"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-base font-semibold">Content</FormLabel>
-                        <FormControl>
-                          <RichTextEditor
-                            value={field.value}
-                            onChange={field.onChange}
-                            placeholder="Enter the main text content for this lesson..."
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="md:col-span-1 space-y-6">
-                  <FormField control={form.control} name="featuredImageUrl" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-base font-semibold">Featured Image</FormLabel>
-                      <FormControl>
-                        <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
-                          {field.value && !isImageUploading ? ( <div className="relative aspect-video bg-muted rounded-md"><Image src={field.value ?? ''} alt="Preview" fill style={{ objectFit: 'contain' }} className="rounded-md" data-ai-hint="lesson image" onError={() => field.onChange('')} /><Button type="button" variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => field.onChange('')}><Trash2 className="h-4 w-4" /></Button></div> )
-                          : isImageUploading ? ( <div className="py-8"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" /><Progress value={imageUploadProgress} className="w-full h-2" />{imageUploadError && <p className="text-xs text-destructive mt-2">{imageUploadError}</p>}</div> )
-                          : ( <Label htmlFor="brand-lesson-image-upload" className="cursor-pointer block"><ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Upload image</p><Input id="brand-lesson-image-upload" type="file" accept="image/*" className="hidden" onChange={handleImageFileChange} disabled={isImageUploading} /></Label> )}
+               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                 <Tabs defaultValue="main" className="h-full flex flex-col">
+                    <TabsList className="mx-6">
+                        <TabsTrigger value="main" className="flex items-center gap-1"><Globe className="h-4 w-4" /> Main Content (English)</TabsTrigger>
+                        <TabsTrigger value="translations" className="flex items-center gap-1"><Languages className="h-4 w-4" /> Translations</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="main" className="flex-1 overflow-y-auto px-6 py-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="md:col-span-2 space-y-6">
+                                <FormField control={form.control} name="title" render={({ field }) => ( <FormItem> <FormLabel className="text-base font-semibold">Name</FormLabel> <FormControl><Input placeholder="Enter lesson name" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} />
+                                <FormField control={form.control} name="content" render={({ field }) => ( <FormItem><FormLabel className="text-base font-semibold">Content</FormLabel><FormControl><RichTextEditor value={field.value} onChange={field.onChange} placeholder="Enter main content..." /></FormControl><FormMessage /></FormItem> )} />
+                            </div>
+                            <div className="md:col-span-1 space-y-6">
+                                <FormField control={form.control} name="featuredImageUrl" render={({ field }) => ( <FormItem><FormLabel>Featured Image</FormLabel><FormControl><div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">{field.value && !isImageUploading ? (<div className="relative aspect-video bg-muted rounded-md"><Image src={field.value ?? ''} alt="Preview" fill style={{ objectFit: 'contain' }} className="rounded-md" data-ai-hint="lesson image" onError={() => field.onChange('')} /><Button type="button" variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => field.onChange('')}><Trash2 className="h-4 w-4" /></Button></div>) : isImageUploading ? (<div className="py-8"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" /><Progress value={imageUploadProgress} className="w-full h-2" />{imageUploadError && <p className="text-xs text-destructive mt-2">{imageUploadError}</p>}</div>) : (<Label htmlFor="brand-lesson-image-upload" className="cursor-pointer block"><ImageIconLucide className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Upload image</p><Input id="brand-lesson-image-upload" type="file" accept="image/*" className="hidden" onChange={handleImageFileChange} disabled={isImageUploading} /></Label>)}</div></FormControl><FormMessage /></FormItem> )} />
+                                <FormField control={form.control} name="videoUrl" render={({ field }) => ( <FormItem><FormLabel>Lesson Video</FormLabel><FormControl><div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">{field.value && !isVideoUploading ? (<div className="relative aspect-video bg-muted rounded-md flex items-center justify-center"><Video className="h-10 w-10 text-muted-foreground" /><p className="text-xs text-muted-foreground mt-1 truncate w-full px-2">{field.value}</p><Button type="button" variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => field.onChange('')}><Trash2 className="h-4 w-4" /></Button></div>) : isVideoUploading ? (<div className="py-8"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" /><Progress value={videoUploadProgress} className="w-full h-2" />{videoUploadError && <p className="text-xs text-destructive mt-2">{videoUploadError}</p>}</div>) : (<Label htmlFor="brand-lesson-video-upload" className="cursor-pointer block"><FileUp className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Upload video</p><Input id="brand-lesson-video-upload" type="file" accept="video/*" className="hidden" onChange={(e) => handleVideoFileChange(e)} disabled={isVideoUploading} /></Label>)}</div></FormControl><FormMessage /></FormItem> )} />
+                                <div className="space-y-2"><Label>Playback Time</Label><div className="flex items-center space-x-2"><FormField control={form.control} name="playbackHours" render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" min="0" {...field} value={field.value ?? 0} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} /></FormControl><FormLabel className="text-xs text-muted-foreground block text-center">h</FormLabel></FormItem>)} /><FormField control={form.control} name="playbackMinutes" render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" min="0" max="59" {...field} value={field.value ?? 0} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} /></FormControl><FormLabel className="text-xs text-muted-foreground block text-center">m</FormLabel></FormItem>)} /><FormField control={form.control} name="playbackSeconds" render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" min="0" max="59" {...field} value={field.value ?? 0} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} /></FormControl><FormLabel className="text-xs text-muted-foreground block text-center">s</FormLabel></FormItem>)} /></div></div>
+                                <FormField control={form.control} name="exerciseFilesInfo" render={({ field }) => ( <FormItem><FormLabel>Exercise Files</FormLabel><FormControl><Textarea rows={3} placeholder="File URLs/Names (one per line)" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem> )} />
+                            </div>
                         </div>
-                      </FormControl> <FormMessage />
-                    </FormItem>
-                  )} />
-                  <FormField control={form.control} name="videoUrl" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-base font-semibold">Lesson Video</FormLabel>
-                      <FormControl>
-                        <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
-                          {field.value && !isVideoUploading ? ( <div className="relative aspect-video bg-muted rounded-md flex items-center justify-center"><Video className="h-10 w-10 text-muted-foreground" /><p className="text-xs text-muted-foreground mt-1 truncate w-full px-2">{field.value}</p><Button type="button" variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => field.onChange('')}><Trash2 className="h-4 w-4" /></Button></div> )
-                          : isVideoUploading ? ( <div className="py-8"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" /><Progress value={videoUploadProgress} className="w-full h-2" />{videoUploadError && <p className="text-xs text-destructive mt-2">{videoUploadError}</p>}</div> )
-                          : ( <Label htmlFor="brand-lesson-video-upload" className="cursor-pointer block"><FileUp className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Upload video</p><Input id="brand-lesson-video-upload" type="file" accept="video/*" className="hidden" onChange={handleVideoFileChange} disabled={isVideoUploading} /></Label> )}
-                        </div>
-                      </FormControl> <FormMessage />
-                    </FormItem>
-                  )} />
-                  <div className="space-y-2">
-                    <Label className="text-base font-semibold">Playback Time (Optional)</Label>
-                    <div className="flex items-center space-x-2">
-                      <FormField control={form.control} name="playbackHours" render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" min="0" {...field} value={field.value ?? 0} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} /></FormControl><FormLabel className="text-xs text-muted-foreground block text-center">h</FormLabel></FormItem>)} />
-                      <FormField control={form.control} name="playbackMinutes" render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" min="0" max="59" {...field} value={field.value ?? 0} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} /></FormControl><FormLabel className="text-xs text-muted-foreground block text-center">m</FormLabel></FormItem>)} />
-                      <FormField control={form.control} name="playbackSeconds" render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" min="0" max="59" {...field} value={field.value ?? 0} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} /></FormControl><FormLabel className="text-xs text-muted-foreground block text-center">s</FormLabel></FormItem>)} />
-                    </div>
-                  </div>
-                  <FormField control={form.control} name="exerciseFilesInfo" render={({ field }) => ( <FormItem><FormLabel className="text-base font-semibold">Exercise Files (Optional)</FormLabel><FormControl><Textarea rows={3} placeholder="File URLs/Names (one per line)" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem> )} />
-                </div>
+                    </TabsContent>
+                    <TabsContent value="translations" className="flex-1 overflow-y-auto px-6 py-4">
+                     <div className="space-y-6">
+                        {SUPPORTED_LOCALES.map(locale => {
+                           const uploadState = translationVideoUploadState[locale.value] || { progress: 0, error: null, uploading: false };
+                           return (
+                            <div key={locale.value} className="p-4 border rounded-md space-y-4">
+                                <div className="flex justify-between items-center"><h3 className="font-semibold text-lg">{locale.label}</h3><Button type="button" variant="outline" size="sm" onClick={() => handleAutoTranslate(locale.value)} disabled={isTranslating[locale.value]}><Wand2 className="mr-2 h-4 w-4" />Auto-Translate</Button></div>
+                                <FormField control={form.control} name={`translations.${locale.value}.title`} render={({ field }) => ( <FormItem><FormLabel>Translated Title</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem> )}/>
+                                <FormField control={form.control} name={`translations.${locale.value}.content`} render={({ field }) => ( <FormItem><FormLabel>Translated Content</FormLabel><FormControl><RichTextEditor value={field.value ?? ''} onChange={field.onChange} /></FormControl><FormMessage /></FormItem> )}/>
+                                <FormField control={form.control} name={`translations.${locale.value}.videoUrl`} render={({ field }) => (
+                                  <FormItem><FormLabel>Translated Video</FormLabel><FormControl><div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
+                                    {field.value && !uploadState.uploading ? ( <div className="relative aspect-video bg-muted rounded-md flex items-center justify-center"><Video className="h-10 w-10 text-muted-foreground" /><p className="text-xs text-muted-foreground mt-1 truncate w-full px-2">{field.value}</p><Button type="button" variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => field.onChange('')}><Trash2 className="h-4 w-4" /></Button></div> )
+                                    : uploadState.uploading ? ( <div className="py-8"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" /><Progress value={uploadState.progress} className="w-full h-2" />{uploadState.error && <p className="text-xs text-destructive mt-2">{uploadState.error}</p>}</div> )
+                                    : ( <Label htmlFor={`brand-lesson-video-upload-${locale.value}`} className="cursor-pointer block"><FileUp className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Upload video for {locale.label}</p><Input id={`brand-lesson-video-upload-${locale.value}`} type="file" accept="video/*" className="hidden" onChange={(e) => handleVideoFileChange(e, locale.value)} disabled={uploadState.uploading} /></Label> )}
+                                  </div></FormControl><FormMessage /></FormItem>
+                                )}/>
+                            </div>
+                           )
+                        })}
+                     </div>
+                  </TabsContent>
+                 </Tabs>
               </form>
             </Form>
           </div>
-
-          <DialogFooter className="px-6 pb-6 pt-4 border-t bg-background z-10">
+          <DialogFooter className="px-6 pb-6 pt-4 border-t bg-background z-10 shrink-0">
             <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
-            <Button type="submit" onClick={form.handleSubmit(onSubmit)} className="bg-primary hover:bg-primary/90" disabled={isSaving || isVideoUploading || isImageUploading}>
+            <Button type="submit" onClick={form.handleSubmit(onSubmit)} className="bg-primary hover:bg-primary/90" disabled={isSaving || isVideoUploading || isImageUploading || Object.values(translationVideoUploadState).some(s => s.uploading)}>
               {(isSaving || isVideoUploading || isImageUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isEditing ? 'Save Changes' : 'Create Lesson'}
             </Button>

@@ -36,8 +36,8 @@ const SUPPORTED_LOCALES = [
 ];
 
 const questionTranslationSchema = z.object({
-    text: z.string().optional(),
-    options: z.array(z.string()).optional(),
+    text: z.string().optional().or(z.literal('')),
+    options: z.array(z.string().optional().or(z.literal(''))).optional(),
 });
 
 const baseSchema = z.object({
