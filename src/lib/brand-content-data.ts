@@ -1,4 +1,5 @@
 
+
 import { db } from './firebase';
 import {
     collection,
@@ -16,7 +17,8 @@ import {
     arrayRemove,
     Timestamp
 } from 'firebase/firestore';
-import type { BrandCourse, BrandCourseFormData, BrandLesson, BrandLessonFormData, BrandQuiz, BrandQuizFormData, BrandQuestion, BrandQuestionFormData, QuestionType } from '@/types/course';
+import type { BrandCourse, BrandCourseFormData, BrandLesson, BrandLessonFormData, BrandQuiz, BrandQuizFormData, BrandQuestion, BrandQuestionFormData, QuestionType, QuizTranslation } from '@/types/course';
+import { getLessonById, getQuizById } from './firestore-data';
 
 const BRAND_COURSES_COLLECTION = 'brandCourses';
 const BRAND_LESSONS_COLLECTION = 'brandLessons';
@@ -307,18 +309,25 @@ export async function getBrandQuizzesByBrandId(brandId: string): Promise<BrandQu
     });
 }
 
-export async function getBrandQuizById(quizId: string): Promise<BrandQuiz | null> {
+export async function getBrandQuizById(quizId: string, locale?: string): Promise<BrandQuiz | null> {
     if (!quizId) return null;
     return retryOperation(async () => {
         const quizRef = doc(db, BRAND_QUIZZES_COLLECTION, quizId);
         const docSnap = await getDoc(quizRef);
         if (docSnap.exists() && docSnap.data().isDeleted !== true) {
-            const data = docSnap.data();
-            return {
-                id: docSnap.id,
-                ...data,
-                questions: data.questions || [] // Ensure questions is always an array
-            } as BrandQuiz;
+            let quizData = { id: docSnap.id, ...docSnap.data(), questions: docSnap.data().questions || [] } as BrandQuiz;
+
+            if (locale && locale !== 'en' && quizData.translations && quizData.translations[locale]) {
+                const translation = quizData.translations[locale];
+                console.log(`[getBrandQuizById] Merging translation for locale '${locale}' for brand quiz '${quizId}'.`);
+                if (translation.title) quizData.title = translation.title;
+                if (translation.questions && translation.questions.length === quizData.questions.length) {
+                    quizData.questions = translation.questions;
+                } else if (translation.questions) {
+                    console.warn(`[getBrandQuizById] Mismatch in question count for brand quiz '${quizId}' locale '${locale}'. Falling back to default questions.`);
+                }
+            }
+            return quizData;
         } else {
             return null;
         }
