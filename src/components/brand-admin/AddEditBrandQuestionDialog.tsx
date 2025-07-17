@@ -236,4 +236,3 @@ export function AddEditBrandQuestionDialog({ isOpen, setIsOpen, brandQuizId, ini
     </Dialog>
   );
 }
-
