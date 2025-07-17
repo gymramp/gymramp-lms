@@ -21,6 +21,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { translateContent } from '@/ai/flows/translate-content';
 
 const SUPPORTED_LOCALES = [
   { value: 'es', label: 'Spanish' },
@@ -55,6 +56,7 @@ export default function ManageQuizQuestionsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [questionToDelete, setQuestionToDelete] = useState<Question | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTranslating, setIsTranslating] = useState<Record<string, boolean>>({});
 
   const form = useForm<EditQuizFormValues>({
     resolver: zodResolver(editQuizFormSchema),
@@ -104,6 +106,46 @@ export default function ManageQuizQuestionsPage() {
       toast({ title: "Error Saving Quiz", description: error.message, variant: "destructive" });
     } finally {
       setIsSaving(false);
+    }
+  };
+  
+  const handleAutoTranslate = async (targetLocale: string) => {
+    const { title } = form.getValues();
+    if (!title) {
+      toast({
+        title: "Missing Title",
+        description: "Please fill in the main English title before translating.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsTranslating(prev => ({ ...prev, [targetLocale]: true }));
+    try {
+      // For quiz titles, we only need to translate the title. We pass an empty string for content.
+      const result = await translateContent({
+        sourceTitle: title,
+        sourceContent: 'title only', // Placeholder as content is not needed
+        targetLocale: targetLocale
+      });
+
+      if (result.translatedTitle) {
+        form.setValue(`translations.${targetLocale}.title`, result.translatedTitle);
+        toast({
+          title: "Translation Complete!",
+          description: `Title has been translated to ${SUPPORTED_LOCALES.find(l => l.value === targetLocale)?.label}.`,
+        });
+      } else {
+        throw new Error("AI did not return a translated title.");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Translation Failed",
+        description: error.message || "Could not translate content.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTranslating(prev => ({ ...prev, [targetLocale]: false }));
     }
   };
 
@@ -167,13 +209,22 @@ export default function ManageQuizQuestionsPage() {
                     <AlertDescription>Provide translations for the quiz title.</AlertDescription>
                   </Alert>
                   {SUPPORTED_LOCALES.map(locale => (
-                    <FormField key={locale.value} control={form.control} name={`translations.${locale.value}.title`} render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Title ({locale.label})</FormLabel>
-                        <FormControl><Input {...field} value={field.value ?? ''} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
+                    <div key={locale.value} className="p-4 border rounded-md space-y-4">
+                      <div className="flex justify-between items-center">
+                          <h3 className="font-semibold text-lg">{locale.label}</h3>
+                           <Button type="button" variant="outline" size="sm" onClick={() => handleAutoTranslate(locale.value)} disabled={isTranslating[locale.value]}>
+                              {isTranslating[locale.value] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                              Auto-Translate Title
+                          </Button>
+                      </div>
+                      <FormField control={form.control} name={`translations.${locale.value}.title`} render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Title ({locale.label})</FormLabel>
+                          <FormControl><Input {...field} value={field.value ?? ''} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                    </div>
                   ))}
                 </TabsContent>
               </Tabs>
@@ -230,10 +281,7 @@ export default function ManageQuizQuestionsPage() {
         onQuestionSaved={fetchQuiz}
       />
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete the question: "{questionToDelete?.text.substring(0, 50)}...".</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel onClick={() => setQuestionToDelete(null)}>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmDeleteQuestion} className="bg-destructive hover:bg-destructive/90">Yes, delete question</AlertDialogAction></AlertDialogFooter>
-        </AlertDialogContent>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete the question: "{questionToDelete?.text.substring(0, 50)}...".</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setQuestionToDelete(null)}>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmDeleteQuestion} className="bg-destructive hover:bg-destructive/90">Yes, delete question</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
     </div>
   );

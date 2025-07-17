@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, PlusCircle, Edit, Trash2, CheckCircle, Loader2, HelpCircle, Save, ListChecks } from 'lucide-react';
+import { ArrowLeft, PlusCircle, Edit, Trash2, CheckCircle, Loader2, HelpCircle, Save, ListChecks, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { BrandQuiz, BrandQuestion, User, Company, QuizTranslation } from '@/types/course';
 import { getBrandQuizById, deleteBrandQuestionFromBrandQuiz, updateBrandQuiz } from '@/lib/brand-content-data';
@@ -26,6 +26,7 @@ import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getUserByEmail } from '@/lib/user-data';
 import { getCompanyById } from '@/lib/company-data';
+import { translateContent } from '@/ai/flows/translate-content';
 
 const SUPPORTED_LOCALES = [
   { value: 'es', label: 'Spanish' },
@@ -62,6 +63,7 @@ export default function ManageBrandQuizQuestionsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [questionToDelete, setQuestionToDelete] = useState<BrandQuestion | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTranslating, setIsTranslating] = useState<Record<string, boolean>>({});
 
   const form = useForm<EditBrandQuizFormValues>({
     resolver: zodResolver(editBrandQuizFormSchema),
@@ -137,6 +139,45 @@ export default function ManageBrandQuizQuestionsPage() {
     }
   };
 
+  const handleAutoTranslate = async (targetLocale: string) => {
+    const { title } = form.getValues();
+    if (!title) {
+      toast({
+        title: "Missing Title",
+        description: "Please fill in the main English title before translating.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsTranslating(prev => ({ ...prev, [targetLocale]: true }));
+    try {
+      const result = await translateContent({
+        sourceTitle: title,
+        sourceContent: 'title only',
+        targetLocale: targetLocale
+      });
+
+      if (result.translatedTitle) {
+        form.setValue(`translations.${targetLocale}.title`, result.translatedTitle);
+        toast({
+          title: "Translation Complete!",
+          description: `Title has been translated to ${SUPPORTED_LOCALES.find(l => l.value === targetLocale)?.label}.`,
+        });
+      } else {
+        throw new Error("AI did not return a translated title.");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Translation Failed",
+        description: error.message || "Could not translate content.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTranslating(prev => ({ ...prev, [targetLocale]: false }));
+    }
+  };
+  
   const openDeleteConfirmation = (question: BrandQuestion) => {
     setQuestionToDelete(question);
     setIsDeleteDialogOpen(true);
@@ -176,7 +217,24 @@ export default function ManageBrandQuizQuestionsPage() {
                 <TabsContent value="main" className="pt-6"><FormField control={form.control} name="title" render={({ field }) => (<FormItem><FormLabel>Quiz Title (English)</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} /></TabsContent>
                 <TabsContent value="translations" className="pt-6 space-y-4">
                   <Alert variant="default" className="text-sm"><AlertDescription>Provide translations for the quiz title.</AlertDescription></Alert>
-                  {SUPPORTED_LOCALES.map(locale => (<FormField key={locale.value} control={form.control} name={`translations.${locale.value}.title`} render={({ field }) => (<FormItem><FormLabel>Title ({locale.label})</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />))}
+                  {SUPPORTED_LOCALES.map(locale => (
+                     <div key={locale.value} className="p-4 border rounded-md space-y-4">
+                        <div className="flex justify-between items-center">
+                            <h3 className="font-semibold text-lg">{locale.label}</h3>
+                             <Button type="button" variant="outline" size="sm" onClick={() => handleAutoTranslate(locale.value)} disabled={isTranslating[locale.value]}>
+                                {isTranslating[locale.value] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                                Auto-Translate Title
+                            </Button>
+                        </div>
+                        <FormField control={form.control} name={`translations.${locale.value}.title`} render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Title ({locale.label})</FormLabel>
+                            <FormControl><Input {...field} value={field.value ?? ''} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                    </div>
+                  ))}
                 </TabsContent>
               </Tabs>
             </CardContent>

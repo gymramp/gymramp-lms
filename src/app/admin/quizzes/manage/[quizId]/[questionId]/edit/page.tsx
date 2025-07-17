@@ -17,9 +17,10 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from '@/hooks/use-toast';
 import type { Quiz, Question, QuestionFormData, QuestionType, QuestionTranslation } from '@/types/course';
 import { getQuizById, updateQuestion } from '@/lib/firestore-data';
-import { PlusCircle, Trash2, ArrowLeft, Loader2, Languages } from 'lucide-react';
+import { PlusCircle, Trash2, ArrowLeft, Loader2, Languages, Wand2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { translateContent } from '@/ai/flows/translate-content';
 
 const SUPPORTED_LOCALES = [
   { value: 'es', label: 'Spanish' },
@@ -90,6 +91,7 @@ export default function EditQuestionPage() {
     const [quiz, setQuiz] = useState<Quiz | null>(null);
     const [initialQuestionData, setInitialQuestionData] = useState<Question | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isTranslating, setIsTranslating] = useState<Record<string, boolean>>({});
 
     const form = useForm<QuestionFormValues>({
         resolver: zodResolver(questionFormSchema),
@@ -136,6 +138,44 @@ export default function EditQuestionPage() {
     }, [quizId, questionId, router, toast, form]);
 
     useEffect(() => { fetchInitialData(); }, [fetchInitialData]);
+
+    const handleAutoTranslate = async (targetLocale: string) => {
+        const questionText = form.getValues('text');
+        const options = form.getValues('options');
+        const optionTexts = options?.map(opt => opt.text).join('\n') || '';
+        const combinedContent = `Question: ${questionText}\n\nOptions:\n${optionTexts}`;
+
+        if (!questionText) {
+            toast({ title: "Missing Content", description: "Please enter the main question text.", variant: "destructive" });
+            return;
+        }
+
+        setIsTranslating(prev => ({...prev, [targetLocale]: true}));
+        try {
+            const result = await translateContent({
+                sourceTitle: questionText, // Use sourceTitle for the question text
+                sourceContent: optionTexts, // Use sourceContent for the options, separated by newlines
+                targetLocale: targetLocale
+            });
+
+            if (result.translatedTitle && result.translatedContent) {
+                form.setValue(`translations.${targetLocale}.text`, result.translatedTitle);
+                const translatedOptions = result.translatedContent.split('\n');
+                if (options && translatedOptions.length === options.length) {
+                    options.forEach((_, index) => {
+                        form.setValue(`translations.${targetLocale}.options.${index}`, translatedOptions[index]);
+                    });
+                }
+                toast({ title: "Translation Complete!", description: `Question and options translated to ${SUPPORTED_LOCALES.find(l => l.value === targetLocale)?.label}.` });
+            } else {
+                throw new Error("AI did not return translated content.");
+            }
+        } catch (error: any) {
+            toast({ title: "Translation Failed", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+        } finally {
+            setIsTranslating(prev => ({...prev, [targetLocale]: false}));
+        }
+    };
 
     const onSubmit = async (data: QuestionFormValues) => {
         try {
@@ -189,7 +229,7 @@ export default function EditQuestionPage() {
                                     <TabsTrigger value="translations"><Languages className="mr-2 h-4 w-4"/>Translations</TabsTrigger>
                                 </TabsList>
                                 <TabsContent value="main" className="pt-6 space-y-6">
-                                    <FormField control={form.control} name="type" render={({ field }) => (/* Question Type RadioGroup ... */ <div/>)} /> {/* Type is non-editable for now */}
+                                    <FormField control={form.control} name="type" render={({ field }) => ( <div/>)} />
                                     <FormField control={form.control} name="text" render={({ field }) => (<FormItem><FormLabel>Question Text</FormLabel><FormControl><Textarea rows={3} {...field} /></FormControl><FormMessage /></FormItem>)} />
 
                                     {(questionType === 'multiple-choice' || questionType === 'multiple-select') && (
@@ -214,7 +254,13 @@ export default function EditQuestionPage() {
                                     <Alert><AlertDescription>Provide translations for the question text and each corresponding answer option. If a translation is not provided, the English version will be used.</AlertDescription></Alert>
                                     {SUPPORTED_LOCALES.map(locale => (
                                         <div key={locale.value} className="p-4 border rounded-md space-y-4">
-                                            <h3 className="font-semibold text-lg">{locale.label}</h3>
+                                            <div className="flex justify-between items-center">
+                                                <h3 className="font-semibold text-lg">{locale.label}</h3>
+                                                <Button type="button" variant="outline" size="sm" onClick={() => handleAutoTranslate(locale.value)} disabled={isTranslating[locale.value]}>
+                                                    {isTranslating[locale.value] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                                                    Auto-Translate
+                                                </Button>
+                                            </div>
                                             <FormField control={form.control} name={`translations.${locale.value}.text`} render={({ field }) => ( <FormItem><FormLabel>Translated Question Text</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem> )}/>
                                             {(questionType === 'multiple-choice' || questionType === 'multiple-select') && (
                                                 <div className="space-y-2">
