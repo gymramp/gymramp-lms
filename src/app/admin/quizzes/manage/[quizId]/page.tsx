@@ -1,35 +1,47 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useTransition } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { ArrowLeft, PlusCircle, Edit, Trash2, CheckCircle, Loader2 } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ArrowLeft, PlusCircle, Edit, Trash2, CheckCircle, Loader2, HelpCircle, Save, Layers, ListChecks, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { Quiz, Question } from '@/types/course';
-import { getQuizById, deleteQuestion } from '@/lib/firestore-data';
+import type { Quiz, Question, QuizFormData, QuizTranslation } from '@/types/course';
+import { getQuizById, deleteQuestion, updateQuiz } from '@/lib/firestore-data';
 import { AddEditQuestionDialog } from '@/components/admin/AddEditQuestionDialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert } from '@/components/ui/alert';
+
+const SUPPORTED_LOCALES = [
+  { value: 'es', label: 'Spanish' },
+  { value: 'fr', label: 'French' },
+  { value: 'de', label: 'German' },
+  { value: 'it', label: 'Italian' },
+  { value: 'ja', label: 'Japanese' },
+  { value: 'pt', label: 'Portuguese' },
+  { value: 'zh', label: 'Chinese' },
+];
+
+const quizTranslationSchema = z.object({
+  title: z.string().optional(),
+});
+
+const editQuizFormSchema = z.object({
+  title: z.string().min(3, { message: 'Quiz title must be at least 3 characters.' }),
+  translations: z.record(quizTranslationSchema).optional(),
+});
+
+type EditQuizFormValues = z.infer<typeof editQuizFormSchema>;
 
 export default function ManageQuizQuestionsPage() {
   const params = useParams();
@@ -38,18 +50,21 @@ export default function ManageQuizQuestionsPage() {
   const quizId = params.quizId as string;
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
-  const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isAddQuestionDialogOpen, setIsAddQuestionDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [questionToDelete, setQuestionToDelete] = useState<Question | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
+  const form = useForm<EditQuizFormValues>({
+    resolver: zodResolver(editQuizFormSchema),
+    defaultValues: { title: '', translations: {} },
+  });
 
-  const fetchQuizAndQuestions = useCallback(async () => {
+  const fetchQuiz = useCallback(async () => {
     setIsLoading(true);
     try {
       if (!quizId) throw new Error("Quiz ID missing");
-
       const fetchedQuiz = await getQuizById(quizId);
       if (!fetchedQuiz) {
         toast({ title: "Error", description: "Quiz not found.", variant: "destructive" });
@@ -57,182 +72,169 @@ export default function ManageQuizQuestionsPage() {
         return;
       }
       setQuiz(fetchedQuiz);
-      setQuestions(fetchedQuiz.questions || []); 
-
+      form.reset({
+        title: fetchedQuiz.title,
+        translations: (fetchedQuiz.translations as any) || {},
+      });
     } catch (error) {
-      console.error("Error fetching quiz/questions:", error);
       toast({ title: "Error", description: "Could not load quiz data.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
-  }, [quizId, router, toast]);
+  }, [quizId, router, toast, form]);
 
   useEffect(() => {
-    fetchQuizAndQuestions();
-  }, [fetchQuizAndQuestions]);
+    fetchQuiz();
+  }, [fetchQuiz]);
 
-
-  const handleAddQuestionClick = () => {
-    setIsAddDialogOpen(true);
+  const onTitleSubmit = async (data: EditQuizFormValues) => {
+    setIsSaving(true);
+    try {
+      const updatedQuiz = await updateQuiz(quizId, {
+        title: data.title,
+        translations: data.translations,
+      });
+      if (updatedQuiz) {
+        setQuiz(updatedQuiz);
+        toast({ title: "Quiz Updated", description: "The quiz details have been saved." });
+      } else {
+        throw new Error("Failed to update quiz");
+      }
+    } catch (error: any) {
+      toast({ title: "Error Saving Quiz", description: error.message, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-   const openDeleteConfirmation = (question: Question) => {
+  const openDeleteConfirmation = (question: Question) => {
     setQuestionToDelete(question);
     setIsDeleteDialogOpen(true);
   };
 
-   const confirmDeleteQuestion = async () => {
+  const confirmDeleteQuestion = async () => {
     if (!quizId || !questionToDelete) return;
-
     try {
       const success = await deleteQuestion(quizId, questionToDelete.id);
       if (success) {
-        setQuestions(prev => prev.filter(q => q.id !== questionToDelete.id));
-        toast({
-            title: 'Question Deleted',
-            description: `Question deleted successfully.`,
-        });
+        fetchQuiz(); // Re-fetch quiz to update question list
+        toast({ title: 'Question Deleted', description: `Question deleted successfully.` });
       } else {
         throw new Error('API returned false on delete');
       }
     } catch (error) {
-      console.error("Failed to delete question:", error);
-      toast({
-          title: 'Error',
-          description: `Failed to delete question.`,
-          variant: 'destructive',
-      });
+      toast({ title: 'Error', description: `Failed to delete question.`, variant: 'destructive' });
     } finally {
-        setIsDeleteDialogOpen(false);
-        setQuestionToDelete(null);
+      setIsDeleteDialogOpen(false);
+      setQuestionToDelete(null);
     }
   };
 
-   const handleQuestionSaved = (savedQuestion: Question) => {
-        fetchQuizAndQuestions(); 
-        setIsAddDialogOpen(false);
-   };
-
-  if (isLoading) {
-    return <div className="container mx-auto text-center">Loading quiz questions...</div>;
-  }
-
-  if (!quiz) {
-      return <div className="container mx-auto text-center">Quiz not found.</div>;
+  if (isLoading || !quiz) {
+    return <div className="container mx-auto p-6 text-center"><Loader2 className="h-8 w-8 animate-spin"/></div>;
   }
 
   return (
-    <div className="container mx-auto">
+    <div className="container mx-auto p-4 md:p-6 lg:p-8">
       <Button variant="outline" onClick={() => router.push('/admin/quizzes')} className="mb-6">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Quiz Library
       </Button>
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-primary">{quiz.title}</h1>
-          <p className="text-muted-foreground">Manage Quiz Questions</p>
-        </div>
-         <Button onClick={handleAddQuestionClick} className="bg-accent text-accent-foreground hover:bg-accent/90">
-            <PlusCircle className="mr-2 h-4 w-4" /> Add Question
-         </Button>
-      </div>
 
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>
-            Questions ({questions.length})
-          </CardTitle>
-          <CardDescription>Add, edit, or remove questions for this quiz.</CardDescription>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onTitleSubmit)} className="space-y-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl"><HelpCircle className="h-6 w-6"/> Edit Quiz</CardTitle>
+              <CardDescription>Manage the quiz title, translations, and its questions.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Tabs defaultValue="main">
+                <TabsList>
+                  <TabsTrigger value="main">Main Content</TabsTrigger>
+                  <TabsTrigger value="translations">Translations</TabsTrigger>
+                </TabsList>
+                <TabsContent value="main" className="pt-6">
+                  <FormField control={form.control} name="title" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Quiz Title (English)</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                </TabsContent>
+                <TabsContent value="translations" className="pt-6 space-y-4">
+                  <Alert variant="default" className="text-sm">
+                    <AlertDescription>Provide translations for the quiz title.</AlertDescription>
+                  </Alert>
+                  {SUPPORTED_LOCALES.map(locale => (
+                    <FormField key={locale.value} control={form.control} name={`translations.${locale.value}.title`} render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Title ({locale.label})</FormLabel>
+                        <FormControl><Input {...field} value={field.value ?? ''} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                  ))}
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+            <CardFooter>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}
+                Save Title & Translations
+              </Button>
+            </CardFooter>
+          </Card>
+        </form>
+      </Form>
+
+      <Card className="mt-8">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2"><ListChecks className="h-5 w-5"/> Questions ({quiz.questions.length})</CardTitle>
+            <CardDescription>Add, edit, or remove questions for this quiz.</CardDescription>
+          </div>
+          <Button onClick={() => setIsAddQuestionDialogOpen(true)} className="bg-accent text-accent-foreground hover:bg-accent/90">
+            <PlusCircle className="mr-2 h-4 w-4" /> Add Question
+          </Button>
         </CardHeader>
         <CardContent>
-          {questions.length === 0 ? (
-            <div className="text-center text-muted-foreground py-8">No questions added to this quiz yet.</div>
+          {quiz.questions.length === 0 ? (
+            <div className="text-center text-muted-foreground py-8">No questions added yet.</div>
           ) : (
-             <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Question Text</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Options</TableHead>
-                        <TableHead>Correct Answer(s)</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                 </TableHeader>
-                 <TableBody>
-                    {questions.map((question, index) => (
-                        <TableRow key={question.id || index}>
-                             <TableCell className="font-medium max-w-sm truncate">{question.text}</TableCell>
-                             <TableCell>
-                                <Badge variant="outline" className="capitalize">{question.type.replace('-', ' ')}</Badge>
-                             </TableCell>
-                             <TableCell className="text-sm text-muted-foreground">
-                                <ul className="list-disc list-inside">
-                                    {question.options.map((opt, i) => <li key={i}>{opt}</li>)}
-                                </ul>
-                             </TableCell>
-                            <TableCell>
-                                <Badge variant="secondary" className="flex items-center gap-1 w-fit whitespace-normal">
-                                   <CheckCircle className="h-3 w-3 text-green-600 flex-shrink-0" />
-                                    <span className="break-all">
-                                      {question.type === 'multiple-select' 
-                                        ? (question.correctAnswers || []).join(', ') 
-                                        : question.correctAnswer
-                                      }
-                                    </span>
-                                </Badge>
-                            </TableCell>
-                             <TableCell className="text-right">
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    asChild
-                                    className="mr-1"
-                                >
-                                  <Link href={`/admin/quizzes/manage/${quizId}/${question.id}/edit`}>
-                                    <Edit className="h-4 w-4 mr-1" /> Edit
-                                  </Link>
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-destructive hover:text-destructive"
-                                    onClick={() => openDeleteConfirmation(question)}
-                                >
-                                    <Trash2 className="h-4 w-4 mr-1" /> Remove
-                                </Button>
-                             </TableCell>
-                         </TableRow>
-                    ))}
-                 </TableBody>
-             </Table>
+            <Table>
+              <TableHeader><TableRow><TableHead>Question Text</TableHead><TableHead>Type</TableHead><TableHead>Correct Answer(s)</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {quiz.questions.map((q, idx) => (
+                  <TableRow key={q.id || idx}>
+                    <TableCell className="font-medium max-w-md truncate">{q.text}</TableCell>
+                    <TableCell><Badge variant="outline" className="capitalize">{q.type.replace('-', ' ')}</Badge></TableCell>
+                    <TableCell><Badge variant="secondary" className="flex items-center gap-1 w-fit whitespace-normal"><CheckCircle className="h-3 w-3 text-green-600"/> <span className="break-all">{q.type === 'multiple-select' ? (q.correctAnswers || []).join(', ') : q.correctAnswer}</span></Badge></TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" asChild className="mr-1"><Link href={`/admin/quizzes/manage/${quizId}/${q.id}/edit`}><Edit className="h-4 w-4 mr-1"/> Edit</Link></Button>
+                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => openDeleteConfirmation(q)}><Trash2 className="h-4 w-4 mr-1"/> Remove</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
 
-       <AddEditQuestionDialog
-            isOpen={isAddDialogOpen}
-            setIsOpen={setIsAddDialogOpen}
-            quizId={quizId}
-            initialData={null} // Always adding here
-            onQuestionSaved={handleQuestionSaved}
-       />
-
-       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This action cannot be undone. This will permanently delete the question: "{questionToDelete?.text.substring(0, 50)}...".
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setQuestionToDelete(null)}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={confirmDeleteQuestion} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                Yes, delete question
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
+      <AddEditQuestionDialog
+        isOpen={isAddQuestionDialogOpen}
+        setIsOpen={setIsAddQuestionDialogOpen}
+        quizId={quizId}
+        initialData={null}
+        onQuestionSaved={fetchQuiz}
+      />
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete the question: "{questionToDelete?.text.substring(0, 50)}...".</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel onClick={() => setQuestionToDelete(null)}>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmDeleteQuestion} className="bg-destructive hover:bg-destructive/90">Yes, delete question</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

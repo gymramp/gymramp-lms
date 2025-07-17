@@ -103,12 +103,7 @@ export default function AdminQuizzesPage() {
 
 
   const handleAddQuiz = () => {
-    setEditingQuiz(null);
-    setIsQuizDialogOpen(true);
-  };
-
-  const handleEditQuiz = (quiz: Quiz) => {
-    setEditingQuiz(quiz);
+    setEditingQuiz(null); // Explicitly set to null for "Add" mode
     setIsQuizDialogOpen(true);
   };
 
@@ -223,16 +218,10 @@ export default function AdminQuizzesPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Manage</DropdownMenuLabel>
-                           <DropdownMenuItem onClick={() => handleEditQuiz(quiz)}>
-                             <>
-                               <Edit className="mr-2 h-4 w-4" />
-                               <span>Edit Title</span>
-                             </>
-                           </DropdownMenuItem>
                            <DropdownMenuItem asChild>
                              <Link href={`/admin/quizzes/manage/${quiz.id}`}>
-                               <ListChecks className="mr-2 h-4 w-4" />
-                               <span>Manage Questions</span>
+                               <Edit className="mr-2 h-4 w-4" />
+                               <span>Edit Quiz & Questions</span>
                              </Link>
                            </DropdownMenuItem>
                           <DropdownMenuSeparator />
@@ -301,7 +290,7 @@ export default function AdminQuizzesPage() {
        <AddEditQuizDialog
             isOpen={isQuizDialogOpen}
             setIsOpen={setIsQuizDialogOpen}
-            initialData={editingQuiz}
+            initialData={null}
             onQuizSaved={(savedQuiz) => {
                 fetchQuizzes();
                 setIsQuizDialogOpen(false);

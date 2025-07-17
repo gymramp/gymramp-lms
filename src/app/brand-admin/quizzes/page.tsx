@@ -117,7 +117,6 @@ export default function BrandAdminQuizzesPage() {
   }, [filteredQuizzes, currentPage, rowsPerPage]);
 
   const handleAddQuiz = () => { if (!isAuthorized) return; setEditingQuiz(null); setIsQuizDialogOpen(true); };
-  const handleEditQuiz = (quiz: BrandQuiz) => { if (!isAuthorized) return; setEditingQuiz(quiz); setIsQuizDialogOpen(true); };
   const openDeleteConfirmation = (quiz: BrandQuiz) => { if (!isAuthorized) return; setQuizToDelete(quiz); setIsDeleteDialogOpen(true); };
 
   const confirmDelete = async () => {
@@ -181,8 +180,7 @@ export default function BrandAdminQuizzesPage() {
                           <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Manage</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => handleEditQuiz(quiz)}><Edit className="mr-2 h-4 w-4" />Edit Title</DropdownMenuItem>
-                            <DropdownMenuItem asChild><Link href={`/brand-admin/quizzes/manage/${quiz.id}`}><ListChecks className="mr-2 h-4 w-4" />Manage Questions</Link></DropdownMenuItem>
+                            <DropdownMenuItem asChild><Link href={`/brand-admin/quizzes/manage/${quiz.id}`}><Edit className="mr-2 h-4 w-4" />Edit Quiz & Questions</Link></DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => openDeleteConfirmation(quiz)} disabled={isDeleting && quizToDelete?.id === quiz.id}>
                               {isDeleting && quizToDelete?.id === quiz.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Trash2 className="mr-2 h-4 w-4" />} Delete Quiz
@@ -218,8 +216,8 @@ export default function BrandAdminQuizzesPage() {
           isOpen={isQuizDialogOpen}
           setIsOpen={setIsQuizDialogOpen}
           brandId={currentUser.companyId}
-          initialData={editingQuiz}
-          onQuizSaved={(savedQuiz) => { fetchBrandQuizzes(); setIsQuizDialogOpen(false); setEditingQuiz(null); }}
+          initialData={null}
+          onQuizSaved={(savedQuiz) => { fetchBrandQuizzes(); setIsQuizDialogOpen(false); }}
         />
       )}
 
