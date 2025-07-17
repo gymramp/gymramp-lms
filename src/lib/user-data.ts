@@ -348,29 +348,23 @@ export const toggleUserCourseAssignments = async (userId: string, courseIds: str
 export async function getUsersWithoutCompany(): Promise<User[]> {
     return retryOperation(async () => {
         const usersRef = collection(db, USERS_COLLECTION);
-        const users: User[] = [];
-        const userIds = new Set<string>();
+        // Step 1: Fetch all non-deleted users
+        const q = query(usersRef, where("isDeleted", "==", false));
+        const querySnapshot = await getDocs(q);
 
-        const qNull = query(usersRef, where('companyId', '==', null), where("isDeleted", "==", false));
-        const snapshotNull = await getDocs(qNull);
-        snapshotNull.forEach((doc) => {
-            if (!userIds.has(doc.id)) {
-                users.push({ id: doc.id, ...serializeUserDocumentData(doc.data()) } as User);
-                userIds.add(doc.id);
+        // Step 2: Filter in code
+        const unassignedUsers: User[] = [];
+        querySnapshot.forEach((doc) => {
+            const user = { id: doc.id, ...serializeUserDocumentData(doc.data()) } as User;
+            // A user is "unassigned" if companyId is null, undefined, or an empty string.
+            // Using !user.companyId is a concise way to check for all falsy values.
+            if (!user.companyId) {
+                unassignedUsers.push(user);
             }
         });
 
-        const qEmpty = query(usersRef, where('companyId', '==', ''), where("isDeleted", "==", false));
-        const snapshotEmpty = await getDocs(qEmpty);
-        snapshotEmpty.forEach((doc) => {
-             if (!userIds.has(doc.id)) {
-                 users.push({ id: doc.id, ...serializeUserDocumentData(doc.data()) } as User);
-                 userIds.add(doc.id);
-             }
-         });
-
-        console.log(`Found ${users.length} users without a brand ID.`);
-        return users;
+        console.log(`Found ${unassignedUsers.length} total users without a brand ID.`);
+        return unassignedUsers;
     });
 }
 
