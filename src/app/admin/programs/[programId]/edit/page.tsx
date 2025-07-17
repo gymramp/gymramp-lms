@@ -23,6 +23,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert } from '@/components/ui/alert';
+import { translateContent } from '@/ai/flows/translate-content';
 
 
 // Supported languages for translation UI
@@ -67,6 +68,7 @@ export default function EditProgramPage({ params }: { params: { programId: strin
   const [isLoading, setIsLoading] = useState(!isCreating);
   const [isSaving, setIsSaving] = useState(false);
   const [allCourses, setAllCourses] = useState<Course[]>([]);
+  const [isTranslating, setIsTranslating] = useState<Record<string, boolean>>({});
   
   const form = useForm<ProgramFormValues>({
     resolver: zodResolver(programFormSchema),
@@ -119,6 +121,46 @@ export default function EditProgramPage({ params }: { params: { programId: strin
   useEffect(() => {
     fetchProgramData();
   }, [fetchProgramData]);
+
+  const handleAutoTranslate = async (targetLocale: string) => {
+    const { title, description } = form.getValues();
+    if (!title || !description) {
+      toast({
+        title: "Missing Content",
+        description: "Please fill in the main English title and description before translating.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsTranslating(prev => ({ ...prev, [targetLocale]: true }));
+    try {
+      const result = await translateContent({
+        sourceTitle: title,
+        sourceContent: description, // Using content field for description
+        targetLocale: targetLocale
+      });
+
+      if (result.translatedTitle && result.translatedContent) {
+        form.setValue(`translations.${targetLocale}.title`, result.translatedTitle);
+        form.setValue(`translations.${targetLocale}.description`, result.translatedContent);
+        toast({
+          title: "Translation Complete!",
+          description: `Content has been translated to ${SUPPORTED_LOCALES.find(l => l.value === targetLocale)?.label}.`,
+        });
+      } else {
+        throw new Error("AI did not return translated content.");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Translation Failed",
+        description: error.message || "Could not translate content.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTranslating(prev => ({ ...prev, [targetLocale]: false }));
+    }
+  };
 
   const onSubmit = async (data: ProgramFormValues) => {
     setIsSaving(true);
@@ -307,7 +349,13 @@ export default function EditProgramPage({ params }: { params: { programId: strin
                         </Alert>
                          {SUPPORTED_LOCALES.map(locale => (
                             <div key={locale.value} className="p-4 border rounded-md space-y-4">
-                                <h3 className="font-semibold text-lg">{locale.label}</h3>
+                                <div className="flex justify-between items-center">
+                                    <h3 className="font-semibold text-lg">{locale.label}</h3>
+                                     <Button type="button" variant="outline" size="sm" onClick={() => handleAutoTranslate(locale.value)} disabled={isTranslating[locale.value]}>
+                                        {isTranslating[locale.value] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                                        Auto-Translate
+                                    </Button>
+                                </div>
                                  <FormField
                                     control={form.control}
                                     name={`translations.${locale.value}.title`}
