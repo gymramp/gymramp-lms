@@ -5,12 +5,19 @@ import { z } from 'zod';
 export type QuestionType = 'multiple-choice' | 'true-false' | 'multiple-select';
 import type { Timestamp } from 'firebase/firestore'; // Import Timestamp
 
+// Translation object for a Question
+export interface QuestionTranslation {
+  text?: string;
+  options?: string[]; // Array of translated option strings, must match order of original options
+}
+
 // Represents a single question within a quiz (Global or Brand)
 export interface QuestionBase {
     id: string; // Can be generated client-side or by Firestore function
     text: string;
     type: QuestionType;
     options: string[]; // Always an array of available option texts
+    translations?: { [key: string]: QuestionTranslation }; // e.g., { 'es': { text: '...', options: [...] } }
 
     // For single-answer types ('multiple-choice', 'true-false')
     correctAnswer?: string; // The single correct option text

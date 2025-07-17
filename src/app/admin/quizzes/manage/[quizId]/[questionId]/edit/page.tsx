@@ -15,13 +15,30 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from '@/hooks/use-toast';
-import type { Quiz, Question, QuestionFormData, QuestionType } from '@/types/course';
+import type { Quiz, Question, QuestionFormData, QuestionType, QuestionTranslation } from '@/types/course';
 import { getQuizById, updateQuestion } from '@/lib/firestore-data';
-import { PlusCircle, Trash2, ArrowLeft, Loader2 } from 'lucide-react';
+import { PlusCircle, Trash2, ArrowLeft, Loader2, Languages } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
-// Zod schema using discriminated union for question types
+const SUPPORTED_LOCALES = [
+  { value: 'es', label: 'Spanish' },
+  { value: 'fr', label: 'French' },
+  { value: 'de', label: 'German' },
+  { value: 'it', label: 'Italian' },
+  { value: 'ja', label: 'Japanese' },
+  { value: 'pt', label: 'Portuguese' },
+  { value: 'zh', label: 'Chinese' },
+];
+
+const questionTranslationSchema = z.object({
+    text: z.string().optional(),
+    options: z.array(z.string()).optional(),
+});
+
 const baseSchema = z.object({
   text: z.string().min(5, { message: 'Question text must be at least 5 characters.' }),
+  translations: z.record(questionTranslationSchema).optional(),
 });
 
 const multipleChoiceOptionSchema = z.object({ text: z.string().min(1, "Option text cannot be empty.") });
@@ -76,7 +93,7 @@ export default function EditQuestionPage() {
 
     const form = useForm<QuestionFormValues>({
         resolver: zodResolver(questionFormSchema),
-        defaultValues: { type: 'multiple-choice', text: '', options: [], correctAnswer: '', correctAnswers: [] },
+        defaultValues: { type: 'multiple-choice', text: '', options: [], correctAnswer: '', correctAnswers: [], translations: {} },
     });
     
     const { fields, append, remove } = useFieldArray({ control: form.control, name: "options" as any });
@@ -107,6 +124,7 @@ export default function EditQuestionPage() {
                 options: (question.type === 'multiple-choice' || question.type === 'multiple-select') ? (question.options || []).map(opt => ({ text: opt })) : [],
                 correctAnswer: (question.type === 'multiple-choice' || question.type === 'true-false') ? question.correctAnswer || '' : '',
                 correctAnswers: question.type === 'multiple-select' ? question.correctAnswers || [] : [],
+                translations: (question as any).translations || {},
             });
 
         } catch (error) {
@@ -132,6 +150,7 @@ export default function EditQuestionPage() {
                 type: data.type, text: data.text, options: optionsForStorage,
                 correctAnswer: (data.type === 'multiple-choice' || data.type === 'true-false') ? data.correctAnswer : undefined,
                 correctAnswers: data.type === 'multiple-select' ? data.correctAnswers : undefined,
+                translations: data.translations,
             };
 
             const updatedQuestion = await updateQuestion(quizId, questionId, questionPayload);
@@ -163,28 +182,52 @@ export default function EditQuestionPage() {
                             <CardTitle>Edit Question</CardTitle>
                             <CardDescription>For quiz: {quiz.title}</CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-6">
-                            <FormField control={form.control} name="type" render={({ field }) => (/* Question Type RadioGroup ... */ <div/>)} /> {/* Type is non-editable for now */}
-                            <FormField control={form.control} name="text" render={({ field }) => (<FormItem><FormLabel>Question Text</FormLabel><FormControl><Textarea rows={3} {...field} /></FormControl><FormMessage /></FormItem>)} />
+                        <CardContent>
+                           <Tabs defaultValue="main">
+                                <TabsList>
+                                    <TabsTrigger value="main">Main Content (English)</TabsTrigger>
+                                    <TabsTrigger value="translations"><Languages className="mr-2 h-4 w-4"/>Translations</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="main" className="pt-6 space-y-6">
+                                    <FormField control={form.control} name="type" render={({ field }) => (/* Question Type RadioGroup ... */ <div/>)} /> {/* Type is non-editable for now */}
+                                    <FormField control={form.control} name="text" render={({ field }) => (<FormItem><FormLabel>Question Text</FormLabel><FormControl><Textarea rows={3} {...field} /></FormControl><FormMessage /></FormItem>)} />
 
-                            {(questionType === 'multiple-choice' || questionType === 'multiple-select') && (
-                                <div className="space-y-3">
-                                    <FormLabel>Answer Options</FormLabel>
-                                    {fields.map((item, index) => (<FormField key={item.id} control={form.control} name={`options.${index}.text` as any} render={({ field }) => (<FormItem><div className="flex items-center gap-2"><FormControl><Input {...field} /></FormControl>{fields.length > 2 && <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}><Trash2 className="h-4 w-4"/></Button>}</div><FormMessage /></FormItem>)}/>))}
-                                    <Button type="button" variant="outline" size="sm" onClick={() => append({ text: '' })}><PlusCircle className="mr-2 h-4 w-4"/>Add Option</Button>
-                                </div>
-                            )}
+                                    {(questionType === 'multiple-choice' || questionType === 'multiple-select') && (
+                                        <div className="space-y-3">
+                                            <FormLabel>Answer Options</FormLabel>
+                                            {fields.map((item, index) => (<FormField key={item.id} control={form.control} name={`options.${index}.text` as any} render={({ field }) => (<FormItem><div className="flex items-center gap-2"><FormControl><Input {...field} /></FormControl>{fields.length > 2 && <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}><Trash2 className="h-4 w-4"/></Button>}</div><FormMessage /></FormItem>)}/>))}
+                                            <Button type="button" variant="outline" size="sm" onClick={() => append({ text: '' })}><PlusCircle className="mr-2 h-4 w-4"/>Add Option</Button>
+                                        </div>
+                                    )}
 
-                            {questionType === 'multiple-choice' && (
-                                <FormField control={form.control} name="correctAnswer" render={({ field }) => (<FormItem><FormLabel>Correct Answer</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} value={field.value} className="space-y-1">{watchedOptions.filter(o => o.text).map((opt, i) => (<FormItem key={`mc-c-${i}`} className="flex items-center space-x-3"><FormControl><RadioGroupItem value={opt.text} /></FormControl><Label className="font-normal">{opt.text}</Label></FormItem>))}</RadioGroup></FormControl><FormMessage/></FormItem>)} />
-                            )}
-                             {questionType === 'true-false' && (
-                                <FormField control={form.control} name="correctAnswer" render={({ field }) => (<FormItem><FormLabel>Correct Answer</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} value={field.value} className="space-y-1"><FormItem className="flex items-center space-x-3"><FormControl><RadioGroupItem value="True" /></FormControl><Label className="font-normal">True</Label></FormItem><FormItem className="flex items-center space-x-3"><FormControl><RadioGroupItem value="False" /></FormControl><Label className="font-normal">False</Label></FormItem></RadioGroup></FormControl><FormMessage/></FormItem>)} />
-                            )}
-                             {questionType === 'multiple-select' && (
-                                <FormField control={form.control} name="correctAnswers" render={() => (<FormItem><FormLabel>Correct Answers</FormLabel><div className="space-y-2">{watchedOptions.filter(o => o.text).map((opt, i) => (<FormField key={`ms-c-${i}`} control={form.control} name="correctAnswers" render={({ field }) => (<FormItem className="flex items-center space-x-3"><FormControl><Checkbox checked={field.value?.includes(opt.text)} onCheckedChange={c=>c?field.onChange([...(field.value||[]), opt.text]):field.onChange((field.value||[]).filter(v=>v!==opt.text))}/></FormControl><Label className="font-normal">{opt.text}</Label></FormItem>)}/>))}</div><FormMessage /></FormItem>)} />
-                            )}
-
+                                    {questionType === 'multiple-choice' && (
+                                        <FormField control={form.control} name="correctAnswer" render={({ field }) => (<FormItem><FormLabel>Correct Answer</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} value={field.value} className="space-y-1">{watchedOptions.filter(o => o.text).map((opt, i) => (<FormItem key={`mc-c-${i}`} className="flex items-center space-x-3"><FormControl><RadioGroupItem value={opt.text} /></FormControl><Label className="font-normal">{opt.text}</Label></FormItem>))}</RadioGroup></FormControl><FormMessage/></FormItem>)} />
+                                    )}
+                                     {questionType === 'true-false' && (
+                                        <FormField control={form.control} name="correctAnswer" render={({ field }) => (<FormItem><FormLabel>Correct Answer</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} value={field.value} className="space-y-1"><FormItem className="flex items-center space-x-3"><FormControl><RadioGroupItem value="True" /></FormControl><Label className="font-normal">True</Label></FormItem><FormItem className="flex items-center space-x-3"><FormControl><RadioGroupItem value="False" /></FormControl><Label className="font-normal">False</Label></FormItem></RadioGroup></FormControl><FormMessage/></FormItem>)} />
+                                    )}
+                                     {questionType === 'multiple-select' && (
+                                        <FormField control={form.control} name="correctAnswers" render={() => (<FormItem><FormLabel>Correct Answers</FormLabel><div className="space-y-2">{watchedOptions.filter(o => o.text).map((opt, i) => (<FormField key={`ms-c-${i}`} control={form.control} name="correctAnswers" render={({ field }) => (<FormItem className="flex items-center space-x-3"><FormControl><Checkbox checked={field.value?.includes(opt.text)} onCheckedChange={c=>c?field.onChange([...(field.value||[]), opt.text]):field.onChange((field.value||[]).filter(v=>v!==opt.text))}/></FormControl><Label className="font-normal">{opt.text}</Label></FormItem>)}/>))}</div><FormMessage /></FormItem>)} />
+                                    )}
+                                </TabsContent>
+                                <TabsContent value="translations" className="pt-6 space-y-6">
+                                    <Alert><AlertDescription>Provide translations for the question text and each corresponding answer option. If a translation is not provided, the English version will be used.</AlertDescription></Alert>
+                                    {SUPPORTED_LOCALES.map(locale => (
+                                        <div key={locale.value} className="p-4 border rounded-md space-y-4">
+                                            <h3 className="font-semibold text-lg">{locale.label}</h3>
+                                            <FormField control={form.control} name={`translations.${locale.value}.text`} render={({ field }) => ( <FormItem><FormLabel>Translated Question Text</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem> )}/>
+                                            {(questionType === 'multiple-choice' || questionType === 'multiple-select') && (
+                                                <div className="space-y-2">
+                                                    <FormLabel>Translated Answer Options</FormLabel>
+                                                    {watchedOptions.map((option, index) => (
+                                                        <FormField key={`${locale.value}-${index}`} control={form.control} name={`translations.${locale.value}.options.${index}`} render={({ field }) => (<FormItem><FormLabel className="text-xs text-muted-foreground">Original: "{option.text}"</FormLabel><FormControl><Input {...field} value={field.value ?? ''} placeholder={`Translation for "${option.text}"`}/></FormControl><FormMessage /></FormItem>)} />
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </TabsContent>
+                           </Tabs>
                         </CardContent>
                         <CardFooter>
                             <Button type="submit">Save Changes</Button>

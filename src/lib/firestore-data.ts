@@ -7,6 +7,7 @@
 
 
 
+
 import { db } from './firebase';
 import {
     collection,
@@ -417,6 +418,7 @@ export async function addQuestionToQuiz(quizId: string, questionData: QuestionPa
             type: questionData.type,
             text: questionData.text,
             options: questionData.options || [],
+            translations: questionData.translations || {},
         };
 
         if (questionData.type === 'multiple-select') {
@@ -439,7 +441,7 @@ export async function addQuestionToQuiz(quizId: string, questionData: QuestionPa
     });
 }
 
-export async function updateQuestion(quizId: string, questionId: string, questionData: QuestionPayload): Promise<Question | null> {
+export async function updateQuestion(quizId: string, questionId: string, questionData: Partial<QuestionPayload>): Promise<Question | null> {
      if (!quizId || !questionId) return null;
     return retryOperation(async () => {
         const quizRef = doc(db, QUIZZES_COLLECTION, quizId);
@@ -454,15 +456,18 @@ export async function updateQuestion(quizId: string, questionId: string, questio
             if (q.id === questionId) {
                 questionFound = true;
                 const updatedQuestionData: Question = {
-                    id: q.id, // Preserve existing ID
-                    type: questionData.type,
-                    text: questionData.text,
-                    options: questionData.options || [],
+                    ...q, // Spread existing question to preserve ID and other fields
+                    type: questionData.type !== undefined ? questionData.type : q.type,
+                    text: questionData.text !== undefined ? questionData.text : q.text,
+                    options: questionData.options !== undefined ? questionData.options : q.options,
+                    translations: questionData.translations !== undefined ? questionData.translations : q.translations,
                 };
-                if (questionData.type === 'multiple-select') {
-                    updatedQuestionData.correctAnswers = questionData.correctAnswers || [];
+                if (updatedQuestionData.type === 'multiple-select') {
+                    updatedQuestionData.correctAnswers = questionData.correctAnswers !== undefined ? questionData.correctAnswers : q.correctAnswers;
+                    delete updatedQuestionData.correctAnswer; // Ensure only one correct answer field
                 } else {
-                    updatedQuestionData.correctAnswer = questionData.correctAnswer || '';
+                    updatedQuestionData.correctAnswer = questionData.correctAnswer !== undefined ? questionData.correctAnswer : q.correctAnswer;
+                    delete updatedQuestionData.correctAnswers; // Ensure only one correct answer field
                 }
                  console.log("[updateQuestion] Object to replace item in array:", JSON.stringify(updatedQuestionData, null, 2));
                 return updatedQuestionData;
