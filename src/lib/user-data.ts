@@ -1,4 +1,5 @@
 
+
 import { db } from './firebase';
 import {
     collection,
@@ -66,7 +67,7 @@ export async function getAllUsers(): Promise<User[]> {
         const querySnapshot = await getDocs(q);
         const users: User[] = [];
         querySnapshot.forEach((doc) => {
-            users.push({ id: doc.id, ...doc.data() } as User);
+            users.push({ id: doc.id, ...serializeUserDocumentData(doc.data()) } as User);
         });
         return users;
     });
@@ -81,7 +82,7 @@ export async function getUserById(userId: string): Promise<User | null> {
         const userRef = doc(db, USERS_COLLECTION, userId);
         const docSnap = await getDoc(userRef);
         if (docSnap.exists() && docSnap.data().isDeleted !== true) {
-            return { id: docSnap.id, ...docSnap.data() } as User;
+            return { id: docSnap.id, ...serializeUserDocumentData(docSnap.data()) } as User;
         } else {
             return null;
         }
@@ -114,7 +115,7 @@ export async function getUserByEmail(email: string): Promise<User | null> {
             console.log(`[getUserByEmail] Document found for '${lowercasedEmail}' with isDeleted:false. ID: ${docSnap.id}.`);
 
             if (docSnap.exists()) {
-                return { id: docSnap.id, ...userData } as User;
+                return { id: docSnap.id, ...serializeUserDocumentData(userData) } as User;
             } else {
                 return null;
             }
@@ -137,7 +138,7 @@ export async function getUsersByCompanyId(companyId: string): Promise<User[]> {
         const querySnapshot = await getDocs(q);
         const users: User[] = [];
         querySnapshot.forEach((doc) => {
-            users.push({ id: doc.id, ...doc.data() } as User);
+            users.push({ id: doc.id, ...serializeUserDocumentData(doc.data()) } as User);
         });
         return users;
     });
@@ -184,7 +185,7 @@ export async function addUser(userData: Omit<UserFormData, 'password'> & { requi
         const docRef = await addDoc(usersRef, newUserDoc);
         const newDocSnap = await getDoc(docRef);
         if (newDocSnap.exists()) {
-            return { id: docRef.id, ...newDocSnap.data() } as User;
+            return { id: docRef.id, ...serializeUserDocumentData(newDocSnap.data()) } as User;
         } else {
             console.error("Failed to fetch newly created user doc.");
             return null;
@@ -219,7 +220,7 @@ export async function updateUser(userId: string, userData: Partial<UserFormData 
             console.warn("updateUser called with no data to update for user:", userId);
             const currentUserDocSnap = await getDoc(userRef);
             if (currentUserDocSnap.exists() && currentUserDocSnap.data().isDeleted !== true) {
-                return { id: userId, ...currentUserDocSnap.data() } as User;
+                return { id: userId, ...serializeUserDocumentData(currentUserDocSnap.data()) } as User;
             }
             return null;
         }
@@ -229,7 +230,7 @@ export async function updateUser(userId: string, userData: Partial<UserFormData 
         await updateDoc(userRef, updatePayload);
         const updatedDocSnap = await getDoc(userRef);
         if (updatedDocSnap.exists() && updatedDocSnap.data().isDeleted !== true) {
-            return { id: userId, ...updatedDocSnap.data() } as User;
+            return { id: userId, ...serializeUserDocumentData(updatedDocSnap.data()) } as User;
         } else {
             console.error("Failed to fetch updated user doc or user is soft-deleted.");
             return null;
@@ -335,7 +336,7 @@ export const toggleUserCourseAssignments = async (userId: string, courseIds: str
 
         const updatedUserSnap = await getDoc(userRef);
         if (updatedUserSnap.exists()) {
-            return { id: userId, ...updatedUserSnap.data() } as User;
+            return { id: userId, ...serializeUserDocumentData(updatedUserSnap.data()) } as User;
         } else {
             console.error("Failed to fetch user after toggling course assignment.");
             return null;
@@ -354,7 +355,7 @@ export async function getUsersWithoutCompany(): Promise<User[]> {
         const snapshotNull = await getDocs(qNull);
         snapshotNull.forEach((doc) => {
             if (!userIds.has(doc.id)) {
-                users.push({ id: doc.id, ...doc.data() } as User);
+                users.push({ id: doc.id, ...serializeUserDocumentData(doc.data()) } as User);
                 userIds.add(doc.id);
             }
         });
@@ -363,7 +364,7 @@ export async function getUsersWithoutCompany(): Promise<User[]> {
         const snapshotEmpty = await getDocs(qEmpty);
         snapshotEmpty.forEach((doc) => {
              if (!userIds.has(doc.id)) {
-                 users.push({ id: doc.id, ...doc.data() } as User);
+                 users.push({ id: doc.id, ...serializeUserDocumentData(doc.data()) } as User);
                  userIds.add(doc.id);
              }
          });
@@ -373,30 +374,6 @@ export async function getUsersWithoutCompany(): Promise<User[]> {
     });
 }
 
-export async function assignMissingCompanyToUsers(defaultCompanyId: string): Promise<number> {
-    if (!defaultCompanyId) {
-        console.error("Cannot assign missing brand: defaultCompanyId is required.");
-        return 0;
-    }
-    return retryOperation(async () => {
-        const usersToUpdate = await getUsersWithoutCompany();
-        if (usersToUpdate.length === 0) {
-            console.log("No users found missing a brand ID.");
-            return 0;
-        }
-
-        const batch = writeBatch(db);
-        usersToUpdate.forEach(user => {
-            const userRef = doc(db, USERS_COLLECTION, user.id);
-            console.log(`Assigning brand ${defaultCompanyId} to user ${user.email} (${user.id})`);
-            batch.update(userRef, { companyId: defaultCompanyId, isDeleted: false, updatedAt: serverTimestamp() });
-        });
-
-        await batch.commit();
-        console.log(`Successfully assigned brand ID ${defaultCompanyId} to ${usersToUpdate.length} users.`);
-        return usersToUpdate.length;
-    }, 3);
-}
 
 export async function assignMissingLocationToUsers(companyId: string, defaultLocationId: string): Promise<number> {
     if (!companyId || !defaultLocationId) {
@@ -694,7 +671,7 @@ export async function updateUserTimeSpentOnCourse(userId: string, courseId: stri
 
         console.log(`Time spent on course ${courseId} for user ${userId} updated to ${newTimeSpent} seconds.`);
         const updatedUserSnap = await getDoc(userRef);
-        return updatedUserSnap.exists() ? { id: userId, ...updatedUserSnap.data() } as User : null;
+        return updatedUserSnap.exists() ? { id: userId, ...serializeUserDocumentData(updatedUserSnap.data()) } as User : null;
     });
 }
 
@@ -726,7 +703,7 @@ export async function incrementUserQuizAttempts(userId: string, courseId: string
 
         console.log(`Quiz attempts for quiz ${actualQuizId} in course ${courseId} for user ${userId} incremented.`);
         const updatedUserSnap = await getDoc(userRef);
-        return updatedUserSnap.exists() ? { id: userId, ...updatedUserSnap.data() } as User : null;
+        return updatedUserSnap.exists() ? { id: userId, ...serializeUserDocumentData(updatedUserSnap.data()) } as User : null;
     });
 }
 
@@ -785,6 +762,7 @@ function serializeUserDocumentData(data: any): any {
     if (!data) return null;
     const serialized = { ...data };
     if (data.createdAt instanceof Timestamp) serialized.createdAt = data.createdAt.toDate().toISOString();
+    if (data.updatedAt instanceof Timestamp) serialized.updatedAt = data.updatedAt.toDate().toISOString();
     if (data.lastLogin instanceof Timestamp) serialized.lastLogin = data.lastLogin.toDate().toISOString();
     if (data.deletedAt instanceof Timestamp) serialized.deletedAt = data.deletedAt.toDate().toISOString();
     if (data.courseProgress) {

@@ -1,5 +1,6 @@
 
 
+
 import { db } from './firebase';
 import {
     collection,
@@ -655,4 +656,29 @@ export async function getCompanyForLogin(host: string | null): Promise<Company |
     console.error(`[getCompanyForLogin] Error fetching brand by identifier "${host}":`, error);
     return null;
   }
+}
+
+export async function assignMissingCompanyToUsers(defaultCompanyId: string): Promise<number> {
+    if (!defaultCompanyId) {
+        console.error("Cannot assign missing company: defaultCompanyId is required.");
+        return 0;
+    }
+    return retryOperation(async () => {
+        const usersToUpdate = await getUsersWithoutCompany();
+        if (usersToUpdate.length === 0) {
+            console.log("No users found missing a company ID.");
+            return 0;
+        }
+
+        const batch = writeBatch(db);
+        usersToUpdate.forEach(user => {
+            const userRef = doc(db, 'users', user.id);
+            console.log(`Assigning company ${defaultCompanyId} to user ${user.email} (${user.id})`);
+            batch.update(userRef, { companyId: defaultCompanyId, isDeleted: false, updatedAt: serverTimestamp() });
+        });
+
+        await batch.commit();
+        console.log(`Successfully assigned company ID ${defaultCompanyId} to ${usersToUpdate.length} users.`);
+        return usersToUpdate.length;
+    }, 3);
 }
