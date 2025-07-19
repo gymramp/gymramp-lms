@@ -29,6 +29,7 @@ export async function createNotification(notificationData: NotificationFormData)
     const notificationsRef = collection(db, NOTIFICATIONS_COLLECTION);
     await addDoc(notificationsRef, {
       ...notificationData,
+      href: notificationData.href || null, // Ensure href is null if not provided
       isRead: false,
       createdAt: serverTimestamp(),
     });

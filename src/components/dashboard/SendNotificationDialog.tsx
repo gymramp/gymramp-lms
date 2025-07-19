@@ -1,3 +1,4 @@
+
 // src/components/dashboard/SendNotificationDialog.tsx
 'use client';
 
@@ -57,7 +58,7 @@ export function SendNotificationDialog({ isOpen, setIsOpen, recipient, sender }:
       senderName: sender.name,
       type: 'message',
       content: data.content,
-      href: data.href || undefined,
+      href: data.href || null, // Fix: Use null instead of undefined for empty href
     };
 
     try {
