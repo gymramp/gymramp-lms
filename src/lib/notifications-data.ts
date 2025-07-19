@@ -43,6 +43,8 @@ export async function createNotification(notificationData: NotificationFormData)
 
 /**
  * Fetches notifications for a specific user, ordered by most recent.
+ * THIS FUNCTION IS DEPRECATED in favor of the real-time listener in the Notifications component,
+ * but kept for potential non-real-time use cases.
  * @param userId - The ID of the user to fetch notifications for.
  * @param count - The maximum number of notifications to fetch.
  * @returns A promise that resolves to an array of notifications.

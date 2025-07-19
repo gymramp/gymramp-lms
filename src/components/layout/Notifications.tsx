@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet";
 import { Button } from '@/components/ui/button';
 import { Bell, CheckCheck } from 'lucide-react';
@@ -11,6 +11,9 @@ import { ScrollArea } from '../ui/scroll-area';
 import { formatDistanceToNow } from 'date-fns';
 import { Badge } from '../ui/badge';
 import { useRouter } from 'next/navigation';
+import { onSnapshot, collection, query, where, orderBy } from 'firebase/firestore';
+import { db } from '@/lib/firebase'; // Import db for onSnapshot
+import type { Timestamp } from 'firebase/firestore';
 
 interface NotificationsProps {
   user: User;
@@ -19,30 +22,46 @@ interface NotificationsProps {
 export function Notifications({ user }: NotificationsProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const router = useRouter();
 
-  const fetchNotifications = useCallback(async () => {
-    if (!user) return;
-    try {
-      const fetchedNotifications = await getNotificationsForUser(user.id);
-      setNotifications(fetchedNotifications);
-      setUnreadCount(fetchedNotifications.filter(n => !n.isRead).length);
-    } catch (error) {
-      console.error("Failed to fetch notifications:", error);
-    }
-  }, [user]);
-
+  // Set up real-time listener for notifications
   useEffect(() => {
-    if (isOpen) {
-      fetchNotifications();
-    }
-  }, [isOpen, fetchNotifications]);
+    if (!user?.id) return;
+
+    const notificationsRef = collection(db, 'notifications');
+    const q = query(
+      notificationsRef,
+      where('recipientId', '==', user.id),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const fetchedNotifications: Notification[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        fetchedNotifications.push({
+          id: doc.id,
+          ...data,
+          createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+        } as unknown as Notification);
+      });
+      setNotifications(fetchedNotifications);
+    }, (error) => {
+      console.error("Error listening to notifications:", error);
+    });
+
+    // Cleanup subscription on component unmount
+    return () => unsubscribe();
+  }, [user?.id]);
+
+  const unreadCount = useMemo(() => {
+    return notifications.filter(n => !n.isRead).length;
+  }, [notifications]);
 
   const handleNotificationClick = async (notification: Notification) => {
     if (!notification.isRead) {
       await markNotificationAsRead(notification.id);
-      fetchNotifications(); // Refresh list to update read status
+      // No need to manually refetch, onSnapshot will update the state
     }
     if (notification.href) {
       router.push(notification.href);
@@ -53,7 +72,7 @@ export function Notifications({ user }: NotificationsProps) {
   const handleMarkAllRead = async () => {
     if (!user) return;
     await markAllNotificationsAsRead(user.id);
-    fetchNotifications(); // Refresh list
+    // No need to manually refetch, onSnapshot will update the state
   };
 
   return (
