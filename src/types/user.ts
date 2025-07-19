@@ -1,5 +1,4 @@
 
-
 // src/types/user.ts
 
 import type { Timestamp } from 'firebase/firestore'; // Import Timestamp
@@ -22,6 +21,7 @@ export interface User {
   deletedAt?: Timestamp | null; // Timestamp of soft deletion
   createdAt?: Timestamp | Date; // Timestamp of user creation
   lastLogin?: Timestamp | Date | null; // Timestamp of last login
+  preferredLocale?: string | null; // Added for user language preference
   courseProgress?: { // Optional: To store progress for each assigned course
     [courseId: string]: UserCourseProgressData;
   };
@@ -118,10 +118,11 @@ export interface UserFormData {
   assignedCourseIds?: string[];
   isActive?: boolean;
   profileImageUrl?: string | null;
+  preferredLocale?: string | null; // Added
 }
 
 // Type for checkout form data (Admin initiating for a new customer)
-export interface CheckoutFormData extends Omit<UserFormData, 'role' | 'isActive' | 'profileImageUrl' | 'assignedCourseIds' | 'companyId'> {
+export interface CheckoutFormData extends Omit<UserFormData, 'role' | 'isActive' | 'profileImageUrl' | 'assignedCourseIds' | 'companyId' | 'preferredLocale'> {
   companyName: string;
   streetAddress?: string;
   city?: string;

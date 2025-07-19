@@ -22,12 +22,25 @@ import { getCompanyById } from '@/lib/company-data';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, updateEmail } from 'firebase/auth';
-import { Building, Mail, User as UserIcon, Upload, Trash2, Loader2, Save } from 'lucide-react';
+import { Building, Mail, User as UserIcon, Upload, Trash2, Loader2, Save, Languages } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const SUPPORTED_LOCALES = [
+  { value: 'en', label: 'English' },
+  { value: 'es', label: 'Spanish' },
+  { value: 'fr', label: 'French' },
+  { value: 'de', label: 'German' },
+  { value: 'it', label: 'Italian' },
+  { value: 'ja', label: 'Japanese' },
+  { value: 'pt', label: 'Portuguese' },
+  { value: 'zh', label: 'Chinese' },
+];
 
 const profileFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
   email: z.string().email("Please enter a valid email address."),
+  preferredLocale: z.string().optional().nullable(),
 });
 
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
@@ -49,6 +62,7 @@ export default function AccountBasicsPage() {
     defaultValues: {
       name: '',
       email: '',
+      preferredLocale: 'en',
     },
   });
 
@@ -59,7 +73,11 @@ export default function AccountBasicsPage() {
           const userDetails = await getUserByEmail(firebaseUser.email);
           setCurrentUser(userDetails);
           if (userDetails) {
-            form.reset({ name: userDetails.name, email: userDetails.email });
+            form.reset({
+              name: userDetails.name,
+              email: userDetails.email,
+              preferredLocale: userDetails.preferredLocale || 'en',
+            });
             if (userDetails.companyId) {
               const company = await getCompanyById(userDetails.companyId);
               setBrandName(company?.name || 'N/A');
@@ -149,18 +167,22 @@ export default function AccountBasicsPage() {
     if (!currentUser) return;
     startTransition(async () => {
       try {
+        let updateData: Partial<User> = {
+            name: data.name,
+            preferredLocale: data.preferredLocale,
+        };
+        
         if (data.email.toLowerCase() !== currentUser.email.toLowerCase()) {
            if (!auth.currentUser) throw new Error("Not authenticated.");
-           // IMPORTANT: You might need to handle re-authentication here for security.
-           // For simplicity, we are directly updating the email.
            await updateEmail(auth.currentUser, data.email);
+           updateData.email = data.email;
            toast({ title: "Email Verification Required", description: `A verification link was sent to ${data.email}. Please verify to complete the change.` });
         }
         
-        const updatedUser = await updateUser(currentUser.id, data);
+        const updatedUser = await updateUser(currentUser.id, updateData);
         if (updatedUser) {
           setCurrentUser(updatedUser);
-          form.reset(updatedUser);
+          form.reset(data);
           toast({ title: "Profile Updated", description: "Your details have been saved." });
         } else {
           throw new Error("Failed to update profile in database.");
@@ -168,8 +190,7 @@ export default function AccountBasicsPage() {
       } catch (error: any) {
         console.error("Profile update error:", error);
         toast({ title: "Update Failed", description: error.message || "Could not update your profile.", variant: "destructive" });
-        // Reset form to original state on failure
-        form.reset({ name: currentUser.name, email: currentUser.email });
+        form.reset({ name: currentUser.name, email: currentUser.email, preferredLocale: currentUser.preferredLocale });
       }
     });
   };
@@ -275,6 +296,30 @@ export default function AccountBasicsPage() {
                 <FormMessage />
               </FormItem>
             )} />
+             <FormField
+                control={form.control}
+                name="preferredLocale"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1 text-muted-foreground"><Languages className="h-4 w-4" /> Language Preference</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || 'en'}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select your preferred language" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {SUPPORTED_LOCALES.map(locale => (
+                          <SelectItem key={locale.value} value={locale.value}>
+                            {locale.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             <div className="space-y-2">
               <Label htmlFor="brand" className="flex items-center gap-1 text-muted-foreground"><Building className="h-4 w-4" /> Brand</Label>
               <Input id="brand" value={brandName || 'Loading...'} readOnly disabled />

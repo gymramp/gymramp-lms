@@ -75,8 +75,7 @@ export default function LearnCoursePage() {
     const isVideoLesson = currentContentItem?.type === 'lesson' || currentContentItem?.type === 'brandLesson';
     const isCurrentUserOnTrial = !!userBrandDetails?.isTrial;
 
-    // TODO: This is a placeholder for user language preference
-    const userLocale = 'es'; // Example: Hardcode to Spanish for testing
+    const userLocale = currentUser?.preferredLocale || 'en';
 
     useEffect(() => {
         setIsMounted(true);
@@ -142,15 +141,15 @@ export default function LearnCoursePage() {
                     let itemType: CurriculumDisplayItem['type'] = typePrefix as CurriculumDisplayItem['type'];
                     if (isBrandCourse) {
                         if (typePrefix === 'brandLesson') itemData = await getBrandLessonById(id);
-                        else if (typePrefix === 'brandQuiz') itemData = await getBrandQuizById(id);
+                        else if (typePrefix === 'brandQuiz') itemData = await getBrandQuizById(id, userLocale);
                         else { 
                             if (typePrefix === 'lesson') itemData = await getLessonById(id, userLocale); // Pass locale
-                            else if (typePrefix === 'quiz') itemData = await getQuizById(id); // TODO: Add locale to quiz
+                            else if (typePrefix === 'quiz') itemData = await getQuizById(id, userLocale);
                             itemType = typePrefix as 'lesson' | 'quiz';
                         }
                     } else { // Global course
                         if (typePrefix === 'lesson') itemData = await getLessonById(id, userLocale); // Pass locale
-                        else if (typePrefix === 'quiz') itemData = await getQuizById(id); // TODO: Add locale to quiz
+                        else if (typePrefix === 'quiz') itemData = await getQuizById(id, userLocale); // Pass locale
                         itemType = typePrefix as 'lesson' | 'quiz';
                     }
                     if (itemData) allItemsMap.set(prefixedId, { id: prefixedId, type: itemType, data: itemData as CurriculumDisplayItem['data'] });
@@ -185,7 +184,7 @@ export default function LearnCoursePage() {
         } finally {
             setIsLoading(false);
         }
-    }, [courseId, router, toast, userLocale]); // Added userLocale dependency
+    }, [courseId, router, toast, userLocale]);
 
     useEffect(() => {
         if (currentUser?.id) {
@@ -420,9 +419,9 @@ export default function LearnCoursePage() {
                             let quizData: Quiz | BrandQuiz | null = null;
                             // Determine if it's a global quiz or brand quiz based on current course type
                             if (isBrandSpecificCourse || currentContentItem.type === 'brandLesson') { // Assume timed quizzes for brand lessons are brand quizzes
-                                quizData = await getBrandQuizById(event.quizId);
+                                quizData = await getBrandQuizById(event.quizId, userLocale);
                             } else {
-                                quizData = await getQuizById(event.quizId);
+                                quizData = await getQuizById(event.quizId, userLocale);
                             }
                             if (quizData) {
                                 setCurrentTimedQuizData(quizData);
@@ -454,7 +453,7 @@ export default function LearnCoursePage() {
                 saveCurrentVideoProgress();
             }, SAVE_PROGRESS_INTERVAL);
         }
-    }, [isVideoLesson, isVideoWatched, completedItemIds, currentContentItem, saveCurrentVideoProgress, showTimedQuizModal, triggeredEventIds, isBrandSpecificCourse, toast]);
+    }, [isVideoLesson, isVideoWatched, completedItemIds, currentContentItem, saveCurrentVideoProgress, showTimedQuizModal, triggeredEventIds, isBrandSpecificCourse, toast, userLocale]);
 
     const handleVideoSeeking = useCallback(() => {
         if (videoRef.current && isVideoLesson && !isCurrentUserOnTrial) {
@@ -562,7 +561,7 @@ export default function LearnCoursePage() {
 
     const sidebarContent = ( <div className="p-4 space-y-4"> <Link href="/courses/my-courses" className="inline-flex items-center text-sm text-muted-foreground hover:text-primary mb-4"> <ChevronLeft className="h-4 w-4 mr-1" /> Back to My Learning </Link> <h3 className="text-lg font-semibold">{course?.title}</h3> <div className="space-y-1"> <div className="flex justify-between text-xs text-muted-foreground mb-1"> <span>Overall Progress</span> <span>{userProgressData?.progress || 0}%</span> </div> <Progress value={userProgressData?.progress || 0} aria-label={`${course?.title || 'Course'} overall progress ${userProgressData?.progress || 0}%`} className="h-2"/> </div> {(isCourseCompleted || (userProgressData?.status === "Completed" && userProgressData.progress === 100)) && ( <Button onClick={() => {setShowCertificateDialog(true); setHasShownInitialCertificate(true);}} variant="outline" className="w-full mt-2 flex items-center gap-2"> <Award className="h-4 w-4" /> View Certificate </Button> )} <h4 className="text-md font-semibold pt-2 border-t mt-4">Curriculum</h4> <ScrollArea className="h-[calc(100vh-320px)]"> <ul className="space-y-1 mt-2"> {curriculumItems.map((item, index) => { const Icon = (item.type === 'lesson' || item.type === 'brandLesson') ? FileText : HelpCircle; const isCompleted = completedItemIds.includes(item.id); const isCurrent = currentContentItem?.id === item.id; const locked = isItemLocked(index); const itemIsClickable = isCourseCompleted || isCompleted || isCurrent || !locked || isCurrentUserOnTrial; return ( <li key={item.id}> <Button variant={isCurrent ? "secondary" : "ghost"} className={cn( "w-full justify-start h-auto py-2 px-2 text-left", isCompleted && !isCurrent && 'text-green-600 hover:text-green-700', locked && !isCompleted && !isCurrent && !isCourseCompleted && !isCurrentUserOnTrial && 'text-muted-foreground opacity-60 cursor-not-allowed', isCurrent && 'font-semibold' )} onClick={() => itemIsClickable && handleContentSelection(item, index)} disabled={!itemIsClickable} title={locked && !isCompleted && !isCourseCompleted && !isCurrentUserOnTrial ? "Complete previous items to unlock" : item.data.title} > <div className="flex items-center w-full"> {isCompleted ? <CheckCircle className="h-4 w-4 mr-2 flex-shrink-0 text-green-500" /> : locked && !isCurrent && !isCourseCompleted && !isCurrentUserOnTrial ? <Lock className="h-4 w-4 mr-2 flex-shrink-0 text-muted-foreground" /> : <Icon className="h-4 w-4 mr-2 flex-shrink-0 text-muted-foreground" /> } <span className="flex-1 text-sm truncate">{item.data.title}</span> </div> </Button> </li> ); })} </ul> </ScrollArea> </div> );
 
-    if (!isMounted || isLoading || !currentUser) return ( <div className="flex h-screen bg-secondary"> <aside className="hidden md:flex md:flex-col w-72 lg:w-80 border-r bg-background p-4 space-y-4"><Skeleton className="h-5 w-3/4" /> <Skeleton className="h-6 w-full" /><div className="space-y-1"><div className="flex justify-between"><Skeleton className="h-3 w-1/4" /><Skeleton className="h-3 w-1/4" /></div><Skeleton className="h-2 w-full" /></div><Skeleton className="h-10 w-full" /> <Skeleton className="h-10 w-full" /> <Skeleton className="h-10 w-full" /> </aside> <main className="flex-1 flex flex-col overflow-hidden"><header className="flex items-center justify-between p-4 border-b bg-background md:justify-end"><Skeleton className="h-8 w-8 rounded md:hidden mr-4" /> <Skeleton className="h-6 w-1/3 md:hidden" /> <div className="flex items-center gap-4"><Skeleton className="h-6 w-24" /> </div></header><div className="flex-1 overflow-y-auto bg-background p-6 text-center"><Skeleton className="h-8 w-1/2 mx-auto mb-4" /><Skeleton className="aspect-video w-full my-6 rounded-lg" /><Skeleton className="h-4 w-full my-2" /><Skeleton className="h-4 w-full my-2" /><Skeleton className="h-4 w-5/6 my-2" /></div></main> </div>);
+    if (!isMounted || isLoading || !currentUser) return ( <div className="flex h-screen bg-secondary"> <aside className="hidden md:flex md:flex-col w-72 lg:w-80 border-r bg-background p-4 space-y-4"><Skeleton className="h-5 w-3/4" /> <Skeleton className="h-6 w-full" /><div className="space-y-1"><div className="flex justify-between"><Skeleton className="h-3 w-1/4" /><Skeleton className="h-3 w-1/4" /></div><Skeleton className="h-2 w-full" /></div><Skeleton className="h-10 w-full" /> <Skeleton className="h-10 w-full" /> <Skeleton className="h-10 w-full" /> </aside> <main className="flex-1 flex flex-col overflow-hidden"><header className="flex items-center justify-between p-4 border-b bg-background md:justify-end"><Skeleton className="h-8 w-8 rounded md:hidden mr-4" /> <Skeleton className="h-6 w-1/3 md:hidden" /> <div className="flex items-center gap-4"><Skeleton className="h-6 w-24" /> </div></header><div className="flex-1 overflow-y-auto bg-background p-6 text-center"><Skeleton className="h-8 w-1/2 mx-auto mb-4" /><Skeleton className="aspect-video w-full my-6 rounded-lg" /><Skeleton className="h-4 w-full my-2" /><Skeleton className="h-4 w-5/6 my-2" /></div></main> </div>);
     if (!course) return <div className="flex h-screen items-center justify-center">Course data not found.</div>;
 
     return ( <> <div className="flex h-screen bg-secondary"> <aside className="hidden md:flex md:flex-col w-72 lg:w-80 border-r bg-background overflow-y-auto">{sidebarContent}</aside> <main className="flex-1 flex flex-col overflow-hidden"> <header className="flex items-center justify-between p-4 border-b bg-background md:justify-end"> <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}> <SheetTrigger asChild><Button variant="outline" size="icon" className="md:hidden mr-4"><Menu className="h-5 w-5" /><span className="sr-only">Toggle Course Menu</span></Button></SheetTrigger> <SheetContent side="left" className="w-72 p-0 overflow-y-auto">{sidebarContent}</SheetContent> </Sheet> <h1 className="text-lg font-semibold truncate md:hidden">{course.title}</h1> <div className="flex items-center gap-4"><span className="text-sm font-medium">Welcome, {currentUser.name}!</span></div> </header> <div className="flex-1 overflow-y-auto bg-background relative"> {renderContent()} <div className="sticky bottom-0 left-0 right-0 bg-background/80 backdrop-blur-sm border-t p-4 flex justify-between items-center z-10"> <Button variant="outline" onClick={handlePrevious} disabled={currentIndex === 0}> <ChevronLeft className="mr-2 h-4 w-4" /> Previous </Button> <Button onClick={handleMainActionClick} disabled={isButtonDisabled || isLoadingTimedQuiz} className={cn(buttonVariant === 'default' ? "bg-primary hover:bg-primary/90" : "bg-secondary hover:bg-secondary/80 text-secondary-foreground")} title={buttonTitle} > {isLoadingTimedQuiz ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} {buttonText} {!(buttonText.includes("Certificate") || (currentIndex === curriculumItems.length -1 && (completedItemIds.includes(currentContentItem?.id || '') || isCourseCompleted))) && !isLoadingTimedQuiz && <ChevronRight className="ml-2 h-4 w-4" />} </Button> </div> </div> </main> </div>
@@ -595,5 +594,3 @@ export default function LearnCoursePage() {
       )}
     </> );
 }
-
-    

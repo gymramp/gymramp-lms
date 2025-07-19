@@ -1,3 +1,4 @@
+
 // src/app/account/layout.tsx
 import { AccountNav } from '@/components/layout/AccountNav';
 import { Separator } from '@/components/ui/separator';
@@ -8,7 +9,7 @@ interface AccountLayoutProps {
 
 export default function AccountLayout({ children }: AccountLayoutProps) {
   return (
-    <div className="container mx-auto space-y-8">
+    <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">My Account</h1>
         <p className="text-muted-foreground">
