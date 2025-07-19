@@ -32,10 +32,28 @@ export default function EditCompanyPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchCompanyData = useCallback(async (user: User | null) => {
-    if (!user || !['Super Admin', 'Admin', 'Owner'].includes(user.role) || !companyId) {
+    if (!user || !companyId) {
       setIsLoading(false);
       return;
     }
+    
+    // Authorization Check
+    let authorized = false;
+    if (user.role === 'Super Admin') {
+        authorized = true;
+    } else if (user.companyId) {
+        const companyDataForAuthCheck = await getCompanyById(companyId);
+        if (companyDataForAuthCheck && (user.companyId === companyDataForAuthCheck.id || user.companyId === companyDataForAuthCheck.parentBrandId)) {
+            authorized = true;
+        }
+    }
+
+    if (!authorized) {
+        toast({ title: "Access Denied", description: "You do not have permission to view this account.", variant: "destructive" });
+        router.push(user.role === 'Staff' ? '/courses/my-courses' : '/dashboard');
+        return;
+    }
+    
     setIsLoading(true);
     try {
       const [companyData, childBrandsData, usersData] = await Promise.all([
@@ -44,8 +62,8 @@ export default function EditCompanyPage() {
         getUsersByCompanyId(companyId) // Fetch users for the parent company
       ]);
 
-      if (!companyData || (user.role !== 'Super Admin' && user.companyId !== companyData.id)) {
-        toast({ title: "Error", description: "Account not found or access denied.", variant: "destructive" });
+      if (!companyData) {
+        toast({ title: "Error", description: "Account not found.", variant: "destructive" });
         router.push('/admin/accounts');
         return;
       }
@@ -69,7 +87,7 @@ export default function EditCompanyPage() {
           fetchCompanyData(userDetails);
         } else {
           toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
-          router.push('/dashboard');
+          router.push(userDetails?.role === 'Staff' ? '/courses/my-courses' : '/dashboard');
         }
       } else {
         router.push('/login');
@@ -115,9 +133,12 @@ export default function EditCompanyPage() {
     );
   }
 
+  const canEdit = currentUser.role === 'Super Admin' || (company.id === currentUser.companyId && (currentUser.role === 'Admin' || currentUser.role === 'Owner'));
+
+
   return (
     <div className="container mx-auto">
-      <Button variant="outline" onClick={() => router.push('/admin/accounts')} className="mb-6">
+      <Button variant="outline" onClick={() => router.push(currentUser.role === 'Super Admin' ? '/admin/accounts' : '/admin/companies')} className="mb-6">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Accounts
       </Button>
       <div className="flex items-center justify-between mb-4">
@@ -131,14 +152,16 @@ export default function EditCompanyPage() {
           <div>
             <CardTitle>{company.name}</CardTitle>
             <CardDescription>
-              This page shows read-only information for the parent brand/account.
+              This page shows read-only information for the brand/account.
             </CardDescription>
           </div>
-           <Button asChild>
-              <Link href={`/admin/companies/${companyId}/edit-form`}>
-                <Edit className="mr-2 h-4 w-4" /> Edit Account
-              </Link>
-          </Button>
+           {canEdit && (
+            <Button asChild>
+                <Link href={`/admin/companies/${companyId}/edit-form`}>
+                  <Edit className="mr-2 h-4 w-4" /> Edit Account
+                </Link>
+            </Button>
+           )}
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8 pt-6">
           <div className="space-y-1">
@@ -174,11 +197,13 @@ export default function EditCompanyPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Brands</CardTitle>
-                <Button asChild variant="outline" size="sm">
-                   <Link href={`/admin/companies/new?parent=${company.id}`}>
-                      <PlusCircle className="mr-2 h-4 w-4" /> Add Brand
-                   </Link>
-                </Button>
+                {canEdit && (
+                  <Button asChild variant="outline" size="sm">
+                     <Link href={`/admin/companies/new?parent=${company.id}`}>
+                        <PlusCircle className="mr-2 h-4 w-4" /> Add Brand
+                     </Link>
+                  </Button>
+                )}
             </CardHeader>
             <CardContent>
               {childBrands.length > 0 ? (
@@ -186,9 +211,11 @@ export default function EditCompanyPage() {
                   {childBrands.map(brand => (
                     <li key={brand.id} className="text-sm p-2 border rounded-md flex justify-between items-center">
                       <span>{brand.name}</span>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/admin/companies/${brand.id}/edit`}>Manage</Link>
-                      </Button>
+                      {canEdit && (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/admin/companies/${brand.id}/edit`}>Manage</Link>
+                        </Button>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -200,11 +227,13 @@ export default function EditCompanyPage() {
            <Card>
             <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Users in this Account</CardTitle>
-                <Button asChild variant="outline" size="sm">
-                    <Link href={`/admin/users/new?companyId=${company.id}`}>
-                        <PlusCircle className="mr-2 h-4 w-4" /> Add User
-                    </Link>
-                </Button>
+                {canEdit && (
+                  <Button asChild variant="outline" size="sm">
+                      <Link href={`/admin/users/new?companyId=${company.id}`}>
+                          <PlusCircle className="mr-2 h-4 w-4" /> Add User
+                      </Link>
+                  </Button>
+                )}
             </CardHeader>
             <CardContent>
               {users.length > 0 ? (

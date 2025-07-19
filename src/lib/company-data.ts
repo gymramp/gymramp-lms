@@ -1,6 +1,7 @@
 
 
 
+
 import { db } from './firebase';
 import {
     collection,
@@ -315,44 +316,15 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
         const companyRef = doc(db, COMPANIES_COLLECTION, companyId);
         const dataToUpdate: Partial<Company> = { updatedAt: serverTimestamp() as Timestamp };
 
+        // Handle all possible fields from CompanyFormData
         if (companyData.name !== undefined) dataToUpdate.name = companyData.name;
         if (companyData.subdomainSlug !== undefined) dataToUpdate.subdomainSlug = companyData.subdomainSlug?.trim().toLowerCase() || null;
         if (companyData.customDomain !== undefined) dataToUpdate.customDomain = companyData.customDomain?.trim().toLowerCase() || null;
         if (companyData.shortDescription !== undefined) dataToUpdate.shortDescription = companyData.shortDescription?.trim() || null;
         if (companyData.logoUrl !== undefined) dataToUpdate.logoUrl = companyData.logoUrl?.trim() || null;
         if (companyData.maxUsers !== undefined) dataToUpdate.maxUsers = companyData.maxUsers ?? null;
-        if (companyData.assignedProgramIds !== undefined) {
-            dataToUpdate.assignedProgramIds = companyData.assignedProgramIds;
-        }
+        if (companyData.assignedProgramIds !== undefined) dataToUpdate.assignedProgramIds = companyData.assignedProgramIds;
         if (companyData.isTrial !== undefined) dataToUpdate.isTrial = companyData.isTrial;
-        
-        // Corrected trialEndsAt handling
-        if (Object.prototype.hasOwnProperty.call(companyData, 'trialEndsAt')) {
-            const trialDateValue = companyData.trialEndsAt;
-            if (trialDateValue === null) {
-                dataToUpdate.trialEndsAt = null;
-            } else if (trialDateValue && typeof (trialDateValue as any).toDate === 'function') { // Check for Firestore Timestamp-like
-                dataToUpdate.trialEndsAt = trialDateValue as Timestamp;
-            } else if (trialDateValue instanceof Date) {
-                dataToUpdate.trialEndsAt = Timestamp.fromDate(trialDateValue);
-            } else if (typeof trialDateValue === 'string') {
-                const parsed = new Date(trialDateValue);
-                if (!isNaN(parsed.valueOf())) { // Check if date string is valid
-                    dataToUpdate.trialEndsAt = Timestamp.fromDate(parsed);
-                } else {
-                    console.warn(`[updateCompany] Invalid date string for trialEndsAt: ${trialDateValue}. Setting to null.`);
-                    dataToUpdate.trialEndsAt = null;
-                }
-            } else if (trialDateValue === undefined) {
-                 // If it was explicitly passed as undefined in the partial update, set to null to clear it
-                 dataToUpdate.trialEndsAt = null;
-            } else {
-                // For any other unexpected type, log a warning and set to null
-                console.warn(`[updateCompany] Unexpected type for trialEndsAt: ${typeof trialDateValue}. Setting to null.`);
-                dataToUpdate.trialEndsAt = null;
-            }
-        }
-
         if (companyData.saleAmount !== undefined) dataToUpdate.saleAmount = companyData.saleAmount ?? null;
         if (companyData.revenueSharePartners !== undefined) dataToUpdate.revenueSharePartners = companyData.revenueSharePartners || null;
         if (companyData.whiteLabelEnabled !== undefined) dataToUpdate.whiteLabelEnabled = companyData.whiteLabelEnabled;
@@ -364,10 +336,35 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
         if (companyData.canManageCourses !== undefined) dataToUpdate.canManageCourses = companyData.canManageCourses;
         if (companyData.stripeCustomerId !== undefined) dataToUpdate.stripeCustomerId = companyData.stripeCustomerId || null;
         if (companyData.stripeSubscriptionId !== undefined) dataToUpdate.stripeSubscriptionId = companyData.stripeSubscriptionId || null;
+        if (companyData.parentBrandId !== undefined) dataToUpdate.parentBrandId = companyData.parentBrandId || null;
+        if (companyData.createdByUserId !== undefined) dataToUpdate.createdByUserId = companyData.createdByUserId || null;
         if (companyData.partnerId !== undefined) dataToUpdate.partnerId = companyData.partnerId || null;
 
+        // Corrected trialEndsAt handling
+        if (Object.prototype.hasOwnProperty.call(companyData, 'trialEndsAt')) {
+            const trialDateValue = companyData.trialEndsAt;
+            if (trialDateValue === null || trialDateValue === undefined) {
+                dataToUpdate.trialEndsAt = null;
+            } else if (trialDateValue && typeof (trialDateValue as any).toDate === 'function') {
+                dataToUpdate.trialEndsAt = trialDateValue as Timestamp;
+            } else if (trialDateValue instanceof Date) {
+                dataToUpdate.trialEndsAt = Timestamp.fromDate(trialDateValue);
+            } else if (typeof trialDateValue === 'string') {
+                const parsed = new Date(trialDateValue);
+                if (!isNaN(parsed.valueOf())) {
+                    dataToUpdate.trialEndsAt = Timestamp.fromDate(parsed);
+                } else {
+                    console.warn(`[updateCompany] Invalid date string for trialEndsAt: ${trialDateValue}. Setting to null.`);
+                    dataToUpdate.trialEndsAt = null;
+                }
+            } else {
+                console.warn(`[updateCompany] Unexpected type for trialEndsAt: ${typeof trialDateValue}. Setting to null.`);
+                dataToUpdate.trialEndsAt = null;
+            }
+        }
+
         if (Object.keys(dataToUpdate).length > 1) {
-            console.log(`[updateCompany] Data being written for brand ${companyId} (assignedProgramIds included):`, JSON.stringify(dataToUpdate.assignedProgramIds, null, 2));
+            console.log(`[updateCompany] Data being written for brand ${companyId}:`, JSON.stringify(dataToUpdate, null, 2));
             await updateDoc(companyRef, dataToUpdate);
         } else {
             console.warn("updateCompany called with no actual data changes (besides updatedAt) for brand:", companyId);
@@ -680,5 +677,5 @@ export async function assignMissingCompanyToUsers(defaultCompanyId: string): Pro
         await batch.commit();
         console.log(`Successfully assigned company ID ${defaultCompanyId} to ${usersToUpdate.length} users.`);
         return usersToUpdate.length;
-    }, 3);
+    });
 }

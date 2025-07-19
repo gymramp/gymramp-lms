@@ -22,8 +22,11 @@ import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2, Info, ArrowLeft, Building, Upload, ImageIcon, Trash2, Globe, Link as LinkIcon, Users, GitBranch, Briefcase } from 'lucide-react';
+import { Loader2, Info, ArrowLeft, Building, Upload, ImageIcon, Trash2, Globe, Link as LinkIcon, Users, GitBranch, Briefcase, Gift, Calendar as CalendarIcon } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { DatePickerWithPresets } from '@/components/ui/date-picker-with-presets';
+import { Timestamp } from 'firebase/firestore';
 
 const companyFormSchema = z.object({
   name: z.string().min(2, { message: 'Account name must be at least 2 characters.' }),
@@ -39,6 +42,8 @@ const companyFormSchema = z.object({
   shortDescription: z.string().max(150, { message: 'Description must be 150 characters or less.' }).optional().or(z.literal('')).nullable(),
   logoUrl: z.string().url({ message: 'Invalid URL format.' }).optional().or(z.literal('')).nullable(),
   maxUsers: z.coerce.number().int().positive().min(1).optional().nullable(),
+  isTrial: z.boolean().default(false),
+  trialEndsAt: z.date().nullable().optional(),
 });
 
 type CompanyFormValues = z.infer<typeof companyFormSchema>;
@@ -59,10 +64,11 @@ export default function EditCompanyFormPage() {
 
   const form = useForm<CompanyFormValues>({
     resolver: zodResolver(companyFormSchema),
-    defaultValues: { name: '', parentBrandId: null, subdomainSlug: null, customDomain: null, shortDescription: null, logoUrl: null, maxUsers: null },
+    defaultValues: { name: '', parentBrandId: null, subdomainSlug: null, customDomain: null, shortDescription: null, logoUrl: null, maxUsers: null, isTrial: false, trialEndsAt: null },
   });
   
   const logoUrlValue = form.watch('logoUrl');
+  const isTrialValue = form.watch('isTrial');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -84,12 +90,18 @@ export default function EditCompanyFormPage() {
     setIsLoading(true);
     try {
         const companyData = await getCompanyById(companyId);
-        if (!companyData || (user.role !== 'Super Admin' && user.companyId !== companyData.id)) {
+        if (!companyData || (user.role !== 'Super Admin' && user.companyId !== companyData.id && user.companyId !== companyData.parentBrandId)) {
              toast({ title: "Error", description: "Account not found or access denied.", variant: "destructive" });
              router.push('/admin/accounts');
              return;
         }
         setCompanyToEdit(companyData);
+        
+        let trialDate: Date | null = null;
+        if(companyData.trialEndsAt) {
+            trialDate = companyData.trialEndsAt instanceof Date ? companyData.trialEndsAt : new Date(companyData.trialEndsAt as string);
+        }
+
         form.reset({
             name: companyData.name,
             parentBrandId: companyData.parentBrandId,
@@ -98,6 +110,8 @@ export default function EditCompanyFormPage() {
             shortDescription: companyData.shortDescription,
             logoUrl: companyData.logoUrl,
             maxUsers: companyData.maxUsers,
+            isTrial: companyData.isTrial,
+            trialEndsAt: trialDate,
         });
 
         if (user.role === 'Super Admin') {
@@ -154,6 +168,8 @@ export default function EditCompanyFormPage() {
         logoUrl: data.logoUrl || null,
         maxUsers: data.maxUsers ?? null,
         parentBrandId: data.parentBrandId || null,
+        isTrial: data.isTrial,
+        trialEndsAt: data.isTrial ? (data.trialEndsAt ? Timestamp.fromDate(data.trialEndsAt) : null) : null,
       };
       
       const updatedCompany = await updateCompany(companyId, formData);
@@ -218,6 +234,50 @@ export default function EditCompanyFormPage() {
                     )}
                   />
                 )}
+                
+                <Card className="bg-secondary/50">
+                    <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2"><Gift className="h-5 w-5"/> Trial Management</CardTitle>
+                        <CardDescription>Extend a trial period or convert the account to paid.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <FormField
+                            control={form.control}
+                            name="isTrial"
+                            render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border bg-background p-3 shadow-sm">
+                                <div className="space-y-0.5">
+                                    <FormLabel>Trial Active</FormLabel>
+                                    <FormDescription className="text-xs">
+                                    {field.value ? "This account is currently in a trial period." : "This is a paid account."}
+                                    </FormDescription>
+                                </div>
+                                <FormControl>
+                                    <Switch
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                    aria-readonly
+                                    />
+                                </FormControl>
+                                </FormItem>
+                            )}
+                        />
+                        {isTrialValue && (
+                             <FormField
+                                control={form.control}
+                                name="trialEndsAt"
+                                render={({ field }) => (
+                                <FormItem className="flex flex-col">
+                                    <FormLabel className="flex items-center gap-1"><CalendarIcon className="h-4 w-4"/> Trial End Date</FormLabel>
+                                    <DatePickerWithPresets date={field.value} setDate={field.onChange} />
+                                    <FormDescription className="text-xs">Set a new end date to extend the trial.</FormDescription>
+                                    <FormMessage />
+                                </FormItem>
+                                )}
+                            />
+                        )}
+                    </CardContent>
+                </Card>
 
                 <FormField control={form.control} name="shortDescription" render={({ field }) => ( <FormItem> <FormLabel>Short Description</FormLabel> <FormControl><Textarea rows={3} {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} />
                 
