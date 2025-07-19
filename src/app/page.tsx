@@ -204,15 +204,14 @@ export default function LoginPage() {
         toast({ title: "Login Successful", description: `Welcome!` });
 
       } catch (error: any) {
-          console.error("Login failed details:", error); // Enhanced logging
-          let errorMessage = "There was a problem logging in.";
-          if (error.code === "auth/invalid-credential" || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-             errorMessage = "Invalid email or password.";
-             console.warn(`Firebase Auth Error: ${error.code} - Suggests incorrect email/password or user not found in Firebase Auth.`);
+          console.error("Login failed details:", error);
+          let errorMessage = "An unexpected error occurred. Please try again.";
+          if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+             errorMessage = "Invalid email or password. Please check your credentials and try again.";
           } else if (error.code === 'auth/invalid-email') {
              errorMessage = "Please enter a valid email address.";
-          } else {
-            console.error("An unexpected Firebase error occurred during login:", error);
+          } else if (error.code === 'auth/too-many-requests') {
+             errorMessage = "Access to this account has been temporarily disabled due to many failed login attempts. You can immediately restore it by resetting your password or you can try again later.";
           }
           toast({ title: "Login Failed", description: errorMessage, variant: "destructive" });
       } finally {
