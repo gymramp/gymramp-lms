@@ -17,7 +17,7 @@ import {
     arrayRemove,
     Timestamp
 } from 'firebase/firestore';
-import type { BrandCourse, BrandCourseFormData, BrandLesson, BrandLessonFormData, BrandQuiz, BrandQuizFormData, BrandQuestion, BrandQuestionFormData, QuestionType, QuizTranslation, CourseTranslation, LessonTranslation } from '@/types/course';
+import type { BrandCourse, BrandCourseFormData, BrandLesson, BrandLessonFormData, BrandQuiz, BrandQuizFormData, BrandQuestion, BrandQuestionFormData, QuestionType, QuizTranslation, CourseTranslation, LessonTranslation, QuestionTranslation } from '@/types/course';
 import { getLessonById, getQuizById } from './firestore-data';
 
 const BRAND_COURSES_COLLECTION = 'brandCourses';
@@ -316,7 +316,7 @@ const sanitizeQuizTranslations = (translations?: { [key: string]: Pick<QuizTrans
     for (const locale in translations) {
         if (Object.prototype.hasOwnProperty.call(translations, locale)) {
             const translation = translations[locale];
-            if (translation && translation.title) {
+            if (translation && (translation.title)) {
                 sanitized[locale] = {
                     title: translation.title || null,
                 };
@@ -433,6 +433,23 @@ export async function deleteBrandQuizAndCleanUp(quizId: string, brandId: string)
 }
 
 // --- BrandQuestion Management Functions (within a BrandQuiz) ---
+const sanitizeBrandQuestionTranslations = (translations?: { [key: string]: QuestionTranslation }): { [key: string]: QuestionTranslation } => {
+    if (!translations) return {};
+    const sanitized: { [key: string]: QuestionTranslation } = {};
+    for (const locale in translations) {
+        if (Object.prototype.hasOwnProperty.call(translations, locale)) {
+            const translation = translations[locale];
+            if (translation && (translation.text || translation.options)) {
+                sanitized[locale] = {
+                    text: translation.text || null,
+                    options: (translation.options || []).map(opt => opt || null)
+                };
+            }
+        }
+    }
+    return sanitized;
+};
+
 
 export async function addBrandQuestionToBrandQuiz(brandQuizId: string, questionData: BrandQuestionFormData): Promise<BrandQuestion | null> {
     if (!brandQuizId) return null;
@@ -450,7 +467,7 @@ export async function addBrandQuestionToBrandQuiz(brandQuizId: string, questionD
             type: questionData.type,
             text: questionData.text,
             options: questionData.options || [],
-            translations: questionData.translations,
+            translations: sanitizeBrandQuestionTranslations(questionData.translations),
         };
 
         if (questionData.type === 'multiple-select') {
@@ -490,7 +507,7 @@ export async function updateBrandQuestionInBrandQuiz(brandQuizId: string, questi
                     type: questionData.type !== undefined ? questionData.type : q.type,
                     text: questionData.text !== undefined ? questionData.text : q.text,
                     options: questionData.options !== undefined ? questionData.options : q.options,
-                    translations: questionData.translations !== undefined ? questionData.translations : q.translations,
+                    translations: questionData.translations !== undefined ? sanitizeBrandQuestionTranslations(questionData.translations) : q.translations,
                 };
                 if (updatedQuestionData.type === 'multiple-select') {
                     updatedQuestionData.correctAnswers = questionData.correctAnswers !== undefined ? questionData.correctAnswers : q.correctAnswers;

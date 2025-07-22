@@ -1,15 +1,4 @@
 
-
-
-
-
-
-
-
-
-
-
-
 import { db } from './firebase';
 import {
     collection,
@@ -28,7 +17,7 @@ import {
     Timestamp,
     documentId
 } from 'firebase/firestore';
-import type { Course, Lesson, Quiz, Question, CourseFormData, LessonFormData, QuizFormData, QuestionFormData, QuestionType, Program, ProgramFormData, LessonTranslation, QuizTranslation, CourseTranslation } from '@/types/course';
+import type { Course, Lesson, Quiz, Question, CourseFormData, LessonFormData, QuizFormData, QuestionFormData, QuestionType, Program, ProgramFormData, LessonTranslation, QuizTranslation, CourseTranslation, QuestionTranslation } from '@/types/course';
 
 const COURSES_COLLECTION = 'courses';
 const LESSONS_COLLECTION = 'lessons';
@@ -339,7 +328,7 @@ const sanitizeQuizTranslations = (translations?: { [key: string]: Pick<QuizTrans
     for (const locale in translations) {
         if (Object.prototype.hasOwnProperty.call(translations, locale)) {
             const translation = translations[locale];
-            if (translation && translation.title) {
+            if (translation && (translation.title)) {
                 sanitized[locale] = {
                     title: translation.title || null,
                 };
@@ -437,6 +426,23 @@ export async function deleteQuiz(quizId: string): Promise<boolean> {
 }
 
 // --- Question Management Functions (within a Quiz) ---
+const sanitizeQuestionTranslations = (translations?: { [key: string]: QuestionTranslation }): { [key: string]: QuestionTranslation } => {
+    if (!translations) return {};
+    const sanitized: { [key: string]: QuestionTranslation } = {};
+    for (const locale in translations) {
+        if (Object.prototype.hasOwnProperty.call(translations, locale)) {
+            const translation = translations[locale];
+            if (translation && (translation.text || translation.options)) {
+                sanitized[locale] = {
+                    text: translation.text || null,
+                    options: (translation.options || []).map(opt => opt || null) // Ensure individual options can be null
+                };
+            }
+        }
+    }
+    return sanitized;
+};
+
 
 export type QuestionPayload = Omit<Question, 'id'>;
 
@@ -457,7 +463,7 @@ export async function addQuestionToQuiz(quizId: string, questionData: QuestionPa
             type: questionData.type,
             text: questionData.text,
             options: questionData.options || [],
-            translations: questionData.translations || {},
+            translations: sanitizeQuestionTranslations(questionData.translations),
         };
 
         if (questionData.type === 'multiple-select') {
@@ -499,7 +505,7 @@ export async function updateQuestion(quizId: string, questionId: string, questio
                     type: questionData.type !== undefined ? questionData.type : q.type,
                     text: questionData.text !== undefined ? questionData.text : q.text,
                     options: questionData.options !== undefined ? questionData.options : q.options,
-                    translations: questionData.translations !== undefined ? questionData.translations : q.translations,
+                    translations: questionData.translations !== undefined ? sanitizeQuestionTranslations(questionData.translations) : q.translations,
                 };
                 if (updatedQuestionData.type === 'multiple-select') {
                     updatedQuestionData.correctAnswers = questionData.correctAnswers !== undefined ? questionData.correctAnswers : q.correctAnswers;
