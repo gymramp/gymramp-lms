@@ -17,7 +17,7 @@ import {
     arrayRemove,
     Timestamp
 } from 'firebase/firestore';
-import type { BrandCourse, BrandCourseFormData, BrandLesson, BrandLessonFormData, BrandQuiz, BrandQuizFormData, BrandQuestion, BrandQuestionFormData, QuestionType, QuizTranslation, CourseTranslation } from '@/types/course';
+import type { BrandCourse, BrandCourseFormData, BrandLesson, BrandLessonFormData, BrandQuiz, BrandQuizFormData, BrandQuestion, BrandQuestionFormData, QuestionType, QuizTranslation, CourseTranslation, LessonTranslation } from '@/types/course';
 import { getLessonById, getQuizById } from './firestore-data';
 
 const BRAND_COURSES_COLLECTION = 'brandCourses';
@@ -52,7 +52,7 @@ const sanitizeCourseTranslations = (translations?: { [key: string]: CourseTransl
   for (const locale in translations) {
     if (Object.prototype.hasOwnProperty.call(translations, locale)) {
       const translation = translations[locale];
-      if (translation.title || translation.description || translation.longDescription) {
+      if (translation && (translation.title || translation.description || translation.longDescription)) {
           sanitized[locale] = {
               title: translation.title || null,
               description: translation.description || null,
@@ -173,6 +173,24 @@ export const updateBrandCourseCurriculum = async (brandCourseId: string, curricu
 
 
 // --- BrandLesson Functions ---
+const sanitizeLessonTranslations = (translations?: { [key: string]: LessonTranslation }): { [key: string]: LessonTranslation } => {
+  if (!translations) return {};
+  const sanitized: { [key: string]: LessonTranslation } = {};
+  for (const locale in translations) {
+    if (Object.prototype.hasOwnProperty.call(translations, locale)) {
+      const translation = translations[locale];
+      if (translation && (translation.title || translation.content || translation.videoUrl)) {
+          sanitized[locale] = {
+              title: translation.title || null,
+              content: translation.content || null,
+              videoUrl: translation.videoUrl || null,
+          };
+      }
+    }
+  }
+  return sanitized;
+};
+
 
 export async function createBrandLesson(brandId: string, lessonData: BrandLessonFormData): Promise<BrandLesson | null> {
     if (!brandId) {
@@ -187,6 +205,7 @@ export async function createBrandLesson(brandId: string, lessonData: BrandLesson
             featuredImageUrl: lessonData.featuredImageUrl?.trim() || null,
             exerciseFilesInfo: lessonData.exerciseFilesInfo?.trim() || null,
             playbackTime: lessonData.playbackTime?.trim() || null,
+            translations: sanitizeLessonTranslations(lessonData.translations),
             isDeleted: false,
             deletedAt: null,
             createdAt: serverTimestamp(),
@@ -232,15 +251,19 @@ export async function updateBrandLesson(lessonId: string, lessonData: Partial<Br
         const lessonSnap = await getDoc(lessonRef);
         if (!lessonSnap.exists() || lessonSnap.data().isDeleted === true) return null;
 
-        const dataToUpdate: Partial<BrandLessonFormData & {updatedAt: Timestamp}> = { updatedAt: serverTimestamp() as Timestamp };
+        const dataToUpdate: Partial<Omit<BrandLessonFormData, 'translations' | 'brandId'>> & { translations?: { [key: string]: LessonTranslation; }; updatedAt?: Timestamp } = { updatedAt: serverTimestamp() as Timestamp };
+        
+        if (lessonData.translations) {
+            dataToUpdate.translations = sanitizeLessonTranslations(lessonData.translations);
+        }
+
         for (const key in lessonData) {
-            if (Object.prototype.hasOwnProperty.call(lessonData, key)) {
-                const value = lessonData[key as keyof BrandLessonFormData];
-                 if (key === 'brandId' && value === undefined) continue;
+            if (Object.prototype.hasOwnProperty.call(lessonData, key) && key !== 'translations' && key !== 'brandId') {
+                const value = lessonData[key as keyof typeof lessonData];
                 if (key === 'videoUrl' || key === 'featuredImageUrl' || key === 'exerciseFilesInfo' || key === 'playbackTime') {
                     (dataToUpdate as any)[key] = (value as string)?.trim() || null;
                 } else {
-                    (dataToUpdate as any)[key as keyof BrandLessonFormData] = value;
+                    (dataToUpdate as any)[key] = value;
                 }
             }
         }
@@ -287,6 +310,23 @@ export async function deleteBrandLessonAndCleanUp(lessonId: string, brandId: str
 
 // --- BrandQuiz Functions ---
 
+const sanitizeQuizTranslations = (translations?: { [key: string]: Pick<QuizTranslation, 'title'> }): { [key: string]: Pick<QuizTranslation, 'title'> } => {
+    if (!translations) return {};
+    const sanitized: { [key: string]: Pick<QuizTranslation, 'title'> } = {};
+    for (const locale in translations) {
+        if (Object.prototype.hasOwnProperty.call(translations, locale)) {
+            const translation = translations[locale];
+            if (translation && translation.title) {
+                sanitized[locale] = {
+                    title: translation.title || null,
+                };
+            }
+        }
+    }
+    return sanitized;
+};
+
+
 export async function createBrandQuiz(brandId: string, quizData: BrandQuizFormData): Promise<BrandQuiz | null> {
     if (!brandId) {
         console.error("Brand ID is required to create a brand quiz.");
@@ -297,6 +337,7 @@ export async function createBrandQuiz(brandId: string, quizData: BrandQuizFormDa
         const newQuizDoc = {
             ...quizData, // Contains title and brandId
             questions: [], // Initialize with empty questions array
+            translations: sanitizeQuizTranslations(quizData.translations),
             isDeleted: false,
             deletedAt: null,
             createdAt: serverTimestamp(),
@@ -359,8 +400,12 @@ export async function updateBrandQuiz(quizId: string, quizData: Partial<BrandQui
         const quizRef = doc(db, BRAND_QUIZZES_COLLECTION, quizId);
         const quizSnap = await getDoc(quizRef);
         if (!quizSnap.exists() || quizSnap.data().isDeleted === true) return null;
+        
+        const dataToUpdate: Partial<BrandQuizFormData & { updatedAt: Timestamp }> = { updatedAt: serverTimestamp() as Timestamp };
+        if (quizData.title !== undefined) dataToUpdate.title = quizData.title;
+        if (quizData.translations !== undefined) dataToUpdate.translations = sanitizeQuizTranslations(quizData.translations);
 
-        await updateDoc(quizRef, {...quizData, updatedAt: serverTimestamp() });
+        await updateDoc(quizRef, dataToUpdate);
         const updatedDocSnap = await getDoc(quizRef);
         if (updatedDocSnap.exists()) {
             const data = updatedDocSnap.data();

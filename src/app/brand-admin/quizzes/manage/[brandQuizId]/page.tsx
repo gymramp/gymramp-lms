@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -8,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, PlusCircle, Edit, Trash2, CheckCircle, Loader2, HelpCircle, Save, ListChecks, Wand2 } from 'lucide-react';
+import { ArrowLeft, PlusCircle, Edit, Trash2, CheckCircle, Loader2, HelpCircle, Save, ListChecks, Wand2, Languages } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { BrandQuiz, BrandQuestion, User, Company, QuizTranslation } from '@/types/course';
 import { getBrandQuizById, deleteBrandQuestionFromBrandQuiz, updateBrandQuiz } from '@/lib/brand-content-data';
@@ -213,7 +214,7 @@ export default function ManageBrandQuizQuestionsPage() {
             <CardHeader><CardTitle className="flex items-center gap-2 text-2xl"><HelpCircle className="h-6 w-6"/> Edit My Quiz</CardTitle><CardDescription>Manage the quiz title, translations, and its questions.</CardDescription></CardHeader>
             <CardContent>
               <Tabs defaultValue="main">
-                <TabsList><TabsTrigger value="main">Main Content</TabsTrigger><TabsTrigger value="translations">Translations</TabsTrigger></TabsList>
+                <TabsList><TabsTrigger value="main">Main Content</TabsTrigger><TabsTrigger value="translations" className="flex items-center gap-1"><Languages className="mr-2 h-4 w-4" />Translations</TabsTrigger></TabsList>
                 <TabsContent value="main" className="pt-6"><FormField control={form.control} name="title" render={({ field }) => (<FormItem><FormLabel>Quiz Title (English)</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} /></TabsContent>
                 <TabsContent value="translations" className="pt-6 space-y-4">
                   <Alert variant="default" className="text-sm"><AlertDescription>Provide translations for the quiz title.</AlertDescription></Alert>

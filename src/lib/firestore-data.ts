@@ -9,6 +9,7 @@
 
 
 
+
 import { db } from './firebase';
 import {
     collection,
@@ -67,7 +68,8 @@ const sanitizeCourseTranslations = (translations?: { [key: string]: CourseTransl
   for (const locale in translations) {
     if (Object.prototype.hasOwnProperty.call(translations, locale)) {
       const translation = translations[locale];
-      if (translation.title || translation.description || translation.longDescription) {
+      // Only include the translation object if at least one field has a non-empty value
+      if (translation && (translation.title || translation.description || translation.longDescription)) {
           sanitized[locale] = {
               title: translation.title || null,
               description: translation.description || null,
@@ -146,21 +148,21 @@ export async function updateCourseMetadata(courseId: string, courseData: Partial
              throw new Error("Course not found or is soft-deleted for update.");
         }
 
-        const updatedDocData: Partial<Course> = {
-            title: courseData.title,
-            description: courseData.description,
-            longDescription: courseData.longDescription,
-            imageUrl: courseData.imageUrl || `https://placehold.co/600x350.png?text=${encodeURIComponent(courseData.title || currentDocSnap.data().title)}`,
-            featuredImageUrl: courseData.featuredImageUrl === '' ? null : courseData.featuredImageUrl,
-            level: courseData.level,
-            duration: courseData.duration,
-            certificateTemplateId: courseData.certificateTemplateId === '' ? null : courseData.certificateTemplateId, // Handle empty string from form
-            updatedAt: serverTimestamp(),
-            translations: sanitizeCourseTranslations(courseData.translations),
-        };
+        const dataToUpdate: Partial<CourseFormData & {updatedAt: Timestamp}> = { updatedAt: serverTimestamp() as Timestamp };
+
+        // Explicitly check for each field to handle empty strings vs. undefined
+        if (courseData.title !== undefined) dataToUpdate.title = courseData.title;
+        if (courseData.description !== undefined) dataToUpdate.description = courseData.description;
+        if (courseData.longDescription !== undefined) dataToUpdate.longDescription = courseData.longDescription;
+        if (courseData.imageUrl !== undefined) dataToUpdate.imageUrl = courseData.imageUrl || `https://placehold.co/600x350.png?text=${encodeURIComponent(courseData.title || currentDocSnap.data().title)}`;
+        if (courseData.featuredImageUrl !== undefined) dataToUpdate.featuredImageUrl = courseData.featuredImageUrl || null;
+        if (courseData.level !== undefined) dataToUpdate.level = courseData.level;
+        if (courseData.duration !== undefined) dataToUpdate.duration = courseData.duration;
+        if (courseData.certificateTemplateId !== undefined) dataToUpdate.certificateTemplateId = courseData.certificateTemplateId || null;
+        if (courseData.translations !== undefined) dataToUpdate.translations = sanitizeCourseTranslations(courseData.translations);
 
 
-        await updateDoc(courseRef, updatedDocData);
+        await updateDoc(courseRef, dataToUpdate);
         const updatedDocSnap = await getDoc(courseRef);
         if (updatedDocSnap.exists()) {
             return { id: courseId, ...updatedDocSnap.data() } as Course;
@@ -197,14 +199,14 @@ export async function deleteCourse(courseId: string): Promise<boolean> {
 
 // --- Lesson Library Functions ---
 
-const sanitizeTranslations = (translations?: { [key: string]: LessonTranslation }): { [key: string]: LessonTranslation } => {
+const sanitizeLessonTranslations = (translations?: { [key: string]: LessonTranslation }): { [key: string]: LessonTranslation } => {
   if (!translations) return {};
   const sanitized: { [key: string]: LessonTranslation } = {};
   for (const locale in translations) {
     if (Object.prototype.hasOwnProperty.call(translations, locale)) {
       const translation = translations[locale];
       // Only include the translation object if at least one field has a non-empty value
-      if (translation.title || translation.content || translation.videoUrl) {
+      if (translation && (translation.title || translation.content || translation.videoUrl)) {
           sanitized[locale] = {
               title: translation.title || null,
               content: translation.content || null,
@@ -227,7 +229,7 @@ export async function createLesson(lessonData: LessonFormData): Promise<Lesson |
             exerciseFilesInfo: lessonData.exerciseFilesInfo?.trim() || null,
             playbackTime: lessonData.playbackTime?.trim() || null,
             isPreviewAvailable: lessonData.isPreviewAvailable || false,
-            translations: sanitizeTranslations(lessonData.translations), // Sanitize before saving
+            translations: sanitizeLessonTranslations(lessonData.translations), // Sanitize before saving
             isDeleted: false,
             deletedAt: null,
             createdAt: serverTimestamp(),
@@ -291,14 +293,14 @@ export async function updateLesson(lessonId: string, lessonData: Partial<LessonF
         const lessonSnap = await getDoc(lessonRef);
         if (!lessonSnap.exists() || lessonSnap.data().isDeleted === true) return null;
 
-         const dataToUpdate: Partial<LessonFormData & {updatedAt: Timestamp}> = { updatedAt: serverTimestamp() as Timestamp };
+        const dataToUpdate: Partial<Omit<LessonFormData, 'translations'>> & { translations?: { [key: string]: LessonTranslation; }; updatedAt?: Timestamp } = { updatedAt: serverTimestamp() as Timestamp };
          
-         if (lessonData.translations) {
-            lessonData.translations = sanitizeTranslations(lessonData.translations);
+        if (lessonData.translations) {
+            dataToUpdate.translations = sanitizeLessonTranslations(lessonData.translations);
         }
         
          for (const key in lessonData) {
-             if (Object.prototype.hasOwnProperty.call(lessonData, key)) {
+             if (Object.prototype.hasOwnProperty.call(lessonData, key) && key !== 'translations') {
                  const value = lessonData[key as keyof LessonFormData];
                  if (key === 'videoUrl' || key === 'featuredImageUrl' || key === 'exerciseFilesInfo' || key === 'playbackTime') {
                      (dataToUpdate as any)[key] = (value as string)?.trim() || null;
@@ -331,12 +333,29 @@ export async function deleteLesson(lessonId: string): Promise<boolean> {
 
 
 // --- Quiz Library Functions ---
+const sanitizeQuizTranslations = (translations?: { [key: string]: Pick<QuizTranslation, 'title'> }): { [key: string]: Pick<QuizTranslation, 'title'> } => {
+    if (!translations) return {};
+    const sanitized: { [key: string]: Pick<QuizTranslation, 'title'> } = {};
+    for (const locale in translations) {
+        if (Object.prototype.hasOwnProperty.call(translations, locale)) {
+            const translation = translations[locale];
+            if (translation && translation.title) {
+                sanitized[locale] = {
+                    title: translation.title || null,
+                };
+            }
+        }
+    }
+    return sanitized;
+};
+
 
 export async function createQuiz(quizData: QuizFormData): Promise<Quiz | null> {
     return retryOperation(async () => {
         const quizzesRef = collection(db, QUIZZES_COLLECTION);
         const newQuizDoc = {
             ...quizData,
+            translations: sanitizeQuizTranslations(quizData.translations),
             questions: [],
             isDeleted: false,
             deletedAt: null,
@@ -393,8 +412,12 @@ export async function updateQuiz(quizId: string, quizData: Partial<QuizFormData>
         const quizRef = doc(db, QUIZZES_COLLECTION, quizId);
         const quizSnap = await getDoc(quizRef);
         if (!quizSnap.exists() || quizSnap.data().isDeleted === true) return null;
+        
+        const dataToUpdate: Partial<QuizFormData & { updatedAt: Timestamp }> = { updatedAt: serverTimestamp() as Timestamp };
+        if (quizData.title !== undefined) dataToUpdate.title = quizData.title;
+        if (quizData.translations !== undefined) dataToUpdate.translations = sanitizeQuizTranslations(quizData.translations);
 
-        await updateDoc(quizRef, {...quizData, updatedAt: serverTimestamp() });
+        await updateDoc(quizRef, dataToUpdate);
         const updatedDocSnap = await getDoc(quizRef);
         if (updatedDocSnap.exists()) {
             return { id: quizId, ...updatedDocSnap.data() } as Quiz;

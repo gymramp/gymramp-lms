@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useTransition } from 'react';
@@ -8,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, PlusCircle, Edit, Trash2, CheckCircle, Loader2, HelpCircle, Save, Layers, ListChecks, Wand2 } from 'lucide-react';
+import { ArrowLeft, PlusCircle, Edit, Trash2, CheckCircle, Loader2, HelpCircle, Save, Layers, ListChecks, Wand2, Languages } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Quiz, Question, QuizFormData, QuizTranslation } from '@/types/course';
 import { getQuizById, deleteQuestion, updateQuiz } from '@/lib/firestore-data';
@@ -193,7 +194,7 @@ export default function ManageQuizQuestionsPage() {
               <Tabs defaultValue="main">
                 <TabsList>
                   <TabsTrigger value="main">Main Content</TabsTrigger>
-                  <TabsTrigger value="translations">Translations</TabsTrigger>
+                  <TabsTrigger value="translations" className="flex items-center gap-1"><Languages className="mr-2 h-4 w-4"/>Translations</TabsTrigger>
                 </TabsList>
                 <TabsContent value="main" className="pt-6">
                   <FormField control={form.control} name="title" render={({ field }) => (
