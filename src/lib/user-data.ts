@@ -1,4 +1,4 @@
-
+// src/lib/user-data.ts
 
 import { db } from './firebase';
 import {
@@ -176,11 +176,13 @@ export async function addUser(userData: Omit<UserFormData, 'password'> & { requi
             isDeleted: false,
             deletedAt: null,
             createdAt: serverTimestamp() as Timestamp,
+            updatedAt: serverTimestamp() as Timestamp, // Added this line
             lastLogin: null,
             assignedCourseIds: userData.assignedCourseIds || [],
             courseProgress: {},
             profileImageUrl: userData.profileImageUrl || null,
             requiresPasswordChange: userData.requiresPasswordChange === true,
+            preferredLocale: 'en', // Default locale
         };
         const docRef = await addDoc(usersRef, newUserDoc);
         const newDocSnap = await getDoc(docRef);
@@ -214,6 +216,7 @@ export async function updateUser(userId: string, userData: Partial<UserFormData 
         if (dataToUpdate.isActive !== undefined) updatePayload.isActive = dataToUpdate.isActive;
         if (dataToUpdate.profileImageUrl !== undefined) updatePayload.profileImageUrl = dataToUpdate.profileImageUrl === '' ? null : dataToUpdate.profileImageUrl;
         if (dataToUpdate.requiresPasswordChange !== undefined) updatePayload.requiresPasswordChange = dataToUpdate.requiresPasswordChange;
+        if (dataToUpdate.preferredLocale !== undefined) updatePayload.preferredLocale = dataToUpdate.preferredLocale || 'en';
 
 
         if (Object.keys(updatePayload).length === 0 && dataToUpdate.requiresPasswordChange === undefined) {

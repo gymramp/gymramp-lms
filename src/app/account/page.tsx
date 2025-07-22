@@ -1,4 +1,3 @@
-
 // src/app/account/page.tsx
 'use client';
 
@@ -182,7 +181,7 @@ export default function AccountBasicsPage() {
         const updatedUser = await updateUser(currentUser.id, updateData);
         if (updatedUser) {
           setCurrentUser(updatedUser);
-          form.reset(data);
+          form.reset(data); // Re-sync form with submitted data
           toast({ title: "Profile Updated", description: "Your details have been saved." });
         } else {
           throw new Error("Failed to update profile in database.");
@@ -190,7 +189,8 @@ export default function AccountBasicsPage() {
       } catch (error: any) {
         console.error("Profile update error:", error);
         toast({ title: "Update Failed", description: error.message || "Could not update your profile.", variant: "destructive" });
-        form.reset({ name: currentUser.name, email: currentUser.email, preferredLocale: currentUser.preferredLocale });
+        // Re-sync form with original data on failure
+        form.reset({ name: currentUser.name, email: currentUser.email, preferredLocale: currentUser.preferredLocale || 'en' });
       }
     });
   };
@@ -325,7 +325,7 @@ export default function AccountBasicsPage() {
               <Input id="brand" value={brandName || 'Loading...'} readOnly disabled />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="role" className="flex items-center gap-1 text-muted-foreground"><Building className="h-4 w-4" /> Role</Label>
+              <Label htmlFor="role" className="flex items-center gap-1 text-muted-foreground"><UserIcon className="h-4 w-4" /> Role</Label>
               <Input id="role" value={currentUser.role} readOnly disabled />
             </div>
           </CardContent>
