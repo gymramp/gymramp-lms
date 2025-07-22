@@ -33,7 +33,8 @@ const translateContentPrompt = ai.definePrompt({
   **IMPORTANT INSTRUCTIONS:**
   1.  Do NOT translate or alter any HTML tags. Preserve the original HTML structure exactly.
   2.  Translate the text content within the HTML tags accurately and naturally for the target language.
-  3.  Return the translated title and content in the specified JSON format.
+  3.  Translate all text, including text found inside single ('') or double ("") quotation marks. Do not treat quoted text as code or as a placeholder that should be ignored.
+  4.  Return the translated title and content in the specified JSON format.
 
   **Original Title:**
   {{{sourceTitle}}}
