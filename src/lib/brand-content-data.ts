@@ -17,7 +17,7 @@ import {
     arrayRemove,
     Timestamp
 } from 'firebase/firestore';
-import type { BrandCourse, BrandCourseFormData, BrandLesson, BrandLessonFormData, BrandQuiz, BrandQuizFormData, BrandQuestion, BrandQuestionFormData, QuestionType, QuizTranslation } from '@/types/course';
+import type { BrandCourse, BrandCourseFormData, BrandLesson, BrandLessonFormData, BrandQuiz, BrandQuizFormData, BrandQuestion, BrandQuestionFormData, QuestionType, QuizTranslation, CourseTranslation } from '@/types/course';
 import { getLessonById, getQuizById } from './firestore-data';
 
 const BRAND_COURSES_COLLECTION = 'brandCourses';
@@ -46,6 +46,25 @@ async function retryOperation<T>(operation: () => Promise<T>, maxRetries = MAX_R
     }
 }
 
+const sanitizeCourseTranslations = (translations?: { [key: string]: CourseTranslation }): { [key: string]: CourseTranslation } => {
+  if (!translations) return {};
+  const sanitized: { [key: string]: CourseTranslation } = {};
+  for (const locale in translations) {
+    if (Object.prototype.hasOwnProperty.call(translations, locale)) {
+      const translation = translations[locale];
+      if (translation.title || translation.description || translation.longDescription) {
+          sanitized[locale] = {
+              title: translation.title || null,
+              description: translation.description || null,
+              longDescription: translation.longDescription || null,
+          };
+      }
+    }
+  }
+  return sanitized;
+};
+
+
 // --- BrandCourse Functions ---
 
 export async function createBrandCourse(brandId: string, courseData: BrandCourseFormData): Promise<BrandCourse | null> {
@@ -66,6 +85,7 @@ export async function createBrandCourse(brandId: string, courseData: BrandCourse
             deletedAt: null,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
+            translations: sanitizeCourseTranslations(courseData.translations),
         };
         const docRef = await addDoc(coursesRef, newCourseDoc);
         const newDocSnap = await getDoc(docRef);
@@ -112,10 +132,14 @@ export async function updateBrandCourseMetadata(courseId: string, courseData: Pa
         if (!currentDocSnap.exists() || currentDocSnap.data().isDeleted === true) {
             throw new Error("Brand course not found or is soft-deleted for update.");
         }
-        const dataToUpdate: Partial<BrandCourse> = { ...courseData, updatedAt: serverTimestamp() as Timestamp };
-        if (courseData.imageUrl === '') dataToUpdate.imageUrl = `https://placehold.co/600x350.png?text=${encodeURIComponent(currentDocSnap.data().title)}`;
+        
+        const dataToUpdate: Partial<BrandCourseFormData & { updatedAt: Timestamp }> = { ...courseData, updatedAt: serverTimestamp() as Timestamp };
+        if (courseData.imageUrl === '') dataToUpdate.imageUrl = `https://placehold.co/600x350.png?text=${encodeURIComponent(courseData.title || currentDocSnap.data().title)}`;
         if (courseData.featuredImageUrl === '') dataToUpdate.featuredImageUrl = null;
         if (courseData.certificateTemplateId === '') dataToUpdate.certificateTemplateId = null;
+        if (courseData.translations) {
+            dataToUpdate.translations = sanitizeCourseTranslations(courseData.translations);
+        }
 
         await updateDoc(courseRef, dataToUpdate);
         const updatedDocSnap = await getDoc(courseRef);
@@ -321,11 +345,6 @@ export async function getBrandQuizById(quizId: string, locale?: string): Promise
                 const translation = quizData.translations[locale];
                 console.log(`[getBrandQuizById] Merging translation for locale '${locale}' for brand quiz '${quizId}'.`);
                 if (translation.title) quizData.title = translation.title;
-                if (translation.questions && translation.questions.length === quizData.questions.length) {
-                    quizData.questions = translation.questions;
-                } else if (translation.questions) {
-                    console.warn(`[getBrandQuizById] Mismatch in question count for brand quiz '${quizId}' locale '${locale}'. Falling back to default questions.`);
-                }
             }
             return quizData;
         } else {
@@ -386,6 +405,7 @@ export async function addBrandQuestionToBrandQuiz(brandQuizId: string, questionD
             type: questionData.type,
             text: questionData.text,
             options: questionData.options || [],
+            translations: questionData.translations,
         };
 
         if (questionData.type === 'multiple-select') {
@@ -425,6 +445,7 @@ export async function updateBrandQuestionInBrandQuiz(brandQuizId: string, questi
                     type: questionData.type !== undefined ? questionData.type : q.type,
                     text: questionData.text !== undefined ? questionData.text : q.text,
                     options: questionData.options !== undefined ? questionData.options : q.options,
+                    translations: questionData.translations !== undefined ? questionData.translations : q.translations,
                 };
                 if (updatedQuestionData.type === 'multiple-select') {
                     updatedQuestionData.correctAnswers = questionData.correctAnswers !== undefined ? questionData.correctAnswers : q.correctAnswers;

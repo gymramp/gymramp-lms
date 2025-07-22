@@ -8,6 +8,7 @@
 
 
 
+
 import { db } from './firebase';
 import {
     collection,
@@ -26,7 +27,7 @@ import {
     Timestamp,
     documentId
 } from 'firebase/firestore';
-import type { Course, Lesson, Quiz, Question, CourseFormData, LessonFormData, QuizFormData, QuestionFormData, QuestionType, Program, ProgramFormData, LessonTranslation, QuizTranslation } from '@/types/course';
+import type { Course, Lesson, Quiz, Question, CourseFormData, LessonFormData, QuizFormData, QuestionFormData, QuestionType, Program, ProgramFormData, LessonTranslation, QuizTranslation, CourseTranslation } from '@/types/course';
 
 const COURSES_COLLECTION = 'courses';
 const LESSONS_COLLECTION = 'lessons';
@@ -59,6 +60,24 @@ async function retryOperation<T>(operation: () => Promise<T>, maxRetries = MAX_R
         }
     }
 }
+
+const sanitizeCourseTranslations = (translations?: { [key: string]: CourseTranslation }): { [key: string]: CourseTranslation } => {
+  if (!translations) return {};
+  const sanitized: { [key: string]: CourseTranslation } = {};
+  for (const locale in translations) {
+    if (Object.prototype.hasOwnProperty.call(translations, locale)) {
+      const translation = translations[locale];
+      if (translation.title || translation.description || translation.longDescription) {
+          sanitized[locale] = {
+              title: translation.title || null,
+              description: translation.description || null,
+              longDescription: translation.longDescription || null,
+          };
+      }
+    }
+  }
+  return sanitized;
+};
 
 
 // --- Course Library Functions ---
@@ -106,6 +125,7 @@ export async function addCourse(courseData: CourseFormData): Promise<Course | nu
             deletedAt: null,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
+            translations: sanitizeCourseTranslations(courseData.translations),
         };
         const docRef = await addDoc(coursesRef, newCourseDoc);
         const newDocSnap = await getDoc(docRef);
@@ -136,6 +156,7 @@ export async function updateCourseMetadata(courseId: string, courseData: Partial
             duration: courseData.duration,
             certificateTemplateId: courseData.certificateTemplateId === '' ? null : courseData.certificateTemplateId, // Handle empty string from form
             updatedAt: serverTimestamp(),
+            translations: sanitizeCourseTranslations(courseData.translations),
         };
 
 
@@ -357,11 +378,6 @@ export async function getQuizById(quizId: string, locale?: string): Promise<Quiz
                 const translation = quizData.translations[locale];
                 console.log(`[getQuizById] Merging translation for locale '${locale}' for quiz '${quizId}'.`);
                 if (translation.title) quizData.title = translation.title;
-                if (translation.questions && translation.questions.length === quizData.questions.length) {
-                    quizData.questions = translation.questions;
-                } else if (translation.questions) {
-                    console.warn(`[getQuizById] Mismatch in question count for quiz '${quizId}' locale '${locale}'. Falling back to default questions.`);
-                }
             }
 
             return quizData;

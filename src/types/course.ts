@@ -50,13 +50,13 @@ export interface Quiz {
     deletedAt?: Timestamp | null;
     createdAt?: Timestamp;
     updatedAt?: Timestamp;
-    translations?: { [key: string]: QuizTranslation }; // e.g., { 'es': { title: '...', questions: [...] } }
+    translations?: { [key: string]: Pick<QuizTranslation, 'title'> }; // Only titles are translated on the main quiz object
 }
 
 // Translation object for a Lesson
 export interface LessonTranslation {
-  title?: string;
-  content?: string;
+  title?: string | null;
+  content?: string | null;
   videoUrl?: string | null;
 }
 
@@ -79,9 +79,9 @@ export interface Lesson {
 
 // Translation object for a Course or Program
 export interface CourseTranslation {
-    title?: string;
-    description?: string;
-    longDescription?: string;
+    title?: string | null;
+    description?: string | null;
+    longDescription?: string | null;
 }
 
 // Represents a course in the global library
@@ -106,6 +106,7 @@ export interface Course {
 // Type for the form data when adding/editing a course metadata (global library)
 export type CourseFormData = Omit<Course, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'curriculum' | 'translations'> & {
     certificateTemplateId?: string | null;
+    translations?: { [key: string]: CourseTranslation };
 };
 
 
@@ -192,6 +193,7 @@ export interface BrandCourse {
 
 export type BrandCourseFormData = Omit<BrandCourse, 'id' | 'brandId' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'curriculum' | 'translations'> & {
     certificateTemplateId?: string | null;
+    translations?: { [key: string]: CourseTranslation };
 };
 
 export interface BrandLesson {
@@ -212,6 +214,7 @@ export interface BrandLesson {
 
 export type BrandLessonFormData = Omit<BrandLesson, 'id' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'translations'> & {
   brandId: string; // Required for creation
+  translations?: { [key: string]: LessonTranslation };
 };
 
 
@@ -228,7 +231,7 @@ export interface BrandQuiz {
     deletedAt?: Timestamp | null;
     createdAt?: Timestamp;
     updatedAt?: Timestamp;
-    translations?: { [key: string]: QuizTranslation };
+    translations?: { [key: string]: Pick<QuizTranslation, 'title'> };
 }
 
 export type BrandQuizFormData = Omit<BrandQuiz, 'id' | 'brandId' | 'questions' | 'questionCount' | 'isDeleted' | 'deletedAt' | 'createdAt' | 'updatedAt' | 'translations'> & {
