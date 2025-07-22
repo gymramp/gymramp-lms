@@ -156,31 +156,43 @@ export default function EditBrandQuestionPage() {
     useEffect(() => { if(currentUser) fetchInitialData(); }, [fetchInitialData, currentUser]);
     
     const handleAutoTranslate = async (targetLocale: string) => {
-        const questionText = form.getValues('text');
-        const options = form.getValues('options');
-        const optionTexts = options?.map(opt => opt.text).join('\n') || '';
+        const stripQuotes = (str: string) => str.trim().replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
 
+        const questionText = form.getValues('text');
+        const options = form.getValues('options') || [];
+        
         if (!questionText) {
             toast({ title: "Missing Content", description: "Please enter the main question text.", variant: "destructive" });
             return;
         }
 
+        const sourceTitle = stripQuotes(questionText);
+        const sourceOptions = options.map(opt => stripQuotes(opt.text));
+        const sourceContent = sourceOptions.join('\n');
+
         setIsTranslating(prev => ({...prev, [targetLocale]: true}));
         try {
             const result = await translateContent({
-                sourceTitle: questionText,
-                sourceContent: optionTexts,
+                sourceTitle: sourceTitle,
+                sourceContent: sourceContent,
                 targetLocale: targetLocale
             });
 
             if (result.translatedTitle && result.translatedContent) {
-                form.setValue(`translations.${targetLocale}.text`, result.translatedTitle);
                 const translatedOptions = result.translatedContent.split('\n');
+
+                const originalQuestionHasQuotes = /^".*"$/.test(questionText.trim()) || /^'.*'$/.test(questionText.trim());
+                const finalTranslatedQuestion = originalQuestionHasQuotes ? `"${result.translatedTitle}"` : result.translatedTitle;
+                form.setValue(`translations.${targetLocale}.text`, finalTranslatedQuestion);
+
                 if (options && translatedOptions.length === options.length) {
-                    options.forEach((_, index) => {
-                        form.setValue(`translations.${targetLocale}.options.${index}`, translatedOptions[index]);
+                    options.forEach((originalOption, index) => {
+                        const originalOptionHasQuotes = /^".*"$/.test(originalOption.text.trim()) || /^'.*'$/.test(originalOption.text.trim());
+                        const finalTranslatedOption = originalOptionHasQuotes ? `"${translatedOptions[index]}"` : translatedOptions[index];
+                        form.setValue(`translations.${targetLocale}.options.${index}`, finalTranslatedOption);
                     });
                 }
+                
                 toast({ title: "Translation Complete!", description: `Question and options translated to ${SUPPORTED_LOCALES.find(l => l.value === targetLocale)?.label}.` });
             } else {
                 throw new Error("AI did not return translated content.");
@@ -191,6 +203,7 @@ export default function EditBrandQuestionPage() {
             setIsTranslating(prev => ({...prev, [targetLocale]: false}));
         }
     };
+
 
     const onSubmit = async (data: BrandQuestionFormValues) => {
         try {
