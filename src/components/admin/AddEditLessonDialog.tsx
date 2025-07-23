@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -47,7 +48,7 @@ const SUPPORTED_LOCALES = [
 const lessonTranslationSchema = z.object({
   title: z.string().optional().or(z.literal('')),
   content: z.string().optional().or(z.literal('')),
-  videoUrl: z.string().url({ message: 'Invalid video URL format.' }).optional().or(z.literal('')),
+  videoUrl: z.string().url({ message: 'Invalid video URL format.' }).optional().or(z.literal('')).nullable(),
 });
 
 const lessonFormSchema = z.object({
@@ -205,8 +206,8 @@ export function AddEditLessonDialog({
 
          try {
              const uniqueFileName = isEditing && initialData?.id
-                 ? `${initialData.id}-image-${file.name}`
-                 : `${Date.now()}-image-${file.name}`;
+                 ? `${initialData.id}-courseimg-${file.name}`
+                 : `${Date.now()}-courseimg-${file.name}`;
              const storagePath = `${STORAGE_PATHS.LESSON_IMAGES}/${uniqueFileName}`;
 
              const downloadURL = await uploadImage(file, storagePath, setImageUploadProgress);
@@ -220,7 +221,7 @@ export function AddEditLessonDialog({
          } catch (error: any) {
              setImageUploadError(error.message || "Failed to upload image.");
              toast({
-                 title: "Image Upload Failed",
+                 title: "Upload Failed",
                  description: error.message || "Could not upload the featured image.",
                  variant: "destructive",
              });
@@ -349,8 +350,8 @@ export function AddEditLessonDialog({
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                 <Tabs defaultValue="main" className="h-full flex flex-col">
                   <TabsList className="mx-6">
-                    <TabsTrigger value="main" className="flex items-center gap-1"><Globe className="h-4 w-4" /> Main Content (English)</TabsTrigger>
-                    <TabsTrigger value="translations" className="flex items-center gap-1"><Languages className="h-4 w-4" /> Translations</TabsTrigger>
+                    <TabsTrigger value="main" className="flex items-center gap-1"><Globe className="h-4 w-4"/> Main Content (English)</TabsTrigger>
+                    <TabsTrigger value="translations" className="flex items-center gap-1"><Languages className="h-4 w-4"/> Translations</TabsTrigger>
                   </TabsList>
                   
                   <TabsContent value="main" className="flex-1 overflow-y-auto px-6 py-4">

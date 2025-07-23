@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -27,6 +28,8 @@ import type { BrandLesson, BrandLessonFormData, LessonTranslation } from '@/type
 import { Upload, PlaySquare, FileUp, Image as ImageIconLucide, Trash2, Loader2, Video, Globe, Languages, Wand2 } from 'lucide-react';
 import RichTextEditor from '@/components/ui/RichTextEditor';
 import { translateContent } from '@/ai/flows/translate-content';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from '../ui/alert';
 
 const SUPPORTED_LOCALES = [
   { value: 'es', label: 'Spanish' },
@@ -41,7 +44,7 @@ const SUPPORTED_LOCALES = [
 const lessonTranslationSchema = z.object({
   title: z.string().optional().or(z.literal('')),
   content: z.string().optional().or(z.literal('')),
-  videoUrl: z.string().url({ message: 'Invalid video URL format.' }).optional().or(z.literal('')),
+  videoUrl: z.string().url({ message: 'Invalid video URL format.' }).optional().or(z.literal('')).nullable(),
 });
 
 
