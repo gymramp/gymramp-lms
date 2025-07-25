@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Send, KeyRound, ShieldCheck } from 'lucide-react';
+import { Loader2, Send, KeyRound, ShieldCheck, Mail } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/types/user';
 import { getUserByEmail } from '@/lib/user-data';
@@ -16,9 +16,9 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { sendTestWelcomeEmailAction } from '@/actions/emailActions'; // New action
+import { sendTestWelcomeEmailAction } from '@/actions/emailActions';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-// MailServerSettingsForm removed
+import { MailServerSettingsForm } from '@/components/admin/MailServerSettingsForm';
 
 // Zod schema for the new form
 const sendTestEmailFormSchema = z.object({
@@ -65,7 +65,7 @@ function SendTestWelcomeEmailFormComponent() {
         title: "Sending Failed",
         description: result.message,
         variant: "destructive",
-        duration: 10000, // Longer duration for error messages
+        duration: 10000,
       });
     }
     setIsSending(false);
@@ -162,16 +162,27 @@ export default function AdminSettingsPage() {
 
   return (
     <div className="container mx-auto">
-      <h1 className="text-3xl font-bold tracking-tight text-primary mb-8">Application Settings</h1>
-      <Card className="w-full max-w-2xl mx-auto shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-xl font-semibold text-primary">Test Welcome Email</CardTitle>
-          <CardDescription>Send a sample welcome email to any address to test the template and email delivery. This helps ensure your email settings are configured correctly.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <SendTestWelcomeEmailFormComponent />
-        </CardContent>
-      </Card>
+      <h1 className="text-3xl font-bold tracking-tight text-primary mb-8">Email Settings & Testing</h1>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <Card className="w-full shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-xl font-semibold text-primary flex items-center gap-2"><Mail className="h-5 w-5" /> Test Email Templates</CardTitle>
+            <CardDescription>Send a sample welcome email to any address to test the template and email delivery. This helps ensure your email settings are configured correctly.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <SendTestWelcomeEmailFormComponent />
+          </CardContent>
+        </Card>
+        <Card className="w-full shadow-lg">
+            <CardHeader>
+                <CardTitle className="text-xl font-semibold text-primary">Email Server Configuration</CardTitle>
+                <CardDescription>Manage how the application sends emails.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <MailServerSettingsForm />
+            </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
