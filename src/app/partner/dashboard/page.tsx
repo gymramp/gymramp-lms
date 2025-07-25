@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Handshake, Users, Building, Copy, ExternalLink, Search, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 type ReferredCompany = Company & {
     userCount: number;
@@ -122,12 +123,22 @@ export default function PartnerDashboardPage() {
     
     const totalCustomers = referredCompanies.length;
     const totalUsers = referredCompanies.reduce((sum, company) => sum + (company.userCount || 0), 0);
+    const getInitials = (name?: string) => name ? name.split(' ').map(n => n[0]).join('').toUpperCase() : 'P';
+
 
     return (
         <div className="container mx-auto">
             <div className="mb-8">
-                <h1 className="text-3xl font-bold tracking-tight text-primary">Partner Dashboard</h1>
-                <p className="text-muted-foreground">Welcome, {currentUser.name}! Here is an overview of your referrals.</p>
+                 <div className="flex items-center gap-4 mb-2">
+                    <Avatar className="h-14 w-14 border-2">
+                        <AvatarImage src={partnerDetails.logoUrl || undefined} alt={`${partnerDetails.name} logo`} className="object-contain" />
+                        <AvatarFallback className="text-xl bg-muted">{getInitials(partnerDetails.name)}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight text-primary">Partner Dashboard</h1>
+                        <p className="text-muted-foreground">Welcome, {currentUser.name}! Here is an overview of your referrals.</p>
+                    </div>
+                </div>
             </div>
             
             <div className="grid md:grid-cols-2 gap-6 mb-8">
