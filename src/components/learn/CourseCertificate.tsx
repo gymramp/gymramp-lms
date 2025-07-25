@@ -26,50 +26,52 @@ export function CourseCertificate({ courseName, userName, completionDate, brandN
         window.print();
     };
 
-    const certificateStyle = "w-full max-w-2xl border-2 border-primary/50 bg-gradient-to-br from-background to-secondary/10 shadow-xl overflow-hidden my-8 mx-auto";
-    const headerStyle = "text-center p-6 border-b-2 border-primary/30";
-    const contentStyle = "p-8 text-center space-y-4";
-    const issuingEntityStyle = "pt-6 text-sm text-muted-foreground";
-
     return (
-        <div className="certificate-container p-4">
-            <Card className={certificateStyle}>
-                <CardHeader className={headerStyle}>
-                     <Award className="h-20 w-20 mx-auto text-accent mb-4" />
-                    <CardTitle className="text-3xl font-bold text-primary">
-                        Certificate of Completion
-                    </CardTitle>
-                     <CardDescription className="text-md text-muted-foreground pt-2">
-                        This certificate is awarded to
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className={contentStyle}>
-                    <h2 className="text-4xl font-semibold text-primary tracking-wide">{userName}</h2>
-                    <p className="text-lg text-foreground">
-                        for successfully completing the course:
-                    </p>
-                    <h3 className="text-2xl font-medium text-accent">{courseName}</h3>
-                    <p className="text-md text-muted-foreground">
-                        Completed on: <span className="font-semibold text-foreground">{formattedDate}</span>
-                    </p>
-                    <div className={issuingEntityStyle}>
-                        <p>Issued by:</p>
-                        {brandLogoUrl && brandName ? (
-                            <div className="flex flex-col items-center mt-2">
-                                <Image src={brandLogoUrl} alt={`${brandName} Logo`} width={100} height={30} className="max-h-[30px] object-contain mb-1" />
-                                <p className="font-semibold text-foreground">{brandName}</p>
-                            </div>
+        <div className="certificate-container p-4 bg-secondary/30 print:bg-white print:p-0">
+            <div className="w-full max-w-4xl mx-auto bg-background shadow-2xl print:shadow-none font-serif">
+                <div className="relative border-4 border-primary p-8">
+                     {/* Decorative Borders */}
+                    <div className="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 border-accent"></div>
+                    <div className="absolute top-0 right-0 w-16 h-16 border-t-4 border-r-4 border-accent"></div>
+                    <div className="absolute bottom-0 left-0 w-16 h-16 border-b-4 border-l-4 border-accent"></div>
+                    <div className="absolute bottom-0 right-0 w-16 h-16 border-b-4 border-r-4 border-accent"></div>
+
+                    <div className="text-center space-y-4">
+                        {brandLogoUrl ? (
+                            <Image src={brandLogoUrl} alt={`${brandName} Logo`} width={120} height={50} className="mx-auto h-auto max-h-[50px] object-contain mb-2"/>
                         ) : (
-                            <div className="flex flex-col items-center mt-2">
-                                <Image src="/images/newlogo.png" alt="GYMRAMP Logo" width={120} height={36} className="opacity-70" />
-                            </div>
+                             <Image src="/images/newlogo.png" alt="Gymramp Logo" width={150} height={45} className="mx-auto opacity-80" />
                         )}
+
+                        <p className="text-lg uppercase tracking-widest text-muted-foreground">Certificate of Completion</p>
+                        
+                        <div className="py-2">
+                             <Award className="h-24 w-24 text-accent mx-auto" strokeWidth={1} />
+                        </div>
+                        
+                        <p className="text-base text-foreground">This certificate is proudly presented to</p>
+                        <h1 className="text-5xl font-bold text-primary tracking-tighter">{userName}</h1>
+                        <p className="text-base text-foreground">for successfully completing the course</p>
+                        <h2 className="text-3xl font-semibold text-accent">{courseName}</h2>
+                        <p className="text-base text-muted-foreground pt-4">Awarded on this day, {formattedDate}</p>
+
+                        <div className="pt-12 flex justify-around items-end">
+                            <div className="text-center">
+                                <p className="font-sans text-lg font-semibold border-b border-muted-foreground pb-1 px-8">{brandName || 'Gymramp'}</p>
+                                <p className="text-sm text-muted-foreground pt-1">Issuing Organization</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="font-sans text-lg font-semibold border-b border-muted-foreground pb-1 px-8">Management</p>
+                                <p className="text-sm text-muted-foreground pt-1">Authorized Signature</p>
+                            </div>
+                        </div>
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+            </div>
             <div className="text-center mt-6 print-hide">
                 <Button onClick={handlePrint}>Print Certificate</Button>
             </div>
         </div>
     );
 }
+
