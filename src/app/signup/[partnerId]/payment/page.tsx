@@ -16,6 +16,7 @@ import type { Program } from '@/types/course';
 import { getProgramById } from '@/lib/firestore-data';
 import { signInWithCustomToken } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { Label } from '@/components/ui/label';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
