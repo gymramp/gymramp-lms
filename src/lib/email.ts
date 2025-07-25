@@ -71,9 +71,9 @@ export async function sendNewUserWelcomeEmail(to: string, name: string, temporar
   const appName = process.env.NEXT_PUBLIC_APP_NAME || 'GYMRAMP';
   const subject = `Welcome to ${appName}!`;
   const loginUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
-  const appLogoUrlEmail = process.env.NEXT_PUBLIC_APP_LOGO_URL_EMAIL;
+  const appLogoUrlEmail = process.env.NEXT_PUBLIC_APP_LOGO_URL_EMAIL || `${loginUrl}/images/newlogo.png`;
+  const accentColor = '#2563EB'; // Using a blue accent color
 
-  // Inspired by Google AI Studio email
   const html = `
     <!DOCTYPE html>
     <html lang="en">
@@ -82,64 +82,51 @@ export async function sendNewUserWelcomeEmail(to: string, name: string, temporar
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>${subject}</title>
         <style>
-            body { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; background-color: #121212; color: #E8EAED; font-family: Arial, sans-serif; }
-            .email-container { width: 100%; max-width: 600px; margin: 0 auto; background-color: #202124; padding: 0; }
-            .header { padding: 20px 30px; text-align: left; border-bottom: 1px solid #3c4043; }
-            .header-app-name { font-size: 20px; font-weight: bold; color: #E8EAED; text-decoration: none; }
-            .header-logo { max-height: 30px; width: auto; margin-bottom: 10px; }
-            .content { padding: 30px; text-align: center; }
-            .circular-logo-container { text-align: center; padding-top: 10px; margin-bottom: 25px; }
-            .circular-logo-wrapper { display: inline-block; background-color: #FFFFFF; border-radius: 50%; padding: 5px; width: 70px; height: 70px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-            .circular-logo-img { width: 100%; height: 100%; border-radius: 50%; object-fit: contain; }
-            .welcome-text { font-size: 28px; font-weight: bold; color: #FFFFFF; margin-top: 0; margin-bottom: 10px; }
-            .sub-heading { font-size: 18px; color: #bdc1c6; margin-bottom: 30px; }
-            .greeting { font-size: 16px; color: #E8EAED; text-align: left; margin-bottom: 15px; }
-            .credentials-intro { font-size: 16px; color: #E8EAED; text-align: left; margin-bottom: 20px; }
-            .credentials-box { background-color: #2d2e30; border-radius: 8px; padding: 20px; margin-bottom: 25px; text-align: left; }
-            .credentials-box p { margin: 8px 0; font-size: 15px; color: #E8EAED; }
-            .credentials-box strong { color: #bdc1c6; }
-            .button-cta { display: inline-block; background-color: #1a73e8; color: #FFFFFF !important; padding: 12px 25px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px; margin-top: 10px; margin-bottom: 20px; }
-            .password-note { font-size: 14px; color: #bdc1c6; margin-bottom: 30px; }
-            .footer { padding: 20px 30px; text-align: center; font-size: 14px; color: #9aa0a6; border-top: 1px solid #3c4043; }
-            .view-online { text-align: right; font-size: 12px; padding: 10px 20px; background-color: #000000; color: #9aa0a6; }
-            .view-online a { color: #9aa0a6; text-decoration: underline; }
-            a { color: #8ab4f8; text-decoration: none; }
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+            body { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; background-color: #f0f2f5; font-family: 'Inter', Arial, sans-serif; color: #333333; }
+            .email-container { width: 100%; max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+            .header { background-color: #111827; padding: 20px 30px; text-align: left; }
+            .header img { max-height: 35px; width: auto; }
+            .content { padding: 40px 30px; }
+            .headline { font-size: 28px; font-weight: 700; color: #111827; margin: 0 0 10px; }
+            .headline-underline { border-bottom: 3px solid ${accentColor}; width: 60px; margin: 0 0 30px; }
+            .greeting { font-size: 16px; line-height: 1.6; color: #374151; margin-bottom: 20px; }
+            .credentials-box { background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin: 25px 0; }
+            .credentials-box p { margin: 8px 0; font-size: 15px; color: #1f2937; }
+            .credentials-box strong { color: #4b5563; font-weight: 600; }
+            .button-cta { display: inline-block; background-color: ${accentColor}; color: #ffffff !important; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 20px 0; }
+            .password-note { font-size: 14px; color: #6b7280; }
+            .footer { padding: 20px 30px; text-align: center; font-size: 12px; color: #9ca3af; background-color: #f9fafb; border-top: 1px solid #e5e7eb;}
+            a { color: ${accentColor}; text-decoration: none; }
         </style>
     </head>
-    <body style="margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; background-color: #121212; color: #E8EAED; font-family: Arial, sans-serif;">
-        <div class="view-online" style="text-align: right; font-size: 12px; padding: 10px 20px; background-color: #000000; color: #9aa0a6;">
-            Email not displaying correctly? <a href="${loginUrl}" style="color: #9aa0a6; text-decoration: underline;">View it online</a>
-        </div>
+    <body style="margin: 0; padding: 0; width: 100% !important; background-color: #f0f2f5; font-family: 'Inter', Arial, sans-serif; color: #333333;">
         <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
             <tr>
-                <td align="center" style="padding: 0;">
-                    <div class="email-container" style="width: 100%; max-width: 600px; margin: 0 auto; background-color: #202124; padding: 0;">
-                        <div class="header" style="padding: 20px 30px; text-align: left; border-bottom: 1px solid #3c4043;">
+                <td align="center" style="padding: 20px 0;">
+                    <div class="email-container" style="width: 100%; max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+                        <div class="header" style="background-color: #111827; padding: 20px 30px; text-align: left;">
                             <a href="${loginUrl}" style="text-decoration: none;">
-                                <img src="${appLogoUrlEmail || `${process.env.NEXT_PUBLIC_APP_URL}/images/newlogo.png`}" alt="${appName} Logo" style="max-height: 45px; width: auto; border: 0;" />
+                                <img src="${appLogoUrlEmail}" alt="${appName} Logo" style="max-height: 35px; width: auto; border: 0;" />
                             </a>
                         </div>
-                        <div class="content" style="padding: 30px 30px; text-align: center;">
-                            <h1 class="welcome-text" style="font-size: 28px; font-weight: bold; color: #FFFFFF; margin-top: 0; margin-bottom: 10px;">Welcome to ${appName}, ${name}!</h1>
-                            <p class="sub-heading" style="font-size: 18px; color: #bdc1c6; margin-bottom: 30px;">Your training journey starts now.</p>
+                        <div class="content" style="padding: 40px 30px;">
+                            <h1 class="headline" style="font-size: 28px; font-weight: 700; color: #111827; margin: 0 0 10px;">Welcome, ${name}!</h1>
+                            <div class="headline-underline" style="border-bottom: 3px solid ${accentColor}; width: 60px; margin: 0 0 30px;"></div>
                             
-                            <p class="greeting" style="font-size: 16px; color: #E8EAED; text-align: left; margin-bottom: 15px;">Hello ${name},</p>
-                            <p class="credentials-intro" style="font-size: 16px; color: #E8EAED; text-align: left; margin-bottom: 20px;">Your account has been successfully created. You can now log in using the credentials below:</p>
+                            <p class="greeting" style="font-size: 16px; line-height: 1.6; color: #374151; margin-bottom: 20px;">Your account has been successfully created. You can now log in using the credentials below:</p>
                             
-                            <div class="credentials-box" style="background-color: #2d2e30; border-radius: 8px; padding: 20px; margin-bottom: 25px; text-align: left;">
-                                <p style="margin: 8px 0; font-size: 15px; color: #E8EAED;"><strong style="color: #bdc1c6;">Email:</strong> ${to}</p>
-                                <p style="margin: 8px 0; font-size: 15px; color: #E8EAED;"><strong style="color: #bdc1c6;">Temporary Password:</strong> ${temporaryPassword}</p>
+                            <div class="credentials-box" style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin: 25px 0;">
+                                <p style="margin: 8px 0; font-size: 15px; color: #1f2937;"><strong style="color: #4b5563; font-weight: 600;">Email:</strong> ${to}</p>
+                                <p style="margin: 8px 0; font-size: 15px; color: #1f2937;"><strong style="color: #4b5563; font-weight: 600;">Temporary Password:</strong> ${temporaryPassword}</p>
                             </div>
                             
-                            <a href="${loginUrl}" class="button-cta" style="display: inline-block; background-color: #1a73e8; color: #FFFFFF !important; padding: 12px 25px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px; margin-top: 10px; margin-bottom: 20px;">Login to Your Account</a>
+                            <a href="${loginUrl}" class="button-cta" style="display: inline-block; background-color: ${accentColor}; color: #ffffff !important; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 20px 0;">Login to Your Account</a>
                             
-                            <p class="password-note" style="font-size: 14px; color: #bdc1c6; margin-bottom: 30px;">For your security, you will be required to change this temporary password upon your first login.</p>
-                            
-                            <p style="font-size: 16px; color: #E8EAED; margin-top: 30px; text-align: left;">If you have any questions or need assistance, please don't hesitate to contact support.</p>
+                            <p class="password-note" style="font-size: 14px; color: #6b7280;">For your security, you will be required to change this temporary password upon your first login.</p>
                         </div>
-                        <div class="footer" style="padding: 20px 30px; text-align: center; font-size: 14px; color: #9aa0a6; border-top: 1px solid #3c4043;">
-                            <p>Thanks,<br>The ${appName} Team</p>
-                            <p style="font-size: 12px;">&copy; ${new Date().getFullYear()} ${appName}. All rights reserved.</p>
+                        <div class="footer" style="padding: 20px 30px; text-align: center; font-size: 12px; color: #9ca3af; background-color: #f9fafb; border-top: 1px solid #e5e7eb;">
+                            <p>If you have any questions, please contact support. <br> &copy; ${new Date().getFullYear()} ${appName}. All rights reserved.</p>
                         </div>
                     </div>
                 </td>
