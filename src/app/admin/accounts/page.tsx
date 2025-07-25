@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { PlusCircle, Search, Building, Users, MoreHorizontal, Briefcase, ChevronsUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { PlusCircle, Search, Building, Users, MoreHorizontal, Briefcase, ChevronsUpDown, ArrowUp, ArrowDown, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Company, User } from '@/types/user';
 import { getParentAccounts } from '@/lib/account-data';
