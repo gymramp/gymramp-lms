@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, Handshake, User, Building, Eye, EyeOff, Layers } from 'lucide-react';
+import { Loader2, Handshake, User, Building, Eye, EyeOff, Layers, ArrowRight } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -17,11 +17,8 @@ import type { Partner } from '@/types/partner';
 import type { Program } from '@/types/course';
 import { getPartnerById } from '@/lib/partner-data';
 import { getProgramsByIds } from '@/lib/firestore-data';
-import { processPublicSignup } from '@/actions/signup';
 import Image from 'next/image';
 import Link from 'next/link';
-import { signInWithCustomToken } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const partnerSignupFormSchema = z.object({
@@ -34,33 +31,38 @@ const partnerSignupFormSchema = z.object({
 
 type PartnerSignupFormValues = z.infer<typeof partnerSignupFormSchema>;
 
-function PartnerSignupForm({ partner, programs, onSuccessfulSignup }: { partner: Partner, programs: Program[], onSuccessfulSignup: () => void }) {
+function PartnerSignupForm({ partner, programs }: { partner: Partner, programs: Program[] }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const router = useRouter();
   const { toast } = useToast();
 
   const form = useForm<PartnerSignupFormValues>({
     resolver: zodResolver(partnerSignupFormSchema),
-    defaultValues: { customerName: '', companyName: '', adminEmail: '', password: '', selectedProgramId: programs.length === 1 ? programs[0].id : '' },
+    defaultValues: {
+      customerName: '',
+      companyName: '',
+      adminEmail: '',
+      password: '',
+      selectedProgramId: programs.length === 1 ? programs[0].id : '',
+    },
   });
 
-  const onSubmit = async (data: PartnerSignupFormValues) => {
+  const onSubmit = (data: PartnerSignupFormValues) => {
     setIsSubmitting(true);
-    try {
-      // paymentIntentId is omitted as we removed Stripe form
-      const result = await processPublicSignup({ ...data, paymentIntentId: null }, partner.id);
-      if (result.success && result.customToken) {
-        toast({ title: "Account Created!", description: "Welcome! You will be automatically logged in.", duration: 7000 });
-        await signInWithCustomToken(auth, result.customToken);
-        onSuccessfulSignup();
-      } else {
-        toast({ title: "Signup Failed", description: result.error || "An unknown error occurred.", variant: "destructive" });
-      }
-    } catch (err: any) {
-      toast({ title: "An Error Occurred", description: err.message || "Something went wrong during signup.", variant: "destructive" });
-    } finally {
-      setIsSubmitting(false);
-    }
+    toast({ title: "Information Saved", description: "Proceeding to payment..." });
+
+    const selectedProgram = programs.find(p => p.id === data.selectedProgramId);
+    const priceString = selectedProgram?.price?.replace(/[$,/mo]/gi, '') || '0';
+    const amountCents = Math.round(parseFloat(priceString) * 100);
+
+    const queryParams = new URLSearchParams({
+      ...data,
+      partnerId: partner.id,
+      finalTotalAmountCents: String(amountCents),
+    });
+
+    router.push(`/signup/${partner.id}/payment?${queryParams.toString()}`);
   };
 
   return (
@@ -86,7 +88,7 @@ function PartnerSignupForm({ partner, programs, onSuccessfulSignup }: { partner:
               <Select onValueChange={field.onChange} value={field.value || ''}>
                 <FormControl><SelectTrigger><SelectValue placeholder="Choose a program..." /></SelectTrigger></FormControl>
                 <SelectContent>
-                  {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.title} ({p.price})</SelectItem>)}
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -95,8 +97,8 @@ function PartnerSignupForm({ partner, programs, onSuccessfulSignup }: { partner:
         </CardContent>
         <CardFooter className="flex flex-col gap-4 pt-4">
           <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isSubmitting ? 'Processing...' : 'Sign Up'}
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
+            {isSubmitting ? 'Processing...' : 'Proceed to Payment'}
           </Button>
           <p className="text-xs text-muted-foreground text-center">Already have an account? <Link href="/" className="underline hover:text-primary">Log in here</Link>.</p>
         </CardFooter>
@@ -107,16 +109,11 @@ function PartnerSignupForm({ partner, programs, onSuccessfulSignup }: { partner:
 
 export default function PartnerSignupPage() {
   const params = useParams();
-  const router = useRouter();
   const partnerId = params.partnerId as string;
   const [partner, setPartner] = useState<Partner | null>(null);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const onSuccessfulSignup = () => {
-    router.push('/onboarding');
-  };
 
   useEffect(() => {
     async function fetchPartnerData() {
@@ -163,10 +160,9 @@ export default function PartnerSignupPage() {
             <CardTitle className="text-2xl font-bold">Sign Up via {partner.name}</CardTitle>
             <CardDescription>Create your account and select a program to get started.</CardDescription>
           </CardHeader>
-          <PartnerSignupForm partner={partner} programs={programs} onSuccessfulSignup={onSuccessfulSignup} />
+          <PartnerSignupForm partner={partner} programs={programs} />
         </Card>
       </div>
     </div>
   );
 }
-

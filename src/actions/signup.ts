@@ -26,6 +26,7 @@ const signupFormSchema = z.object({
   password: z.string().min(8),
   selectedProgramId: z.string().optional(),
   paymentIntentId: z.string().optional().nullable(),
+  finalTotalAmount: z.number().optional().nullable(),
 });
 
 type SignupFormValues = z.infer<typeof signupFormSchema>;
@@ -84,10 +85,10 @@ export async function processPublicSignup(data: SignupFormValues, partnerId?: st
     if (!validatedData.success) {
       throw new Error("Invalid signup data provided.");
     }
-    const { customerName, companyName, adminEmail, password, selectedProgramId, paymentIntentId } = validatedData.data;
+    const { customerName, companyName, adminEmail, password, selectedProgramId, paymentIntentId, finalTotalAmount } = validatedData.data;
     
     // Public signups are free by default in this flow.
-    const saleAmount = 0;
+    const saleAmount = finalTotalAmount ?? 0;
     let selectedProgram = null;
     if (selectedProgramId) {
       selectedProgram = await getProgramById(selectedProgramId);
@@ -170,15 +171,15 @@ export async function processPublicSignup(data: SignupFormValues, partnerId?: st
 
     console.log(`[processPublicSignup] Admin user "${newAdminUser.name}" created in Firestore with ID: ${newAdminUser.id}`);
     
-    // Create customer purchase record if a program was selected, with $0 amount
+    // Create customer purchase record if a program was selected
     if (selectedProgram) {
         await addCustomerPurchaseRecord({
             brandId: newCompany.id,
             brandName: newCompany.name,
             adminUserId: newAdminUser.id,
             adminUserEmail: newAdminUser.email,
-            totalAmountPaid: 0,
-            paymentIntentId: null, // No payment in this flow
+            totalAmountPaid: saleAmount,
+            paymentIntentId: paymentIntentId || null, 
             selectedProgramId: selectedProgram.id,
             selectedProgramTitle: selectedProgram.title,
             selectedCourseIds: selectedProgram.courseIds || [],
