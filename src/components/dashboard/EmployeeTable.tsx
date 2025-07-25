@@ -2,7 +2,7 @@
 // src/components/dashboard/EmployeeTable.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
   Table,
@@ -23,7 +23,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Edit, Archive, Undo, BookCopy, MapPin, Loader2, ShieldCheck, MoreHorizontal, Trash2, Send } from "lucide-react";
+import { Edit, Archive, Undo, BookCopy, MapPin, Loader2, ShieldCheck, MoreHorizontal, Trash2, Send, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { User, UserRole, Location, Company } from '@/types/user';
 import type { Course, BrandCourse } from '@/types/course';
@@ -56,6 +56,10 @@ interface EmployeeTableProps {
   baseEditPath: "/admin/users" | "/dashboard/users";
 }
 
+type SortKey = 'name' | 'role';
+type SortDirection = 'asc' | 'desc';
+
+
 export function EmployeeTable({ employees, onToggleEmployeeStatus, currentUser, locations = [], companies = [], baseEditPath }: EmployeeTableProps) {
     const { toast } = useToast();
     const [assignedCourseTitles, setAssignedCourseTitles] = useState<Record<string, string>>({});
@@ -64,6 +68,35 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, currentUser, 
     const [userToToggle, setUserToToggle] = useState<User | null>(null);
     const [isNotificationDialogOpen, setIsNotificationDialogOpen] = useState(false);
     const [notificationRecipient, setNotificationRecipient] = useState<User | null>(null);
+    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection } | null>({ key: 'name', direction: 'asc' });
+
+    const sortedEmployees = useMemo(() => {
+        let sortableItems = [...employees];
+        if (sortConfig !== null) {
+            sortableItems.sort((a, b) => {
+                const aValue = a[sortConfig.key];
+                const bValue = b[sortConfig.key];
+                if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [employees, sortConfig]);
+
+    const requestSort = (key: SortKey) => {
+        let direction: SortDirection = 'asc';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+    
+    const getSortIcon = (key: SortKey) => {
+        if (!sortConfig || sortConfig.key !== key) return <ChevronsUpDown className="ml-2 h-4 w-4" />;
+        if (sortConfig.direction === 'asc') return <ArrowUp className="ml-2 h-4 w-4" />;
+        return <ArrowDown className="ml-2 h-4 w-4" />;
+    };
 
     useEffect(() => {
         let isMounted = true;
@@ -177,7 +210,7 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, currentUser, 
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Name</TableHead>
+          <TableHead><Button variant="ghost" onClick={() => requestSort('name')}>Name {getSortIcon('name')}</Button></TableHead>
           <TableHead>Course(s) Assigned</TableHead>
           <TableHead className="text-center">Locations</TableHead>
           <TableHead className="text-center">Active</TableHead>
@@ -185,14 +218,14 @@ export function EmployeeTable({ employees, onToggleEmployeeStatus, currentUser, 
         </TableRow>
       </TableHeader>
       <TableBody>
-        {employees.length === 0 && (
+        {sortedEmployees.length === 0 && (
             <TableRow>
                 <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                     No employees to display for the current filters.
                 </TableCell>
             </TableRow>
         )}
-        {employees.map((employee) => {
+        {sortedEmployees.map((employee) => {
           const assignedCourseIds = employee.assignedCourseIds || [];
           const assignedCount = assignedCourseIds.length;
           let courseDisplay: React.ReactNode = <span className="text-xs text-muted-foreground italic">None Assigned</span>;

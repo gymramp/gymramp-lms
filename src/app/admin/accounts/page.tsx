@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { PlusCircle, Search, Building, Users, MoreHorizontal, Edit, Briefcase, ExternalLink, Settings } from 'lucide-react';
+import { PlusCircle, Search, Building, Users, MoreHorizontal, Briefcase, ChevronsUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Company, User } from '@/types/user';
 import { getParentAccounts } from '@/lib/account-data';
@@ -27,12 +27,17 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
+type SortKey = keyof Company | 'childBrandCount' | 'userCount';
+type SortDirection = 'asc' | 'desc';
+
+
 export default function AdminAccountsPage() {
   const [accounts, setAccounts] = useState<Company[]>([]);
   const [filteredAccounts, setFilteredAccounts] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection } | null>({ key: 'name', direction: 'asc' });
   const { toast } = useToast();
   const router = useRouter();
 
@@ -79,6 +84,34 @@ export default function AdminAccountsPage() {
     );
     setFilteredAccounts(filtered);
   }, [searchTerm, accounts]);
+  
+  const sortedAccounts = useMemo(() => {
+    let sortableItems = [...filteredAccounts];
+    if (sortConfig !== null) {
+      sortableItems.sort((a, b) => {
+        const aValue = a[sortConfig.key as keyof Company];
+        const bValue = b[sortConfig.key as keyof Company];
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [filteredAccounts, sortConfig]);
+
+  const requestSort = (key: SortKey) => {
+    let direction: SortDirection = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+  
+  const getSortIcon = (key: SortKey) => {
+    if (!sortConfig || sortConfig.key !== key) return <ChevronsUpDown className="ml-2 h-4 w-4" />;
+    if (sortConfig.direction === 'asc') return <ArrowUp className="ml-2 h-4 w-4" />;
+    return <ArrowDown className="ml-2 h-4 w-4" />;
+  };
 
   if (!currentUser || currentUser.role !== 'Super Admin') {
     return <div className="container mx-auto text-center"><Skeleton className="h-64 w-full" /></div>;
@@ -111,7 +144,7 @@ export default function AdminAccountsPage() {
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-10 w-full" />
             </div>
-          ) : filteredAccounts.length === 0 ? (
+          ) : sortedAccounts.length === 0 ? (
             <div className="text-center text-muted-foreground py-8">
               {searchTerm ? `No accounts found matching "${searchTerm}".` : "No parent accounts found."}
             </div>
@@ -119,14 +152,14 @@ export default function AdminAccountsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Account Name</TableHead>
-                  <TableHead className="text-center">Brands</TableHead>
-                  <TableHead className="text-center">Users (Total)</TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('name')}>Account Name {getSortIcon('name')}</Button></TableHead>
+                  <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort('childBrandCount')}>Brands {getSortIcon('childBrandCount')}</Button></TableHead>
+                  <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort('userCount')}>Users (Total) {getSortIcon('userCount')}</Button></TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAccounts.map((account) => (
+                {sortedAccounts.map((account) => (
                   <TableRow key={account.id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
