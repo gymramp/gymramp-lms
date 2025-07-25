@@ -1,4 +1,5 @@
 
+
 import type { Metadata, Viewport } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -13,6 +14,10 @@ import { AiChatAssistant } from '@/components/layout/AiChatAssistant';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
+import { getLogoHref } from '@/lib/nav-config';
+import { auth } from '@/lib/firebase';
+import { getUserByEmail } from '@/lib/user-data';
+
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -34,6 +39,15 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   console.log('[RootLayout] Rendering with default theme. White-labeling based on hostname/user has been removed.');
+
+  // This is a server-side approach to get the initial user for the logo link
+  const firebaseUser = auth.currentUser;
+  let userDetails = null;
+  if (firebaseUser?.email) {
+      userDetails = await getUserByEmail(firebaseUser.email);
+  }
+  const logoHref = getLogoHref(userDetails);
+
 
   const bodyClasses = "h-full font-sans antialiased";
 
@@ -62,7 +76,7 @@ export default async function RootLayout({
                     <MobileSidebar />
                 </Sheet>
                  <div className="flex-1 flex justify-center">
-                    <Link href="/">
+                    <Link href={logoHref}>
                       <Image
                           src="/images/newlogo.png"
                           alt="Gymramp Logo"

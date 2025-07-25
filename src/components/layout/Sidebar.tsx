@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from '@/lib/utils';
-import { getNavigationStructure, getUserDropdownItems, getQuickAddItems, NavItemType } from '@/lib/nav-config';
+import { getNavigationStructure, getUserDropdownItems, getQuickAddItems, getLogoHref, NavItemType } from '@/lib/nav-config';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { getUserByEmail } from '@/lib/user-data';
@@ -26,6 +26,7 @@ export function Sidebar() {
   const [navItems, setNavItems] = useState<NavItemType[]>([]);
   const [userMenuItems, setUserMenuItems] = useState<NavItemType[]>([]);
   const [quickAddItems, setQuickAddItems] = useState<NavItemType[]>([]);
+  const [logoHref, setLogoHref] = useState('/');
   const [isLoading, setIsLoading] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
@@ -38,6 +39,7 @@ export function Sidebar() {
     setNavItems([]);
     setUserMenuItems([]);
     setQuickAddItems([]);
+    setLogoHref('/');
 
     if (firebaseUser?.email) {
       try {
@@ -52,6 +54,7 @@ export function Sidebar() {
           setNavItems(mainNav);
           setUserMenuItems(userNav);
           setQuickAddItems(quickAddNav);
+          setLogoHref(getLogoHref(userDetails));
         }
       } catch (error) {
         console.error("[Sidebar] Error fetching user data for nav:", error);
@@ -131,7 +134,7 @@ export function Sidebar() {
   return (
     <aside className="hidden md:flex flex-col w-64 border-r bg-background h-full">
       <div className="p-4 border-b h-20 flex items-center shrink-0">
-        <Link href={currentUser.role === 'Staff' ? "/courses/my-courses" : "/dashboard"} className="flex items-center w-full text-center">
+        <Link href={logoHref} className="flex items-center w-full text-center">
            <Image
             src="/images/newlogo.png"
             alt={`${currentBrandName} Logo`}

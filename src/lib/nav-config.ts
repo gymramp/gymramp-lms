@@ -176,3 +176,23 @@ export async function getQuickAddItems(user: User | null): Promise<NavItemType[]
 
   return items;
 }
+
+// Function to get the correct home/dashboard link for the logo
+export function getLogoHref(user: User | null): string {
+    if (!user) return '/';
+
+    switch (user.role) {
+        case 'Super Admin':
+            return '/admin/dashboard';
+        case 'Admin':
+        case 'Owner':
+        case 'Manager':
+            return '/dashboard';
+        case 'Partner':
+            return '/partner/dashboard';
+        case 'Staff':
+            return '/courses/my-courses';
+        default:
+            return '/';
+    }
+}
