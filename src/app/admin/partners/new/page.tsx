@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import type { User, UserFormData } from '@/types/user';
@@ -22,11 +22,12 @@ import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2, ArrowLeft, Handshake, Percent, Upload, ImageIcon as ImageIconLucide, Trash2 } from 'lucide-react';
+import { Loader2, Info, ArrowLeft, Handshake, Percent, Upload, ImageIcon as ImageIconLucide, Trash2 } from 'lucide-react';
 import { generateRandomPassword } from '@/lib/utils';
 import { sendNewUserWelcomeEmail } from '@/lib/email';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Info } from 'lucide-react';
+import { createUserAndSendWelcomeEmail } from '@/actions/userManagement';
+
 
 const partnerFormSchema = z.object({
   name: z.string().min(2, { message: "Partner name must be at least 2 characters." }),
