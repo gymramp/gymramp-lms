@@ -86,13 +86,11 @@ export async function processPublicSignup(data: SignupFormValues, partnerId?: st
     }
     const { customerName, companyName, adminEmail, password, selectedProgramId, paymentIntentId } = validatedData.data;
     
-    let saleAmount = 0;
+    // Public signups are free by default in this flow.
+    const saleAmount = 0;
     let selectedProgram = null;
     if (selectedProgramId) {
       selectedProgram = await getProgramById(selectedProgramId);
-      if (selectedProgram?.price) {
-         saleAmount = parseFloat(selectedProgram.price.replace(/[$,]/g, '')) || 0;
-      }
     }
 
     const newCompanyData: CompanyFormData = {
@@ -172,15 +170,15 @@ export async function processPublicSignup(data: SignupFormValues, partnerId?: st
 
     console.log(`[processPublicSignup] Admin user "${newAdminUser.name}" created in Firestore with ID: ${newAdminUser.id}`);
     
-    // Create customer purchase record if a program was selected
+    // Create customer purchase record if a program was selected, with $0 amount
     if (selectedProgram) {
         await addCustomerPurchaseRecord({
             brandId: newCompany.id,
             brandName: newCompany.name,
             adminUserId: newAdminUser.id,
             adminUserEmail: newAdminUser.email,
-            totalAmountPaid: saleAmount,
-            paymentIntentId: paymentIntentId || null,
+            totalAmountPaid: 0,
+            paymentIntentId: null, // No payment in this flow
             selectedProgramId: selectedProgram.id,
             selectedProgramTitle: selectedProgram.title,
             selectedCourseIds: selectedProgram.courseIds || [],

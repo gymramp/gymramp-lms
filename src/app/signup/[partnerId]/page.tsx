@@ -86,7 +86,7 @@ function PartnerSignupForm({ partner, programs, onSuccessfulSignup }: { partner:
               <Select onValueChange={field.onChange} value={field.value || ''}>
                 <FormControl><SelectTrigger><SelectValue placeholder="Choose a program..." /></SelectTrigger></FormControl>
                 <SelectContent>
-                  {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.title} - {p.price || "Contact for pricing"}</SelectItem>)}
+                  {programs.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -169,3 +169,4 @@ export default function PartnerSignupPage() {
     </div>
   );
 }
+
