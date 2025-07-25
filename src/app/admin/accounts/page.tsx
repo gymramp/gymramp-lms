@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { PlusCircle, Search, Building, Users, MoreHorizontal, Briefcase, ChevronsUpDown, ArrowUp, ArrowDown, Settings } from 'lucide-react';
+import { PlusCircle, Search, Building, Users, MoreHorizontal, Briefcase, ChevronsUpDown, ArrowUp, ArrowDown, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Company, User } from '@/types/user';
 import { getParentAccounts } from '@/lib/account-data';
@@ -26,9 +26,12 @@ import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; 
+import { Label } from "@/components/ui/label"; 
 
 type SortKey = keyof Company | 'childBrandCount' | 'userCount';
 type SortDirection = 'asc' | 'desc';
+const DEFAULT_ROWS_PER_PAGE = 10; 
 
 
 export default function AdminAccountsPage() {
@@ -38,6 +41,8 @@ export default function AdminAccountsPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection } | null>({ key: 'name', direction: 'asc' });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState<number | 'all'>(DEFAULT_ROWS_PER_PAGE);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -83,6 +88,7 @@ export default function AdminAccountsPage() {
       account.name.toLowerCase().includes(lowercasedFilter)
     );
     setFilteredAccounts(filtered);
+    setCurrentPage(1); 
   }, [searchTerm, accounts]);
   
   const sortedAccounts = useMemo(() => {
@@ -111,6 +117,23 @@ export default function AdminAccountsPage() {
     if (!sortConfig || sortConfig.key !== key) return <ChevronsUpDown className="ml-2 h-4 w-4" />;
     if (sortConfig.direction === 'asc') return <ArrowUp className="ml-2 h-4 w-4" />;
     return <ArrowDown className="ml-2 h-4 w-4" />;
+  };
+
+  const rowsToShow = rowsPerPage === 'all' ? Infinity : rowsPerPage;
+  const totalPages = rowsPerPage === 'all' ? 1 : Math.ceil(sortedAccounts.length / rowsToShow);
+  const paginatedAccounts = useMemo(() => {
+      if (rowsPerPage === 'all') return sortedAccounts;
+      const startIndex = (currentPage - 1) * rowsPerPage;
+      return sortedAccounts.slice(startIndex, startIndex + rowsPerPage);
+  }, [sortedAccounts, currentPage, rowsPerPage]);
+
+  const handleRowsPerPageChange = (value: string) => {
+    if (value === 'all') {
+        setRowsPerPage('all');
+    } else {
+        setRowsPerPage(parseInt(value, 10));
+    }
+    setCurrentPage(1);
   };
 
   if (!currentUser || currentUser.role !== 'Super Admin') {
@@ -144,11 +167,12 @@ export default function AdminAccountsPage() {
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-10 w-full" />
             </div>
-          ) : sortedAccounts.length === 0 ? (
+          ) : paginatedAccounts.length === 0 ? (
             <div className="text-center text-muted-foreground py-8">
               {searchTerm ? `No accounts found matching "${searchTerm}".` : "No parent accounts found."}
             </div>
           ) : (
+            <>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -159,7 +183,7 @@ export default function AdminAccountsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedAccounts.map((account) => (
+                {paginatedAccounts.map((account) => (
                   <TableRow key={account.id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
@@ -207,6 +231,47 @@ export default function AdminAccountsPage() {
                 ))}
               </TableBody>
             </Table>
+            <div className="flex items-center justify-between space-x-2 py-4 mt-4 border-t">
+                <div className="flex-1 text-sm text-muted-foreground">
+                    Page {currentPage} of {totalPages} ({filteredAccounts.length} total accounts)
+                </div>
+                <div className="flex items-center space-x-2">
+                    <Label htmlFor="rows-per-page" className="text-sm">Rows per page:</Label>
+                     <Select
+                        value={rowsPerPage === 'all' ? 'all' : String(rowsPerPage)}
+                        onValueChange={handleRowsPerPageChange}
+                     >
+                        <SelectTrigger id="rows-per-page" className="w-[80px] h-9">
+                             <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                            <SelectItem value="all">All</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1 || totalPages === 0}
+                    >
+                        <ChevronLeft className="h-4 w-4" /> Previous
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages || totalPages === 0}
+                    >
+                        Next <ChevronRight className="h-4 w-4" />
+                    </Button>
+                </div>
+             </div>
+            </>
           )}
         </CardContent>
       </Card>
