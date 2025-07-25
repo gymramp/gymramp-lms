@@ -2,6 +2,7 @@
 
 
 
+
 import { db } from './firebase';
 import {
     collection,
@@ -678,4 +679,39 @@ export async function assignMissingCompanyToUsers(defaultCompanyId: string): Pro
         console.log(`Successfully assigned company ID ${defaultCompanyId} to ${usersToUpdate.length} users.`);
         return usersToUpdate.length;
     });
+}
+
+export async function assignMissingLocationToUsers(companyId: string, defaultLocationId: string): Promise<number> {
+    if (!companyId || !defaultLocationId) {
+        console.error("Cannot assign missing location: brand ID and defaultLocationId are required.");
+        return 0;
+    }
+
+    return retryOperation(async () => {
+        const usersRef = collection(db, USERS_COLLECTION);
+        const companyUsersQuery = query(usersRef, where('companyId', '==', companyId), where("isDeleted", "==", false));
+        const companyUsersSnapshot = await getDocs(companyUsersQuery);
+
+        let updatedCount = 0;
+        const batch = writeBatch(db);
+
+        companyUsersSnapshot.forEach((userDoc) => {
+            const userData = userDoc.data() as User;
+            if (!userData.assignedLocationIds || !Array.isArray(userData.assignedLocationIds) || userData.assignedLocationIds.length === 0) {
+                console.log(`Assigning location ${defaultLocationId} to user ${userData.email} (${userDoc.id})`);
+                const userRef = doc(db, USERS_COLLECTION, userDoc.id);
+                batch.update(userRef, { assignedLocationIds: [defaultLocationId], updatedAt: serverTimestamp() });
+                updatedCount++;
+            }
+        });
+
+        if (updatedCount > 0) {
+            await batch.commit();
+            console.log(`Successfully assigned location ${defaultLocationId} to ${updatedCount} users in brand ${companyId}.`);
+        } else {
+            console.log(`No users found in brand ${companyId} needing location assignment.`);
+        }
+
+        return updatedCount;
+    }, 3);
 }

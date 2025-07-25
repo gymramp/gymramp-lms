@@ -1,4 +1,5 @@
 
+
 // src/lib/nav-config.ts
 import type { User, UserRole, Company } from '@/types/user';
 import {
@@ -146,6 +147,7 @@ export async function getQuickAddItems(user: User | null): Promise<NavItemType[]
   if (user.role === 'Super Admin') {
     items.push({ href: '/admin/users/new', label: 'New User', icon: UserPlus });
     items.push({ href: '/admin/companies/new', label: 'New Brand', icon: Building });
+    items.push({ href: '/admin/partners/new', label: 'New Partner', icon: Handshake });
   } 
   else if (user.role === 'Admin' || user.role === 'Owner' || user.role === 'Manager') {
     items.push({ href: '/admin/users/new', label: 'New User', icon: UserPlus });
