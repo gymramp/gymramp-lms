@@ -148,6 +148,15 @@ export default function PartnerSignupPage() {
   return (
     <div className="container flex items-center justify-center min-h-screen py-12">
       <div className="w-full max-w-lg">
+        <div className="mb-8 flex items-center justify-center">
+            <Image
+                src="/images/newlogo.png"
+                alt="Gymramp Logo"
+                width={150}
+                height={45}
+                priority
+            />
+        </div>
         <Card className="shadow-xl">
           <CardHeader className="text-center">
             {partner.logoUrl ? (
