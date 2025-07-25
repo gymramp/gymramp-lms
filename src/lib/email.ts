@@ -83,7 +83,7 @@ export async function sendNewUserWelcomeEmail(to: string, name: string, temporar
         <title>${subject}</title>
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-            body { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; background-color: #ffffff; font-family: 'Inter', Arial, sans-serif; color: #000000; }
+            body { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; background-color: #f3f4f6; font-family: 'Inter', Arial, sans-serif; color: #000000; }
             .email-container { width: 100%; max-width: 600px; margin: 0 auto; background-color: #ffffff; }
             .header { padding: 40px 30px; text-align: center; }
             .header img { max-height: 45px; width: auto; }
@@ -100,7 +100,7 @@ export async function sendNewUserWelcomeEmail(to: string, name: string, temporar
             a { color: ${accentColor}; text-decoration: underline; }
         </style>
     </head>
-    <body style="margin: 0; padding: 0; width: 100% !important; background-color: #ffffff; font-family: 'Inter', Arial, sans-serif; color: #000000;">
+    <body style="margin: 0; padding: 0; width: 100% !important; background-color: #f3f4f6; font-family: 'Inter', Arial, sans-serif; color: #000000;">
         <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
             <tr>
                 <td align="center" style="padding: 20px 0;">
