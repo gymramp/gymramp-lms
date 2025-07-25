@@ -21,9 +21,11 @@ import { getCompanyById } from '@/lib/company-data';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, updateEmail } from 'firebase/auth';
-import { Building, Mail, User as UserIcon, Upload, Trash2, Loader2, Save, Languages } from 'lucide-react';
+import { Building, Mail, User as UserIcon, Upload, Trash2, Loader2, Save, Languages, Sparkles } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { BadgeCard, type BadgeInfo } from '@/components/gamification/BadgeCard';
+import { getBadgesForUser } from '@/lib/gamification';
 
 const SUPPORTED_LOCALES = [
   { value: 'en', label: 'English' },
@@ -47,6 +49,7 @@ type ProfileFormValues = z.infer<typeof profileFormSchema>;
 export default function AccountBasicsPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [brandName, setBrandName] = useState<string | null>(null);
+  const [earnedBadges, setEarnedBadges] = useState<BadgeInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -83,6 +86,8 @@ export default function AccountBasicsPage() {
             } else {
               setBrandName('N/A');
             }
+            const badges = await getBadgesForUser(userDetails);
+            setEarnedBadges(badges);
           }
         } catch (error) {
            console.error("Error fetching user profile:", error);
@@ -202,20 +207,17 @@ export default function AccountBasicsPage() {
 
   if (isLoading) {
     return (
-      <Card className="w-full max-w-2xl mx-auto">
-        <CardHeader>
-          <Skeleton className="h-6 w-1/4" />
-          <Skeleton className="h-4 w-1/2 mt-2" />
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex items-center gap-4">
-            <Skeleton className="h-20 w-20 rounded-full" />
-            <div className="space-y-2 flex-1"><Skeleton className="h-10 w-1/2" /><Skeleton className="h-4 w-3/4" /></div>
-          </div>
-          <div className="space-y-2"><Skeleton className="h-4 w-24" /><Skeleton className="h-10 w-full" /></div>
-          <div className="space-y-2"><Skeleton className="h-4 w-24" /><Skeleton className="h-10 w-full" /></div>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-2">
+            <Card className="w-full">
+                <CardHeader><Skeleton className="h-6 w-1/4" /><Skeleton className="h-4 w-1/2 mt-2" /></CardHeader>
+                <CardContent className="space-y-6"><div className="flex items-center gap-4"><Skeleton className="h-20 w-20 rounded-full" /><div className="space-y-2 flex-1"><Skeleton className="h-10 w-1/2" /><Skeleton className="h-4 w-3/4" /></div></div><div className="space-y-2"><Skeleton className="h-4 w-24" /><Skeleton className="h-10 w-full" /></div><div className="space-y-2"><Skeleton className="h-4 w-24" /><Skeleton className="h-10 w-full" /></div></CardContent>
+            </Card>
+        </div>
+        <div className="md:col-span-1">
+            <Card><CardHeader><Skeleton className="h-6 w-3/4" /></CardHeader><CardContent><div className="flex gap-4"><Skeleton className="h-24 w-24" /><Skeleton className="h-24 w-24" /></div></CardContent></Card>
+        </div>
+      </div>
     );
   }
 
@@ -224,7 +226,8 @@ export default function AccountBasicsPage() {
   }
 
   return (
-    <Card className="w-full max-w-2xl mx-auto shadow-lg">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <Card className="w-full shadow-lg lg:col-span-2">
       <CardHeader>
         <CardTitle className="text-xl font-bold">Profile Information</CardTitle>
         <CardDescription>View and manage your personal details.</CardDescription>
@@ -240,94 +243,20 @@ export default function AccountBasicsPage() {
                     <AvatarFallback className="text-2xl">{getInitials(currentUser.name)}</AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isUploading}
-                        className="w-fit"
-                      >
-                        {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                        {isUploading ? 'Uploading...' : 'Upload Image'}
-                      </Button>
-                      {currentUser.profileImageUrl && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10 w-fit"
-                            onClick={handleRemoveProfileImage}
-                            disabled={isUploading}
-                          >
-                              <Trash2 className="mr-2 h-4 w-4" /> Remove Image
-                          </Button>
-                      )}
-                      <Input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleProfileImageChange}
-                        disabled={isUploading}
-                      />
-                        {isUploading && (
-                          <div className="w-full max-w-xs mt-2">
-                              <Progress value={uploadProgress} className="h-2" />
-                              <p className="text-xs text-muted-foreground text-center mt-1">{Math.round(uploadProgress)}%</p>
-                          </div>
-                        )}
+                      <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="w-fit"><Upload className="mr-2 h-4 w-4" />{isUploading ? 'Uploading...' : 'Upload Image'}</Button>
+                      {currentUser.profileImageUrl && (<Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10 w-fit" onClick={handleRemoveProfileImage} disabled={isUploading}><Trash2 className="mr-2 h-4 w-4" /> Remove Image</Button>)}
+                      <Input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleProfileImageChange} disabled={isUploading} />
+                        {isUploading && (<div className="w-full max-w-xs mt-2"><Progress value={uploadProgress} className="h-2" /><p className="text-xs text-muted-foreground text-center mt-1">{Math.round(uploadProgress)}%</p></div>)}
                         {uploadError && <p className="text-xs text-destructive mt-2">{uploadError}</p>}
                 </div>
               </div>
             </div>
 
-            <FormField control={form.control} name="name" render={({ field }) => (
-              <FormItem>
-                <FormLabel className="flex items-center gap-1 text-muted-foreground"><UserIcon className="h-4 w-4" /> Name</FormLabel>
-                <FormControl><Input {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
-            )} />
-            <FormField control={form.control} name="email" render={({ field }) => (
-              <FormItem>
-                <FormLabel className="flex items-center gap-1 text-muted-foreground"><Mail className="h-4 w-4" /> Email</FormLabel>
-                <FormControl><Input type="email" {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
-            )} />
-             <FormField
-                control={form.control}
-                name="preferredLocale"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center gap-1 text-muted-foreground"><Languages className="h-4 w-4" /> Language Preference</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || 'en'}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select your preferred language" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {SUPPORTED_LOCALES.map(locale => (
-                          <SelectItem key={locale.value} value={locale.value}>
-                            {locale.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            <div className="space-y-2">
-              <Label htmlFor="brand" className="flex items-center gap-1 text-muted-foreground"><Building className="h-4 w-4" /> Brand</Label>
-              <Input id="brand" value={brandName || 'Loading...'} readOnly disabled />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="role" className="flex items-center gap-1 text-muted-foreground"><UserIcon className="h-4 w-4" /> Role</Label>
-              <Input id="role" value={currentUser.role} readOnly disabled />
-            </div>
+            <FormField control={form.control} name="name" render={({ field }) => ( <FormItem><FormLabel className="flex items-center gap-1 text-muted-foreground"><UserIcon className="h-4 w-4" /> Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="email" render={({ field }) => ( <FormItem><FormLabel className="flex items-center gap-1 text-muted-foreground"><Mail className="h-4 w-4" /> Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>)} />
+             <FormField control={form.control} name="preferredLocale" render={({ field }) => ( <FormItem><FormLabel className="flex items-center gap-1 text-muted-foreground"><Languages className="h-4 w-4" /> Language Preference</FormLabel><Select onValueChange={field.onChange} value={field.value || 'en'}><FormControl><SelectTrigger><SelectValue placeholder="Select your preferred language" /></SelectTrigger></FormControl><SelectContent>{SUPPORTED_LOCALES.map(locale => ( <SelectItem key={locale.value} value={locale.value}>{locale.label}</SelectItem> ))}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <div className="space-y-2"><Label htmlFor="brand" className="flex items-center gap-1 text-muted-foreground"><Building className="h-4 w-4" /> Brand</Label><Input id="brand" value={brandName || 'Loading...'} readOnly disabled /></div>
+            <div className="space-y-2"><Label htmlFor="role" className="flex items-center gap-1 text-muted-foreground"><UserIcon className="h-4 w-4" /> Role</Label><Input id="role" value={currentUser.role} readOnly disabled /></div>
           </CardContent>
           <CardFooter>
             <Button type="submit" disabled={isPending || !form.formState.isDirty}>
@@ -338,5 +267,26 @@ export default function AccountBasicsPage() {
         </form>
       </Form>
     </Card>
+
+    <div className="lg:col-span-1">
+        <Card className="shadow-lg">
+            <CardHeader>
+                <CardTitle className="text-xl font-bold flex items-center gap-2"><Sparkles className="h-5 w-5 text-amber-400" /> My Badges</CardTitle>
+                <CardDescription>Your recently earned achievements.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {earnedBadges.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-4">
+                        {earnedBadges.slice(0, 4).map((badge, index) => (
+                            <BadgeCard key={index} badge={badge} />
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-sm text-muted-foreground italic">No badges earned yet. Start a course to get your first one!</p>
+                )}
+            </CardContent>
+        </Card>
+    </div>
+    </div>
   );
 }

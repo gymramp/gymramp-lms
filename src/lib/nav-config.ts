@@ -4,7 +4,7 @@ import type { User, UserRole, Company } from '@/types/user';
 import {
     BarChartBig, Building, Layers, CreditCard, BookOpen, FileText,
     ListChecks, UserPlus, ShoppingCart, Gift,
-    TestTube2, Percent, HelpCircle, LayoutDashboard, Users, MapPin, Settings, Award, Cog, Package, Handshake, KeyRound, Briefcase, DatabaseZap
+    TestTube2, Percent, HelpCircle, LayoutDashboard, Users, MapPin, Settings, Award, Cog, Package, Handshake, KeyRound, Briefcase, DatabaseZap, Trophy
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { getCompanyById } from '@/lib/company-data';
@@ -83,14 +83,14 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
         ]
       },
       { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },
-      { href: '/certificates', label: 'My Certificates', icon: Award },
+      { href: '/achievements', label: 'My Achievements', icon: Trophy },
     );
   } else if (user.role === 'Manager') {
     roleSpecificItems.push(
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/admin/users', label: 'Team', icon: Users, requiresCompanyId: true },
       { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },
-      { href: '/certificates', label: 'My Certificates', icon: Award },
+      { href: '/achievements', label: 'My Achievements', icon: Trophy },
     );
   } else if (user.role === 'Partner') {
     roleSpecificItems.push(
@@ -99,7 +99,7 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
   } else if (user.role === 'Staff') {
     roleSpecificItems.push(
       { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },
-      { href: '/certificates', label: 'My Certificates', icon: Award },
+      { href: '/achievements', label: 'My Achievements', icon: Trophy },
     );
   }
 
@@ -137,7 +137,7 @@ export function getUserDropdownItems(user: User | null): NavItemType[] {
         );
     }
     if (user.role !== 'Partner') {
-        items.push({ href: '/certificates', label: 'My Certificates', icon: Award });
+        items.push({ href: '/achievements', label: 'My Achievements', icon: Trophy });
     }
     items.push({ href: '/site-help', label: 'Site Help', icon: HelpCircle });
 
