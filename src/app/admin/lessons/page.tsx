@@ -15,7 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, MoreHorizontal, Trash2, Edit, PlaySquare, Eye, EyeOff, Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'; 
+import { PlusCircle, MoreHorizontal, Trash2, Edit, PlaySquare, Eye, EyeOff, Search, ChevronLeft, ChevronRight, Loader2, ChevronsUpDown, ArrowDown, ArrowUp } from 'lucide-react'; 
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,8 +41,11 @@ import { AddEditLessonDialog } from '@/components/admin/AddEditLessonDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; 
 import { Label } from "@/components/ui/label"; 
+import { cn } from '@/lib/utils';
 
 const DEFAULT_ROWS_PER_PAGE = 10; 
+type SortKey = keyof Lesson | 'videoUrl' | 'isPreviewAvailable';
+type SortDirection = 'asc' | 'desc';
 
 export default function AdminLessonsPage() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -58,6 +61,7 @@ export default function AdminLessonsPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState<number | 'all'>(DEFAULT_ROWS_PER_PAGE);
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection } | null>({ key: 'title', direction: 'asc' });
 
   const fetchLessons = async () => {
     setIsLoading(true);
@@ -89,14 +93,48 @@ export default function AdminLessonsPage() {
     setCurrentPage(1); 
   }, [searchTerm, lessons]);
 
-  const rowsToShow = rowsPerPage === 'all' ? Infinity : rowsPerPage;
-  const totalPages = rowsPerPage === 'all' ? 1 : Math.ceil(filteredLessons.length / rowsToShow);
-  const paginatedLessons = useMemo(() => {
-      if (!filteredLessons) return [];
-      if (rowsPerPage === 'all') return filteredLessons;
+  const sortedAndPaginatedLessons = useMemo(() => {
+      let sortableItems = [...filteredLessons];
+      if (sortConfig !== null) {
+          sortableItems.sort((a, b) => {
+              const aValue = a[sortConfig.key];
+              const bValue = b[sortConfig.key];
+              let comparison = 0;
+              if (typeof aValue === 'string' && typeof bValue === 'string') {
+                  comparison = aValue.localeCompare(bValue, undefined, { numeric: true, sensitivity: 'base' });
+              } else if (typeof aValue === 'boolean' && typeof bValue === 'boolean') {
+                  comparison = aValue === bValue ? 0 : aValue ? -1 : 1;
+              } else if (sortConfig.key === 'videoUrl') {
+                  const aHasVideo = !!a.videoUrl;
+                  const bHasVideo = !!b.videoUrl;
+                  comparison = aHasVideo === bHasVideo ? 0 : aHasVideo ? -1 : 1;
+              }
+              return sortConfig.direction === 'asc' ? comparison : -comparison;
+          });
+      }
+      
+      if (rowsPerPage === 'all') return sortableItems;
       const startIndex = (currentPage - 1) * rowsPerPage;
-      return filteredLessons.slice(startIndex, startIndex + rowsPerPage);
-  }, [filteredLessons, currentPage, rowsPerPage]);
+      return sortableItems.slice(startIndex, startIndex + rowsPerPage);
+  }, [filteredLessons, sortConfig, currentPage, rowsPerPage]);
+
+
+  const requestSort = (key: SortKey) => {
+    let direction: SortDirection = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+  
+  const getSortIcon = (key: SortKey) => {
+    if (!sortConfig || sortConfig.key !== key) return <ChevronsUpDown className="ml-2 h-4 w-4" />;
+    if (sortConfig.direction === 'asc') return <ArrowUp className="ml-2 h-4 w-4" />;
+    return <ArrowDown className="ml-2 h-4 w-4" />;
+  };
+
+  const rowsToShow = rowsPerPage === 'all' ? Infinity : rowsPerPage;
+  const totalPages = rowsPerPage === 'all' ? (filteredLessons.length > 0 ? 1 : 0) : Math.ceil(filteredLessons.length / rowsToShow);
 
 
   const handleAddLesson = () => {
@@ -197,19 +235,31 @@ export default function AdminLessonsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Has Video?</TableHead>
-                  <TableHead>Preview Enabled?</TableHead>
+                  <TableHead>
+                      <Button variant="ghost" onClick={() => requestSort('title')} className="px-1">
+                        Title {getSortIcon('title')}
+                      </Button>
+                  </TableHead>
+                  <TableHead>
+                       <Button variant="ghost" onClick={() => requestSort('videoUrl')} className="px-1">
+                        Has Video? {getSortIcon('videoUrl')}
+                      </Button>
+                  </TableHead>
+                  <TableHead>
+                       <Button variant="ghost" onClick={() => requestSort('isPreviewAvailable')} className="px-1">
+                        Preview Enabled? {getSortIcon('isPreviewAvailable')}
+                       </Button>
+                  </TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedLessons.map((lesson) => (
+                {sortedAndPaginatedLessons.map((lesson) => (
                   <TableRow key={lesson.id}>
                     <TableCell className="font-medium">{lesson.title}</TableCell>
                     <TableCell>{lesson.videoUrl ? 'Yes' : 'No'}</TableCell>
                      <TableCell>
-                        <Badge variant={lesson.isPreviewAvailable ? "default" : "secondary"} className={lesson.isPreviewAvailable ? 'bg-green-100 text-green-800' : ''}>
+                        <Badge variant={lesson.isPreviewAvailable ? "default" : "secondary"} className={cn(lesson.isPreviewAvailable ? 'bg-green-100 text-green-800' : '', 'w-fit')}>
                             {lesson.isPreviewAvailable ? <Eye className="mr-1 h-3 w-3"/> : <EyeOff className="mr-1 h-3 w-3"/>}
                             {lesson.isPreviewAvailable ? 'Yes' : 'No'}
                         </Badge>
