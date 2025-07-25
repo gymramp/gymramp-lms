@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from '@/components/ui/sheet';
-import { User as UserIcon, Loader2, HelpCircle, Send, MessageCircleQuestion } from 'lucide-react';
+import { User as UserIcon, Loader2, HelpCircle, Send, MessageCircleQuestion, Eraser } from 'lucide-react';
 import { askSiteSupport } from '@/ai/flows/site-support';
 import type { User } from '@/types/user';
 import { cn } from '@/lib/utils';
@@ -28,6 +28,11 @@ export function AiChatAssistant() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const getWelcomeMessage = (user: User | null): Message[] => {
+    if (!user) return [];
+    return [{ role: 'assistant', content: `Hello ${user.name}! I'm your AI support assistant. How can I help you today?` }];
+  };
+  
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser?.email) {
@@ -50,16 +55,12 @@ export function AiChatAssistant() {
           setMessages(JSON.parse(savedMessages));
         } else {
           // If no history, start with a welcome message.
-          setMessages([
-            { role: 'assistant', content: `Hello ${currentUser.name}! I'm your AI support assistant. How can I help you today?` }
-          ]);
+          setMessages(getWelcomeMessage(currentUser));
         }
       } catch (error) {
         console.error("Failed to load chat history from localStorage:", error);
         // On error, start with a fresh welcome message.
-        setMessages([
-          { role: 'assistant', content: `Hello ${currentUser.name}! I'm your AI support assistant. How can I help you today?` }
-        ]);
+        setMessages(getWelcomeMessage(currentUser));
       }
     } else {
       // Clear messages if there's no user.
@@ -116,6 +117,14 @@ export function AiChatAssistant() {
     }
   };
 
+  const handleNewChat = () => {
+    if (!currentUser) return;
+    const key = `chatHistory_${currentUser.id}`;
+    localStorage.removeItem(key);
+    setMessages(getWelcomeMessage(currentUser));
+  };
+
+
   const handleSheetOpenChange = (open: boolean) => {
     setIsOpen(open);
   };
@@ -138,14 +147,14 @@ export function AiChatAssistant() {
         </Button>
       </SheetTrigger>
       <SheetContent className="w-[400px] sm:w-[540px] flex flex-col p-0">
-        <SheetHeader className="p-4 border-b">
-          <SheetTitle className="flex items-center gap-2">
+        <SheetHeader className="p-4 border-b flex flex-row items-center justify-between">
+          <div className="flex items-center gap-2">
             <HelpCircle className="h-5 w-5 text-primary" />
-            Gymramp Help and Support
-          </SheetTitle>
-           <SheetDescription className="sr-only">
-             An AI assistant to help answer questions about using the platform.
-           </SheetDescription>
+            <SheetTitle>Gymramp Help</SheetTitle>
+          </div>
+           <Button variant="ghost" size="sm" onClick={handleNewChat}>
+            <Eraser className="mr-2 h-4 w-4" /> New Chat
+          </Button>
         </SheetHeader>
         <ScrollArea className="flex-1 p-4">
           <div className="space-y-6">
