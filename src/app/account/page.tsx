@@ -272,7 +272,7 @@ export default function AccountBasicsPage() {
         <Card className="shadow-lg">
             <CardHeader>
                 <CardTitle className="text-xl font-bold flex items-center gap-2"><Sparkles className="h-5 w-5 text-amber-400" /> My Badges</CardTitle>
-                <CardDescription>Your recently earned achievements.</CardDescription>
+                <CardDescription>Your earned achievements.</CardDescription>
             </CardHeader>
             <CardContent>
                 {earnedBadges.length > 0 ? (
@@ -280,6 +280,11 @@ export default function AccountBasicsPage() {
                         {earnedBadges.slice(0, 4).map((badge, index) => (
                             <BadgeCard key={index} badge={badge} />
                         ))}
+                         {earnedBadges.length > 4 && (
+                            <Link href="/achievements" className="col-span-2">
+                                <Button variant="outline" className="w-full">View All {earnedBadges.length} Badges</Button>
+                            </Link>
+                        )}
                     </div>
                 ) : (
                     <p className="text-sm text-muted-foreground italic">No badges earned yet. Start a course to get your first one!</p>

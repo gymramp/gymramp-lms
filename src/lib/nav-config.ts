@@ -4,7 +4,7 @@ import type { User, UserRole, Company } from '@/types/user';
 import {
     BarChartBig, Building, Layers, CreditCard, BookOpen, FileText,
     ListChecks, UserPlus, ShoppingCart, Gift,
-    TestTube2, Percent, HelpCircle, LayoutDashboard, Users, MapPin, Settings, Award, Cog, Package, Handshake, KeyRound, Briefcase, DatabaseZap, Trophy
+    TestTube2, Percent, HelpCircle, LayoutDashboard, Users, MapPin, Settings, Award, Cog, Package, Handshake, KeyRound, Briefcase, DatabaseZap, Trophy, Flame, Zap
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { getCompanyById } from '@/lib/company-data';
