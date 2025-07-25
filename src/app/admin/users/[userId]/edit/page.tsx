@@ -31,9 +31,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from '@/components/ui/badge';
 
 const ROLE_HIERARCHY: Record<UserRole, number> = {
-  'Super Admin': 5, 'Admin': 4, 'Owner': 3, 'Manager': 2, 'Staff': 1,
+  'Super Admin': 5, 'Admin': 4, 'Owner': 3, 'Manager': 2, 'Staff': 1, 'Partner': 0,
 };
-const ALL_POSSIBLE_ROLES_TO_ASSIGN: UserRole[] = ['Super Admin', 'Admin', 'Owner', 'Manager', 'Staff'];
+const ALL_POSSIBLE_ROLES_TO_ASSIGN: UserRole[] = ['Super Admin', 'Admin', 'Owner', 'Manager', 'Staff', 'Partner'];
 const NO_BRAND_VALUE = "__NO_BRAND__";
 
 const editUserFormSchema = z.object({
@@ -44,8 +44,8 @@ const editUserFormSchema = z.object({
   newTemporaryPassword: z.string().optional().refine(val => !val || val.length === 0 || val.length >= 6, {
     message: "New password must be at least 6 characters if provided.",
   }),
-}).refine(data => data.role === 'Super Admin' || !!data.companyId, {
-  message: "Non-Super Admin users must be assigned to a brand.",
+}).refine(data => data.role === 'Super Admin' || data.role === 'Partner' || !!data.companyId, {
+  message: "This role requires an account assignment.",
   path: ["companyId"],
 });
 
@@ -157,7 +157,7 @@ export default function AdminEditUserPage() {
         if (brandForContext.canManageCourses) {
           courses.push(...await getBrandCoursesByBrandId(brandForContext.id));
         }
-      } else if (user.role === 'Super Admin') {
+      } else if (user.role === 'Super Admin' || user.role === 'Partner') {
         courses.push(...await getAllGlobalCourses());
       }
       setAssignableCourses(courses.filter((c, i, self) => i === self.findIndex(o => o.id === c.id) && !c.isDeleted));
@@ -189,6 +189,12 @@ export default function AdminEditUserPage() {
       form.setValue('assignedLocationIds', []);
     }
   }, [watchedCompanyId, allSystemLocations, userToEdit, form]);
+  
+  useEffect(() => {
+    if (watchedRole === 'Partner' || watchedRole === 'Super Admin') {
+        form.setValue('companyId', null);
+    }
+  }, [watchedRole, form]);
 
   const onSubmit = async (data: EditUserFormValues) => {
     if (!userToEdit || !currentUserSession || currentUserSession.role !== 'Super Admin') {
@@ -200,8 +206,8 @@ export default function AdminEditUserPage() {
       const updatePayload: Partial<UserFormData & { requiresPasswordChange?: boolean }> = {
         name: data.name,
         role: data.role,
-        companyId: data.role === 'Super Admin' ? null : data.companyId,
-        assignedLocationIds: (data.role === 'Super Admin' || !data.companyId) ? [] : data.assignedLocationIds,
+        companyId: data.role === 'Super Admin' || data.role === 'Partner' ? null : data.companyId,
+        assignedLocationIds: (data.role === 'Super Admin' || data.role === 'Partner' || !data.companyId) ? [] : data.assignedLocationIds,
       };
       let passwordMessage = "";
       if (data.newTemporaryPassword && data.newTemporaryPassword.length >= 6) {
@@ -297,15 +303,15 @@ export default function AdminEditUserPage() {
                       <Select
                         onValueChange={(value) => field.onChange(value === NO_BRAND_VALUE ? null : value)}
                         value={field.value === null ? NO_BRAND_VALUE : field.value || ''}
-                        disabled={userToEdit.role === 'Super Admin'}
+                        disabled={userToEdit.role === 'Super Admin' || userToEdit.role === 'Partner'}
                       >
                         <FormControl><SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger></FormControl>
                         <SelectContent>
-                          <SelectItem value={NO_BRAND_VALUE}>No Brand (Only for Super Admin)</SelectItem>
+                          <SelectItem value={NO_BRAND_VALUE}>No Brand (Only for Super Admin/Partner)</SelectItem>
                           {allCompaniesForSA.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      {userToEdit.role === 'Super Admin' && <p className="text-xs text-muted-foreground">Super Admins are not assigned to a specific brand.</p>}
+                      {(userToEdit.role === 'Super Admin' || userToEdit.role === 'Partner') && <p className="text-xs text-muted-foreground">Super Admins and Partners are not assigned to a specific brand.</p>}
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -319,7 +325,7 @@ export default function AdminEditUserPage() {
                               <Checkbox checked={field.value?.includes(loc.id)} onCheckedChange={c => field.onChange(c ? [...(field.value || []), loc.id] : (field.value || []).filter(v => v !== loc.id))} />
                             </FormControl><FormLabel className="font-normal">{loc.name}</FormLabel></FormItem>
                           )}/>))
-                         : <p className="text-sm text-muted-foreground italic">{(watchedCompanyId && watchedRole !== 'Super Admin') ? 'No locations for selected brand.' : (watchedRole !== 'Super Admin' ? 'Select a brand to see locations.' : 'Super Admins are not assigned locations.')}</p>
+                         : <p className="text-sm text-muted-foreground italic">{(watchedCompanyId && watchedRole !== 'Super Admin' && watchedRole !== 'Partner') ? 'No locations for selected brand.' : (watchedRole !== 'Super Admin' && watchedRole !== 'Partner' ? 'Select a brand to see locations.' : 'This role is not assigned to locations.')}</p>
                         }
                       </ScrollArea><FormMessage />
                     </FormItem>
@@ -365,7 +371,7 @@ export default function AdminEditUserPage() {
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5" /> Assigned Courses</CardTitle></CardHeader>
             <CardContent>
-              {assignableCourses.length === 0 ? <p className="text-sm text-muted-foreground">No courses available for assignment in this user's brand context.</p> :
+              {assignableCourses.length === 0 ? <p className="text-sm text-muted-foreground">No courses available for assignment in this user's context.</p> :
                 <ScrollArea className="h-80">
                   <div className="space-y-2">
                     {assignableCourses.map(course => (

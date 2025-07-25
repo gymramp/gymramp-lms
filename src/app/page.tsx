@@ -90,6 +90,7 @@ export default function LoginPage() {
               case 'Admin':
               case 'Owner':
               case 'Manager': redirectPath = '/dashboard'; break;
+              case 'Partner': redirectPath = '/partner/dashboard'; break;
             }
             router.replace(redirectPath);
             return;
@@ -188,6 +189,7 @@ export default function LoginPage() {
                 case 'Admin':
                 case 'Owner':
                 case 'Manager': redirectPath = '/dashboard'; break;
+                case 'Partner': redirectPath = '/partner/dashboard'; break;
             }
         } else {
              await signOut(auth);

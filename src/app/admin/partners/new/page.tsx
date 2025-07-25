@@ -10,19 +10,22 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
-import type { User } from '@/types/user';
+import type { User, UserFormData } from '@/types/user';
 import type { PartnerFormData } from '@/types/partner';
-import { getUserByEmail } from '@/lib/user-data';
+import { getUserByEmail, addUser } from '@/lib/user-data';
 import { addPartner } from '@/lib/partner-data';
 import { uploadImage, STORAGE_PATHS } from '@/lib/storage';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loader2, ArrowLeft, Handshake, Percent, Upload, ImageIcon as ImageIconLucide, Trash2 } from 'lucide-react';
+import { generateRandomPassword } from '@/lib/utils';
+import { sendNewUserWelcomeEmail } from '@/lib/email';
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Info } from 'lucide-react';
 
 const partnerFormSchema = z.object({
   name: z.string().min(2, { message: "Partner name must be at least 2 characters." }),
@@ -95,20 +98,47 @@ export default function NewPartnerPage() {
 
   const onSubmit = (data: PartnerFormValues) => {
     startTransition(async () => {
-      const partnerFormData: PartnerFormData = {
-        ...data,
-        companyName: data.companyName || null,
-        logoUrl: data.logoUrl || null,
-        availableProgramIds: [],
-      };
+        // Step 1: Create the Partner document
+        const partnerFormData: PartnerFormData = {
+          ...data,
+          companyName: data.companyName || null,
+          logoUrl: data.logoUrl || null,
+          availableProgramIds: [],
+        };
 
-      const newPartner = await addPartner(partnerFormData);
-      if (newPartner) {
-        toast({ title: "Partner Created", description: `Partner "${newPartner.name}" has been created.` });
-        router.push(`/admin/partners/${newPartner.id}/edit`);
-      } else {
-        toast({ title: "Creation Failed", variant: "destructive" });
-      }
+        const newPartner = await addPartner(partnerFormData);
+        if (!newPartner) {
+            toast({ title: "Partner Creation Failed", description: "Could not create the partner document.", variant: "destructive" });
+            return;
+        }
+
+        // Step 2: Create a corresponding User document for the Partner
+        try {
+            const tempPassword = generateRandomPassword();
+            const newPartnerUserData: Omit<UserFormData, 'password'> = {
+                name: data.name,
+                email: data.email,
+                role: 'Partner',
+                companyId: null, // Partners are not tied to a company
+                assignedLocationIds: [],
+                profileImageUrl: data.logoUrl || null,
+                isActive: true,
+            };
+            
+            // This Server Action creates the user in both Auth and Firestore
+            const result = await createUserAndSendWelcomeEmail(newPartnerUserData);
+            
+            if (result.success && result.user) {
+                 toast({ title: "Partner & User Created", description: `Partner "${newPartner.name}" created. Welcome email sent.`, duration: 7000 });
+                 router.push(`/admin/partners/${newPartner.id}/edit`);
+            } else {
+                 // Attempt to roll back partner creation if user creation fails
+                 // await deletePartner(newPartner.id); // Consider if a rollback function is needed
+                 toast({ title: "User Creation Failed", description: result.error || 'The partner was created, but their login account failed. Please create the user manually with the "Partner" role.', variant: "destructive", duration: 10000 });
+            }
+        } catch (userCreationError: any) {
+             toast({ title: "User Creation Error", description: userCreationError.message || "Could not create the user account for the partner.", variant: "destructive" });
+        }
     });
   };
 
@@ -126,15 +156,22 @@ export default function NewPartnerPage() {
           <Card className="max-w-2xl mx-auto">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-2xl"><Handshake className="h-6 w-6"/> Add New Partner</CardTitle>
-              <CardDescription>Fill out the form below to create a new partner.</CardDescription>
+              <CardDescription>Fill out the form below to create a new partner. This will also create a 'Partner' user account so they can log in.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+               <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertTitle>Partner Login</AlertTitle>
+                  <AlertDescription>
+                    Creating a partner will automatically generate a corresponding user account with a temporary password, which will be sent to their email address.
+                  </AlertDescription>
+                </Alert>
               <FormField control={form.control} name="name" render={({ field }) => ( <FormItem><FormLabel>Partner Name</FormLabel><FormControl><Input placeholder="e.g., John Doe" {...field} /></FormControl><FormMessage /></FormItem> )} />
-              <FormField control={form.control} name="email" render={({ field }) => ( <FormItem><FormLabel>Contact Email</FormLabel><FormControl><Input type="email" placeholder="partner@example.com" {...field} /></FormControl><FormMessage /></FormItem> )} />
+              <FormField control={form.control} name="email" render={({ field }) => ( <FormItem><FormLabel>Contact & Login Email</FormLabel><FormControl><Input type="email" placeholder="partner@example.com" {...field} /></FormControl><FormMessage /></FormItem> )} />
               <FormField control={form.control} name="companyName" render={({ field }) => ( <FormItem><FormLabel>Company Name (Optional)</FormLabel><FormControl><Input placeholder="Partner Co." {...field} /></FormControl><FormMessage /></FormItem> )} />
               <FormField control={form.control} name="percentage" render={({ field }) => ( <FormItem><FormLabel className="flex items-center gap-1"><Percent className="h-4 w-4"/>Revenue Share (%)</FormLabel><FormControl><Input type="number" min="0.01" max="100" step="0.01" placeholder="10" {...field} /></FormControl><FormMessage /></FormItem> )} />
               <FormItem>
-                <Label>Partner Logo (Optional)</Label>
+                <FormLabel>Partner Logo (Optional)</FormLabel>
                 <div className="border border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary">
                   {logoUrlValue && !isUploading ? (
                     <div className="relative w-32 h-32 mx-auto mb-2">
@@ -152,7 +189,7 @@ export default function NewPartnerPage() {
             <CardFooter>
               <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isPending || isUploading}>
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Partner
+                Create Partner & User Account
               </Button>
             </CardFooter>
           </Card>

@@ -26,7 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 
 const ROLE_HIERARCHY: Record<UserRole, number> = {
-  'Super Admin': 5, 'Admin': 4, 'Owner': 3, 'Manager': 2, 'Staff': 1,
+  'Super Admin': 5, 'Admin': 4, 'Owner': 3, 'Manager': 2, 'Staff': 1, 'Partner': 0,
 };
 const ASSIGNABLE_ROLES_BY_ADMINS: UserRole[] = ['Admin', 'Owner', 'Manager', 'Staff'];
 
@@ -34,8 +34,11 @@ const userFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email({ message: 'Please enter a valid email address.' }),
   role: z.string().min(1, { message: 'Please select a user role' }) as z.ZodType<UserRole>,
-  companyId: z.string().min(1, { message: 'Please select an account.' }),
+  companyId: z.string().nullable(), // Nullable for Partner/Super Admin
   assignedLocationIds: z.array(z.string()).default([]),
+}).refine(data => data.role === 'Super Admin' || data.role === 'Partner' || !!data.companyId, {
+  message: "This role requires an account assignment.",
+  path: ["companyId"],
 });
 
 type UserFormValues = z.infer<typeof userFormSchema>;
@@ -57,6 +60,7 @@ export default function AddNewUserPage() {
   });
 
   const selectedCompanyIdForm = form.watch('companyId');
+  const selectedRole = form.watch('role');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -122,6 +126,13 @@ export default function AddNewUserPage() {
     fetchLocations();
   }, [selectedCompanyIdForm, companies, form]);
 
+  // When role changes, adjust companyId requirement
+  useEffect(() => {
+    if (selectedRole === 'Partner' || selectedRole === 'Super Admin') {
+      form.setValue('companyId', null); // Partners/SAs are not in a company
+    }
+  }, [selectedRole, form]);
+
 
   const onSubmit = async (data: UserFormValues) => {
     startTransition(async () => {
@@ -137,7 +148,7 @@ export default function AddNewUserPage() {
         name: data.name,
         email: data.email,
         role: data.role,
-        companyId: data.companyId,
+        companyId: data.role === 'Partner' || data.role === 'Super Admin' ? null : data.companyId,
         assignedLocationIds: data.assignedLocationIds || [],
       };
 
@@ -226,38 +237,6 @@ export default function AddNewUserPage() {
                 </FormItem> 
               )} />
               
-              <FormField control={form.control} name="companyId" render={({ field }) => (
-                <FormItem> 
-                  <FormLabel>Account</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} disabled={currentUser?.role !== 'Super Admin' && companies.length <= 1}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select an account" /></SelectTrigger></FormControl>
-                    <SelectContent>{companies.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}</SelectContent>
-                  </Select>
-                  <FormDescription>Assigns the user to a specific customer account.</FormDescription>
-                  {isUserLimitReached && <p className="text-xs font-medium text-destructive mt-1">User limit reached for this account.</p>}
-                  <FormMessage />
-                </FormItem>
-              )} />
-              
-              <FormField control={form.control} name="assignedLocationIds" render={({ field }) => (
-                <FormItem> 
-                  <FormLabel>Assign to Locations (Optional)</FormLabel>
-                  <FormControl>
-                    <ScrollArea className="h-40 w-full rounded-md border p-4">
-                      {locationsForSelectedBrand.length > 0 ? (
-                        <div className="space-y-2">{locationsForSelectedBrand.map((loc) => (
-                          <FormField key={loc.id} control={form.control} name="assignedLocationIds" render={({ field: cbField }) => (
-                            <FormItem className="flex items-center space-x-3"><FormControl><Checkbox checked={cbField.value?.includes(loc.id)} onCheckedChange={(checked) => checked ? cbField.onChange([...(cbField.value || []), loc.id]) : cbField.onChange((cbField.value || []).filter(v => v !== loc.id))} id={`loc-${loc.id}`} /></FormControl><FormLabel htmlFor={`loc-${loc.id}`} className="font-normal">{loc.name}</FormLabel></FormItem>
-                          )}/>
-                        ))}</div>
-                      ) : (<div className="text-sm text-muted-foreground italic h-full flex items-center justify-center">{selectedCompanyIdForm ? 'No locations for this account.' : 'Select an account first.'}</div>)}
-                    </ScrollArea>
-                  </FormControl> 
-                  <FormDescription>Determines which location-specific data the user can access or be associated with.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )} />
-
               <FormField control={form.control} name="role" render={({ field }) => (
                 <FormItem> 
                   <FormLabel>Role</FormLabel>
@@ -278,6 +257,42 @@ export default function AddNewUserPage() {
                   <FormMessage />
                 </FormItem>
               )} />
+
+              {(selectedRole !== 'Partner' && selectedRole !== 'Super Admin') && (
+                <>
+                <FormField control={form.control} name="companyId" render={({ field }) => (
+                    <FormItem> 
+                    <FormLabel>Account</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || ''} disabled={currentUser?.role !== 'Super Admin' && companies.length <= 1}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Select an account" /></SelectTrigger></FormControl>
+                        <SelectContent>{companies.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}</SelectContent>
+                    </Select>
+                    <FormDescription>Assigns the user to a specific customer account.</FormDescription>
+                    {isUserLimitReached && <p className="text-xs font-medium text-destructive mt-1">User limit reached for this account.</p>}
+                    <FormMessage />
+                    </FormItem>
+                )} />
+                
+                <FormField control={form.control} name="assignedLocationIds" render={({ field }) => (
+                    <FormItem> 
+                    <FormLabel>Assign to Locations (Optional)</FormLabel>
+                    <FormControl>
+                        <ScrollArea className="h-40 w-full rounded-md border p-4">
+                        {locationsForSelectedBrand.length > 0 ? (
+                            <div className="space-y-2">{locationsForSelectedBrand.map((loc) => (
+                            <FormField key={loc.id} control={form.control} name="assignedLocationIds" render={({ field: cbField }) => (
+                                <FormItem className="flex items-center space-x-3"><FormControl><Checkbox checked={cbField.value?.includes(loc.id)} onCheckedChange={(checked) => checked ? cbField.onChange([...(cbField.value || []), loc.id]) : cbField.onChange((cbField.value || []).filter(v => v !== loc.id))} id={`loc-${loc.id}`} /></FormControl><FormLabel htmlFor={`loc-${loc.id}`} className="font-normal">{loc.name}</FormLabel></FormItem>
+                            )}/>
+                            ))}</div>
+                        ) : (<div className="text-sm text-muted-foreground italic h-full flex items-center justify-center">{selectedCompanyIdForm ? 'No locations for this account.' : 'Select an account first.'}</div>)}
+                        </ScrollArea>
+                    </FormControl> 
+                    <FormDescription>Determines which location-specific data the user can access or be associated with.</FormDescription>
+                    <FormMessage />
+                    </FormItem>
+                )} />
+                </>
+              )}
               
               <CardFooter className="p-0 pt-6">
                 <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isPending || isUserLimitReached}>

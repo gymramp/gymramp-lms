@@ -1,5 +1,4 @@
 
-
 // src/lib/nav-config.ts
 import type { User, UserRole, Company } from '@/types/user';
 import {
@@ -93,6 +92,10 @@ export async function getNavigationStructure(user: User | null): Promise<NavItem
       { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },
       { href: '/certificates', label: 'My Certificates', icon: Award },
     );
+  } else if (user.role === 'Partner') {
+    roleSpecificItems.push(
+      { href: '/partner/dashboard', label: 'Partner Dashboard', icon: Handshake }
+    );
   } else if (user.role === 'Staff') {
     roleSpecificItems.push(
       { href: '/courses/my-courses', label: 'My Learning', icon: BookOpen },
@@ -133,7 +136,9 @@ export function getUserDropdownItems(user: User | null): NavItemType[] {
             { href: '/admin/settings', label: 'Settings', icon: Cog }
         );
     }
-    items.push({ href: '/certificates', label: 'My Certificates', icon: Award });
+    if (user.role !== 'Partner') {
+        items.push({ href: '/certificates', label: 'My Certificates', icon: Award });
+    }
     items.push({ href: '/site-help', label: 'Site Help', icon: HelpCircle });
 
     return items;

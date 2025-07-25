@@ -1,9 +1,8 @@
-
 // src/types/user.ts
 
 import type { Timestamp } from 'firebase/firestore'; // Import Timestamp
 
-export type UserRole = 'Super Admin' | 'Admin' | 'Owner' | 'Manager' | 'Staff';
+export type UserRole = 'Super Admin' | 'Admin' | 'Owner' | 'Manager' | 'Staff' | 'Partner';
 
 // Represents a user in the system
 export interface User {
@@ -11,7 +10,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
-  companyId: string; // ID of the company/brand the user belongs to
+  companyId: string | null; // ID of the company/brand the user belongs to. Null for Super Admin/Partner
   assignedLocationIds: string[]; // Array of location IDs assigned to the user
   assignedCourseIds?: string[]; // Optional: Array of course IDs assigned directly to this user
   isActive: boolean; // Whether the user account is active or deactivated
