@@ -14,40 +14,40 @@
     --popover: 0 0% 100%; /* White */
     --popover-foreground: 0 0% 3.9%; /* Near Black */
 
-    /* Primary Color (Black) */
-    --primary: 0 0% 3.9%; /* Near Black */
-    --primary-foreground: 0 0% 98%; /* Near White for contrast */
+    /* Primary Color: Blue (#3498db) -> HSL 207 68% 54% */
+    --primary: 207 68% 54%;
+    --primary-foreground: 0 0% 98%; /* Near White for contrast on Blue */
 
-    /* Secondary Color (Light Gray) */
-    --secondary: 0 0% 96.1%; /* Light Gray */
+    /* Secondary Color: Light Gray (#ecf0f1) -> HSL 210 17% 95% */
+    --secondary: 210 17% 95%;
     --secondary-foreground: 0 0% 9%; /* Dark Gray for contrast */
 
-    --muted: 0 0% 96.1%; /* Default Light Gray */
+    /* Muted: Using Secondary's base for consistency */
+    --muted: 210 17% 95%; 
     --muted-foreground: 0 0% 45.1%; /* Default Medium Gray */
 
-    /* Accent Color (Blue: Previous Primary) HSL(226, 71%, 56%)*/
-    --accent: 226 71% 56%;
-    --accent-foreground: 0 0% 98%; /* Near White for contrast on Blue */
+    /* Accent Color: Teal (#2ecc71) -> HSL 145 63% 49% */
+    --accent: 145 63% 49%;
+    --accent-foreground: 0 0% 98%; /* Near White for contrast on Teal */
 
     --destructive: 0 84.2% 60.2%; /* Default Red */
     --destructive-foreground: 0 0% 98%; /* Default Near White */
 
     --border: 0 0% 89.8%; /* Default Light Gray Border */
     --input: 0 0% 89.8%; /* Default Light Gray Input Border */
-    --ring: 0 0% 3.9%; /* Ring to match new primary (black) */
+    --ring: 207 68% 54%; /* Ring to match new primary (blue) */
 
     --radius: 0.5rem;
 
-    /* Chart colors (Kept original for now, adjust if needed) */
-    --chart-1: 226 71% 56%; /* Blue */
-    --chart-2: 39 100% 50%; /* Orange */
+    /* Chart colors */
+    --chart-1: 207 68% 54%; /* Blue */
+    --chart-2: 145 63% 49%; /* Teal */
     --chart-3: 210 40% 50%; /* Blueish Gray */
     --chart-4: 120 30% 50%; /* Greenish Gray */
     --chart-5: 0 0% 45.1%; /* Medium Gray */
   }
 
   .dark {
-    /* Dark mode uses dark background */
     --background: 0 0% 3.9%;
     --foreground: 0 0% 98%;
     --card: 0 0% 3.9%;
@@ -55,30 +55,30 @@
     --popover: 0 0% 3.9%;
     --popover-foreground: 0 0% 98%;
 
-    /* Dark Primary Color (Near White) */
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 3.9%; /* Near Black for contrast */
+    /* Dark Primary Color (Lighter Blue) */
+    --primary: 207 68% 65%;
+    --primary-foreground: 0 0% 9%; 
 
     /* Dark Secondary Color (Dark Gray) */
-    --secondary: 0 0% 14.9%; /* Dark Gray */
-    --secondary-foreground: 0 0% 98%; /* Light Gray for contrast */
+    --secondary: 0 0% 14.9%; 
+    --secondary-foreground: 0 0% 98%;
 
     --muted: 0 0% 14.9%;
     --muted-foreground: 0 0% 63.9%;
 
-    /* Dark Accent Color (Lighter version of previous Primary Blue: HSL(226, 71%, 65%)) */
-    --accent: 226 71% 65%;
-    --accent-foreground: 0 0% 98%; /* Near White for contrast */
+    /* Dark Accent Color (Lighter Teal) */
+    --accent: 145 63% 55%;
+    --accent-foreground: 0 0% 9%; 
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 14.9%;
     --input: 0 0% 14.9%;
-    --ring: 0 0% 98%; /* Ring to match new dark primary (white) */
+    --ring: 207 68% 65%;
 
-    /* Dark Chart colors (Kept original for now, adjust if needed) */
-    --chart-1: 226 71% 65%;
-    --chart-2: 39 100% 60%;
+    /* Dark Chart colors */
+    --chart-1: 207 68% 65%;
+    --chart-2: 145 63% 55%;
     --chart-3: 210 40% 60%;
     --chart-4: 120 30% 60%;
     --chart-5: 0 0% 63.9%;

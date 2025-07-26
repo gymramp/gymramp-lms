@@ -1,4 +1,3 @@
-
 // src/app/dashboard/page.tsx
 'use client';
 
@@ -31,7 +30,7 @@ import Link from 'next/link';
 const DEFAULT_ROWS_PER_PAGE = 5;
 
 const ROLE_HIERARCHY: Record<UserRole, number> = {
-  'Super Admin': 5, 'Admin': 4, 'Owner': 3, 'Manager': 2, 'Staff': 1,
+  'Super Admin': 5, 'Admin': 4, 'Owner': 3, 'Manager': 2, 'Staff': 1, 'Partner': 0,
 };
 
 type EmployeeWithOverallProgress = User & {

@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -31,22 +30,22 @@ interface StatCardProps {
   title: string;
   value: string | number | React.ReactNode; // Allow ReactNode for loading spinner
   description: string;
-  change?: string;
-  changeVariant?: "default" | "destructive"; // "default" for green, "destructive" for red
   icon: LucideIcon;
   chartData: any[]; // e.g., [{ date: 'Jan 1', value: 400 }]
   chartColor: string; // e.g., "hsl(var(--chart-1))"
+  change?: string;
+  changeVariant?: "default" | "destructive"; // "default" for green, "destructive" for red
 }
 
 export function StatCard({
   title,
   value,
   description,
-  change,
-  changeVariant = "default",
   icon: Icon,
   chartData,
   chartColor,
+  change,
+  changeVariant = "default",
 }: StatCardProps) {
   const chartId = React.useId().replace(/:/g, "");
 
