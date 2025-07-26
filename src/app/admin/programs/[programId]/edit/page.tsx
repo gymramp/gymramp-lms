@@ -59,9 +59,10 @@ const programFormSchema = z.object({
 
 type ProgramFormValues = z.infer<typeof programFormSchema>;
 
-export default function EditProgramPage({ params }: { params: { programId: string } }) {
+export default function EditProgramPage() {
   const router = useRouter();
-  const programId = params.programId;
+  const params = useParams();
+  const programId = params.programId as string;
   const isCreating = programId === 'new';
   const { toast } = useToast();
 
@@ -396,4 +397,3 @@ export default function EditProgramPage({ params }: { params: { programId: strin
     </div>
   );
 }
-
