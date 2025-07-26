@@ -94,6 +94,7 @@ export interface Course {
   featuredImageUrl?: string | null;
   level: 'Beginner' | 'Intermediate' | 'Advanced';
   duration: string;
+  category?: string | null; // New field
   curriculum: string[]; // Array of 'lesson-[id]' or 'quiz-[id]'
   certificateTemplateId?: string | null; // Added for certificate template
   isDeleted?: boolean;
@@ -182,6 +183,7 @@ export interface BrandCourse {
     featuredImageUrl?: string | null;
     level: 'Beginner' | 'Intermediate' | 'Advanced';
     duration: string;
+    category?: string | null;
     curriculum: string[]; // Array of 'brandLesson-[id]' or 'brandQuiz-[id]'
     certificateTemplateId?: string | null; // Added for certificate template
     isDeleted?: boolean;

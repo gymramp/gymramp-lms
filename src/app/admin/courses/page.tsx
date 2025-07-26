@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, MoreHorizontal, Trash2, Edit, BookOpen, CreditCard, Search, Loader2 } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Trash2, Edit, BookOpen, CreditCard, Search, Loader2, Settings } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -137,27 +138,18 @@ export default function AdminCoursesPage() {
   return (
     <div className="container mx-auto">
        <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Course Management</h1>
-        <Button onClick={handleAddCourseClick} className="bg-accent text-accent-foreground hover:bg-accent/90">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add Course
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Course Management</h1>
+          <p className="text-muted-foreground">Create and manage your course catalog</p>
+        </div>
+        <Button onClick={handleAddCourseClick} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+          <PlusCircle className="mr-2 h-4 w-4" /> Create Course
         </Button>
-      </div>
-
-      <div className="mb-6 flex items-center gap-2">
-        <Search className="h-5 w-5 text-muted-foreground" />
-        <Input
-          type="text"
-          placeholder="Search courses by title or description..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-sm"
-        />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Course List</CardTitle>
-          <CardDescription>Manage the available courses in the library.</CardDescription>
+          <CardTitle>All Courses ({filteredCourses.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -166,74 +158,61 @@ export default function AdminCoursesPage() {
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
             </div>
-          ) : filteredCourses.length === 0 ? (
-             <div className="text-center text-muted-foreground py-8">
-               {searchTerm ? `No courses found matching "${searchTerm}".` : "No courses available. Add one to get started!"}
-             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Level</TableHead>
-                  <TableHead>Curriculum Items</TableHead>
-                  <TableHead>Quizzes (In Curriculum)</TableHead>
+                  <TableHead className="w-[40%]">Course</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Duration</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredCourses.map((course) => (
+                 {filteredCourses.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center">
+                        {searchTerm ? `No courses found matching "${searchTerm}".` : "No courses available. Add one to get started!"}
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredCourses.map((course) => (
                   <TableRow key={course.id}>
-                    <TableCell className="font-medium">{course.title}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{course.level}</Badge>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-3">
+                        <Image
+                            src={course.featuredImageUrl || course.imageUrl || 'https://placehold.co/80x45.png'}
+                            alt={course.title}
+                            width={80}
+                            height={45}
+                            className="rounded-md object-cover w-20 h-[45px]"
+                            data-ai-hint="course thumbnail"
+                        />
+                        <div>
+                            <p className="font-semibold">{course.title}</p>
+                            <p className="text-xs text-muted-foreground capitalize">{course.level}</p>
+                        </div>
+                      </div>
                     </TableCell>
-                    <TableCell>{course.curriculum?.length || 0}</TableCell>
-                    <TableCell>{course.curriculum?.filter(id => id.startsWith('quiz-')).length || 0}</TableCell>
-                    <TableCell className="text-right space-x-1">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0" disabled={isDeleting === course.id}>
-                            <>
-                              <span className="sr-only">Open menu for {course.title}</span>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Manage</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => handleEditCourseClick(course)}>
-                            <>
-                              <Edit className="mr-2 h-4 w-4" />
-                              <span>Edit Details</span>
-                            </>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem asChild>
+                    <TableCell className="text-muted-foreground">{course.category || 'N/A'}</TableCell>
+                    <TableCell className="text-muted-foreground">{course.duration || 'N/A'}</TableCell>
+                    <TableCell>
+                      <Badge variant="success">Published</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                         <Button variant="ghost" size="icon" asChild title="Manage Curriculum">
                             <Link href={`/admin/courses/manage/${course.id}`}>
-                              <BookOpen className="mr-2 h-4 w-4" />
-                              <span>Manage Curriculum</span>
+                              <Settings className="h-4 w-4" />
                             </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                            onClick={() => openDeleteDialog(course)}
-                             disabled={isDeleting === course.id}
-                          >
-                             {isDeleting === course.id ? (
-                                <span className="flex items-center gap-2">
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin"/>
-                                    Deleting...
-                                </span>
-                            ) : (
-                                <>
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    <span>Delete Course</span>
-                                </>
-                             )}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleEditCourseClick(course)} title="Edit Course">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => openDeleteDialog(course)} disabled={isDeleting === course.id} title="Delete Course">
+                             {isDeleting === course.id ? <Loader2 className="h-4 w-4 animate-spin"/> : <Trash2 className="h-4 w-4" />}
+                          </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

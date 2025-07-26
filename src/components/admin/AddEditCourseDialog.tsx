@@ -71,6 +71,7 @@ const courseFormSchema = z.object({
   featuredImageUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')),
   level: z.enum(['Beginner', 'Intermediate', 'Advanced'], { required_error: 'Please select a difficulty level.' }),
   duration: z.string().min(3, { message: 'Please enter an approximate duration.' }),
+  category: z.string().min(2, { message: 'Category must be at least 2 characters.' }).optional().nullable(),
   certificateTemplateId: z.string().optional().nullable(),
   translations: z.record(courseTranslationSchema).optional(),
 });
@@ -111,6 +112,7 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
       featuredImageUrl: '',
       level: undefined,
       duration: '',
+      category: '',
       certificateTemplateId: null,
       translations: {},
     },
@@ -129,6 +131,7 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
             featuredImageUrl: initialData.featuredImageUrl || '',
             level: initialData.level,
             duration: initialData.duration,
+            category: initialData.category,
             certificateTemplateId: initialData.certificateTemplateId || null,
             translations: initialData.translations || {},
           });
@@ -141,6 +144,7 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
             featuredImageUrl: '',
             level: undefined,
             duration: '',
+            category: '',
             certificateTemplateId: null,
             translations: {},
           });
@@ -249,6 +253,7 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
          featuredImageUrl: finalFeaturedImageUrl,
          level: data.level,
          duration: data.duration,
+         category: data.category,
          certificateTemplateId: data.certificateTemplateId || null,
          translations: data.translations,
      };
@@ -323,8 +328,11 @@ export function AddEditCourseDialog({ isOpen, setIsOpen, onSave, initialData }: 
                     <FormField control={form.control} name="featuredImageUrl" render={({ field }) => ( <FormItem className="hidden"><FormControl><Input type="url" {...field} value={field.value ?? ''} readOnly /></FormControl><FormMessage /></FormItem> )}/>
                     <p className="text-xs text-muted-foreground">Upload a featured image for the course.</p>
                 </FormItem>
-                <FormField control={form.control} name="level" render={({ field }) => ( <FormItem><FormLabel>Difficulty Level</FormLabel><Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a level" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Beginner">Beginner</SelectItem><SelectItem value="Intermediate">Intermediate</SelectItem><SelectItem value="Advanced">Advanced</SelectItem></SelectContent></Select><FormMessage /></FormItem> )}/>
-                <FormField control={form.control} name="duration" render={({ field }) => ( <FormItem><FormLabel>Approximate Duration</FormLabel><FormControl><Input placeholder="e.g., Approx. 8 hours" {...field} /></FormControl><FormMessage /></FormItem> )}/>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField control={form.control} name="category" render={({ field }) => ( <FormItem><FormLabel>Category</FormLabel><FormControl><Input placeholder="e.g., Sales Fundamentals" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem> )}/>
+                  <FormField control={form.control} name="level" render={({ field }) => ( <FormItem><FormLabel>Difficulty Level</FormLabel><Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a level" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Beginner">Beginner</SelectItem><SelectItem value="Intermediate">Intermediate</SelectItem><SelectItem value="Advanced">Advanced</SelectItem></SelectContent></Select><FormMessage /></FormItem> )}/>
+                </div>
+                <FormField control={form.control} name="duration" render={({ field }) => ( <FormItem><FormLabel>Approximate Duration</FormLabel><FormControl><Input placeholder="e.g., 3h 0m" {...field} /></FormControl><FormMessage /></FormItem> )}/>
                 <FormField control={form.control} name="certificateTemplateId" render={({ field }) => ( <FormItem><FormLabel className="flex items-center gap-1"><Award className="h-4 w-4"/> Certificate Template</FormLabel><Select onValueChange={(value) => field.onChange(value === 'none' ? null : value)} value={field.value || 'none'}><FormControl><SelectTrigger><SelectValue placeholder="Select a certificate template" /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">None (Default)</SelectItem>{CERTIFICATE_TEMPLATES.map(template => ( <SelectItem key={template.value} value={template.value}>{template.label}</SelectItem> ))}</SelectContent></Select><FormMessage /></FormItem> )}/>
               </TabsContent>
               <TabsContent value="translations" className="flex-1 overflow-y-auto px-6 py-4 space-y-6">

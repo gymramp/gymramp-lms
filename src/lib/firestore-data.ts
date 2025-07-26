@@ -1,4 +1,5 @@
 
+
 import { db } from './firebase';
 import {
     collection,
@@ -110,6 +111,7 @@ export async function addCourse(courseData: CourseFormData): Promise<Course | nu
             featuredImageUrl: courseData.featuredImageUrl || null,
             level: courseData.level,
             duration: courseData.duration,
+            category: courseData.category || null,
             certificateTemplateId: courseData.certificateTemplateId || null, // Save certificate template
             curriculum: [],
             isDeleted: false,
@@ -147,6 +149,7 @@ export async function updateCourseMetadata(courseId: string, courseData: Partial
         if (courseData.featuredImageUrl !== undefined) dataToUpdate.featuredImageUrl = courseData.featuredImageUrl || null;
         if (courseData.level !== undefined) dataToUpdate.level = courseData.level;
         if (courseData.duration !== undefined) dataToUpdate.duration = courseData.duration;
+        if (courseData.category !== undefined) dataToUpdate.category = courseData.category || null;
         if (courseData.certificateTemplateId !== undefined) dataToUpdate.certificateTemplateId = courseData.certificateTemplateId || null;
         if (courseData.translations !== undefined) dataToUpdate.translations = sanitizeCourseTranslations(courseData.translations);
 
